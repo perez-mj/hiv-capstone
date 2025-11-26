@@ -1,0 +1,83 @@
+CREATE DATABASE hiv_dlt_db;
+USE hiv_dlt_db;
+
+-- Patients table
+CREATE TABLE patients (
+    patient_id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    date_of_birth DATE NOT NULL,
+    contact VARCHAR(255),
+    consent BOOLEAN NOT NULL,
+    hiv_status ENUM('Reactive', 'Non-Reactive') NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- DLT Hashes table (with auto-increment id to allow multiple hashes per patient)
+CREATE TABLE dlt_hashes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id VARCHAR(255) NOT NULL,
+    hash VARCHAR(64) NOT NULL, -- SHA-256 produces 64 hex characters
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(patient_id)
+);
+
+-- Biometric Links table
+CREATE TABLE biometric_links (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    biometric_id VARCHAR(255) UNIQUE NOT NULL,
+    patient_id VARCHAR(255) NOT NULL,
+    FOREIGN KEY (patient_id) REFERENCES patients(patient_id)
+);
+
+-- Admin Users table
+CREATE TABLE admin_users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL -- We will store the hashed password
+);
+
+CREATE TABLE audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    action_type VARCHAR(100) NOT NULL,
+    patient_id VARCHAR(255),
+    description TEXT,
+    ip_address VARCHAR(45),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_action_type (action_type),
+    INDEX idx_patient_id (patient_id),
+    INDEX idx_timestamp (timestamp)
+);
+
+-- Add missing columns and fix inconsistencies
+ALTER TABLE patients 
+MODIFY COLUMN consent BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN contact_info VARCHAR(255) AFTER contact;
+
+-- Update the existing data
+UPDATE patients SET contact_info = contact WHERE contact_info IS NULL;
+
+-- Create a view for the frontend
+CREATE VIEW patient_details AS
+SELECT 
+  p.patient_id,
+  p.name,
+  p.date_of_birth,
+  p.contact,
+  p.contact_info,
+  p.consent,
+  CASE 
+    WHEN p.consent = TRUE THEN 'YES' 
+    ELSE 'NO' 
+  END as consent_status,
+  p.hiv_status,
+  p.created_at,
+  bl.biometric_id,
+  COUNT(dh.id) as dlt_hash_count,
+  CASE 
+    WHEN COUNT(dh.id) > 0 THEN 'verified'
+    ELSE 'pending'
+  END as dlt_status
+FROM patients p 
+LEFT JOIN biometric_links bl ON p.patient_id = bl.patient_id
+LEFT JOIN dlt_hashes dh ON p.patient_id = dh.patient_id
+GROUP BY p.patient_id;
