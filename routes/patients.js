@@ -1,359 +1,391 @@
-// --- backend/routes/patients.js ---
+// backend/routes/patients.js
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
-const { logAudit } = require('../utils/auditLogger');
 const auth = require('../middleware/auth');
+const { logAudit } = require('../utils/auditLogger');
 
-
-// Apply auth middleware to all routes
 router.use(auth);
 
-// Utility functions
-const generatePatientId = () => `HIV-${Date.now()}-${Math.floor(Math.random() * 9000) + 1000}`;
-
-// Mock DLT functions
-const calculateHash = (data) => {
-  const crypto = require('crypto');
-  return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
-};
-
-const submitHashToDLT = async (patientId, dataHash) => {
-  console.log(`[DLT MOCK] Storing hash for patient ${patientId}: ${dataHash}`);
+const getUserInfo = (req) => {
   return {
-    transaction_id: `TX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    block_hash: `BLOCK-${Date.now().toString(16)}`,
-    status: 'COMMITTED'
+    admin_user_id: req.user?.id || null,
+    ip_address: req.ip || req.connection.remoteAddress || null
   };
 };
 
-// POST /api/patients/enroll
-router.post('/enroll', async (req, res, next) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    const { name, date_of_birth, contact, consent, hiv_status, biometric_id } = req.body;
-
-    if (!name || !date_of_birth || consent === undefined || !hiv_status || !biometric_id) {
-      return res.status(400).json({ error: 'Missing required enrollment fields' });
-    }
-    
-    const patient_id = generatePatientId();
-    
-    await connection.beginTransaction();
-
-    try {
-      // Insert into patients table
-      await connection.execute(
-        'INSERT INTO patients (patient_id, name, date_of_birth, contact, consent, hiv_status) VALUES (?, ?, ?, ?, ?, ?)',
-        [patient_id, name, date_of_birth, contact, consent, hiv_status]
-      );
-
-      // Insert into biometric_links table
-      await connection.execute(
-        'INSERT INTO biometric_links (biometric_id, patient_id) VALUES (?, ?)',
-        [biometric_id, patient_id]
-      );
-
-      // DLT Integration
-      const dataToHash = { 
-        patient_id, 
-        consent, 
-        hiv_status,
-        timestamp: new Date().toISOString()
-      };
-      const hash = calculateHash(dataToHash);
-      
-      const dltResult = await submitHashToDLT(patient_id, hash);
-
-      // Insert DLT Hash record
-      await connection.execute(
-        'INSERT INTO dlt_hashes (patient_id, data_hash) VALUES (?, ?)',
-        [patient_id, hash]
-      );
-
-      // Audit log
-      await logAudit(connection, {
-        action_type: 'PATIENT_ENROLLMENT',
-        patient_id: patient_id,
-        description: `New patient enrolled: ${name} (${patient_id}) with consent: ${consent}, status: ${hiv_status}`
-      });
-
-      await connection.commit();
-      
-      res.status(201).json({ 
-        message: 'Patient enrolled and DLT hash stored successfully', 
-        patient_id: patient_id,
-        dlt_transaction: dltResult.transaction_id,
-        hash: hash
-      });
-
-    } catch (dbErr) {
-      await connection.rollback();
-      throw dbErr;
-    } finally {
-      connection.release();
-    }
-  } catch (err) {
-    await logAudit(null, {
-      action_type: 'ENROLLMENT_FAILED',
-      description: `Failed to enroll patient: ${err.message}`,
-      ip_address: req.ip
-    });
-    next(err);
-  }
-});
-
-// GET /api/patients - Get all patients (optimized)
+// GET /api/patients - Get all patients with pagination and filters
 router.get('/', async (req, res, next) => {
   try {
-    const [rows] = await pool.execute(`
+    const { page = 1, limit = 10, search, consent, hiv_status, dlt_status } = req.query;
+    const offset = (page - 1) * limit;
+
+    // Build the main query
+    let query = `
       SELECT 
-        p.*,
-        bl.biometric_id,
-        (SELECT COUNT(*) FROM dlt_hashes dh WHERE dh.patient_id = p.patient_id) as dlt_hash_count
-      FROM patients p 
-      LEFT JOIN biometric_links bl ON p.patient_id = bl.patient_id
-      ORDER BY p.created_at DESC
-    `);
+        p.patient_id,
+        p.name,
+        p.date_of_birth,
+        p.contact_info,
+        p.contact,
+        p.consent,
+        p.hiv_status,
+        p.dlt_status,
+        p.created_at,
+        p.updated_at,
+        CASE 
+          WHEN p.consent = 1 THEN 'YES'
+          WHEN p.consent = 0 THEN 'NO'
+          ELSE 'NO'
+        END as consent_status,
+        COALESCE(dh.verified, FALSE) as dlt_verified,
+        COALESCE(biometric_count.active_biometrics, 0) as active_biometrics
+      FROM patients p
+      LEFT JOIN dlt_hashes dh ON p.patient_id = dh.patient_id
+      LEFT JOIN (
+        SELECT patient_id, COUNT(*) as active_biometrics 
+        FROM biometric_links 
+        WHERE is_active = TRUE 
+        GROUP BY patient_id
+      ) biometric_count ON p.patient_id = biometric_count.patient_id
+      WHERE 1=1
+    `;
     
-    const patients = rows.map(patient => ({
-      ...patient,
-      consent_status: patient.consent ? 'YES' : 'NO',
-      dlt_status: patient.dlt_hash_count > 0 ? 'verified' : 'pending'
-    }));
-    
-    res.json(patients);
+    const params = [];
+
+    if (search) {
+      query += ` AND (p.name LIKE  OR p.patient_id LIKE %${search}% OR p.contact_info LIKE %${search}% OR p.contact LIKE %${search}%)`;
+    }
+
+    if (consent) {
+      if (consent === 'YES') {
+        query += ' AND p.consent = TRUE';
+      } else if (consent === 'NO') {
+        query += ' AND p.consent = FALSE';
+      }
+    }
+
+    if (hiv_status) {
+      query += ` AND p.hiv_status = ${hiv_status}`;
+    }
+
+    if (dlt_status) {
+      query += ` AND p.dlt_status = ${dlt_status}`;
+    }
+
+    query += ` ORDER BY p.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+
+    const [rows] = await pool.execute(query, params);
+
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(*) as total 
+      FROM patients p
+      WHERE 1=1
+    `;
+    const countParams = [];
+
+    if (search) {
+      countQuery += ` AND (p.name LIKE %${search}% OR p.patient_id LIKE %${search}% OR p.contact_info LIKE %${search}% OR p.contact LIKE %${search}%)`;
+    }
+
+    if (consent) {
+      if (consent === 'YES') {
+        countQuery += ' AND p.consent = TRUE';
+      } else if (consent === 'NO') {
+        countQuery += ' AND p.consent = FALSE';
+      }
+    }
+
+    if (hiv_status) {
+      countQuery += ` AND p.hiv_status = ${hiv_status}`;
+    }
+
+    if (dlt_status) {
+      countQuery += ` AND p.dlt_status = ${dlt_status}`;
+    }
+
+    const [countRows] = await pool.execute(countQuery, countParams);
+    const total = countRows[0].total;
+
+    res.json({
+      patients: rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+
   } catch (err) {
-    next(err);
+    console.error('Error fetching patients:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
 
-// GET /api/patients/:patient_id - Get patient by ID
-router.get('/:patient_id', async (req, res, next) => {
+// GET /api/patients/:id - Get single patient
+router.get('/:id', async (req, res, next) => {
   try {
-    const { patient_id } = req.params;
-    const [rows] = await pool.execute(
-      `SELECT p.*, bl.biometric_id
-       FROM patients p 
-       LEFT JOIN biometric_links bl ON p.patient_id = bl.patient_id
-       WHERE p.patient_id = ?`,
-      [patient_id]
-    );
-    
+    const { id } = req.params;
+
+    const query = `
+      SELECT 
+        p.patient_id,
+        p.name,
+        p.date_of_birth,
+        p.contact_info,
+        p.contact,
+        p.consent,
+        p.hiv_status,
+        p.dlt_status,
+        p.created_at,
+        p.updated_at,
+        CASE 
+          WHEN p.consent = 1 THEN 'YES'
+          WHEN p.consent = 0 THEN 'NO'
+          ELSE 'NO'
+        END as consent_status,
+        COALESCE(dh.verified, FALSE) as dlt_verified,
+        COALESCE(dh.data_hash, '') as dlt_hash,
+        COALESCE(dh.timestamp, p.created_at) as dlt_timestamp,
+        COALESCE(biometric_count.active_biometrics, 0) as active_biometrics
+      FROM patients p
+      LEFT JOIN dlt_hashes dh ON p.patient_id = dh.patient_id
+      LEFT JOIN (
+        SELECT patient_id, COUNT(*) as active_biometrics 
+        FROM biometric_links 
+        WHERE is_active = TRUE 
+        GROUP BY patient_id
+      ) biometric_count ON p.patient_id = biometric_count.patient_id
+      WHERE p.patient_id = ?
+    `;
+
+    const [rows] = await pool.execute(query, [id]);
+
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Patient not found' });
     }
-    
+
     res.json(rows[0]);
   } catch (err) {
-    next(err);
+    console.error('Error fetching patient:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
 
-// PUT /api/patients/:patient_id - Update patient
-router.put('/:patient_id', async (req, res, next) => {
-  const connection = await pool.getConnection();
-  
+// POST /api/patients - Create new patient
+router.post('/', async (req, res, next) => {
   try {
-    const { patient_id } = req.params;
-    const { name, date_of_birth, contact, consent, hiv_status } = req.body;
+    const { patient_id, name, date_of_birth, contact, contact_info, consent, hiv_status } = req.body;
 
-    // Check if patient exists
-    const [existingRows] = await connection.execute(
-      'SELECT * FROM patients WHERE patient_id = ?',
-      [patient_id]
+    // Validate required fields
+    if (!patient_id || !name || !date_of_birth || !hiv_status) {
+      return res.status(400).json({ error: 'Missing required fields: patient_id, name, date_of_birth, and hiv_status are required' });
+    }
+
+    const consentBool = Boolean(consent);
+
+    const [result] = await pool.execute(
+      `INSERT INTO patients
+       (patient_id, name, date_of_birth, contact, contact_info, consent, hiv_status, dlt_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [patient_id, name, date_of_birth, contact || null, contact_info || null, consentBool, hiv_status, 'pending']
     );
 
-    if (existingRows.length === 0) {
-      return res.status(404).json({ error: 'Patient not found' });
-    }
-
-    await connection.beginTransaction();
-
-    try {
-      // Update patient
-      await connection.execute(
-        `UPDATE patients 
-         SET name = ?, date_of_birth = ?, contact = ?, consent = ?, hiv_status = ?
-         WHERE patient_id = ?`,
-        [name, date_of_birth, contact, consent, hiv_status, patient_id]
-      );
-
-      // Generate new DLT hash for updated data
-      const dataToHash = { 
-        patient_id, 
-        consent, 
-        hiv_status,
-        timestamp: new Date().toISOString()
-      };
-      const hash = calculateHash(dataToHash);
-      
-      const dltResult = await submitHashToDLT(patient_id, hash);
-
-      // Store new DLT hash
-      await connection.execute(
-        'INSERT INTO dlt_hashes (patient_id, data_hash) VALUES (?, ?)',
-        [patient_id, hash]
-      );
-
-      // Audit log
-      await logAudit(connection, {
-        action_type: 'PATIENT_UPDATED',
-        patient_id: patient_id,
-        description: `Patient updated: ${name} (${patient_id})`
-      });
-
-      await connection.commit();
-      
-      res.json({ 
-        message: 'Patient updated and new DLT hash stored successfully',
-        patient_id: patient_id,
-        dlt_transaction: dltResult.transaction_id,
-        hash: hash
-      });
-
-    } catch (dbErr) {
-      await connection.rollback();
-      throw dbErr;
-    } finally {
-      connection.release();
-    }
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /api/patients/:patient_id - Delete patient
-router.delete('/:patient_id', async (req, res, next) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    const { patient_id } = req.params;
-
-    // Check if patient exists
-    const [existingRows] = await connection.execute(
-      'SELECT * FROM patients WHERE patient_id = ?',
-      [patient_id]
-    );
-
-    if (existingRows.length === 0) {
-      return res.status(404).json({ error: 'Patient not found' });
-    }
-
-    const patient = existingRows[0];
-
-    await connection.beginTransaction();
-
-    try {
-      // Delete related records first (due to foreign key constraints)
-      await connection.execute(
-        'DELETE FROM dlt_hashes WHERE patient_id = ?',
-        [patient_id]
-      );
-
-      await connection.execute(
-        'DELETE FROM biometric_links WHERE patient_id = ?',
-        [patient_id]
-      );
-
-      // Delete patient
-      await connection.execute(
-        'DELETE FROM patients WHERE patient_id = ?',
-        [patient_id]
-      );
-
-      // Audit log
-      await logAudit(connection, {
-        action_type: 'PATIENT_DELETED',
-        patient_id: patient_id,
-        description: `Patient deleted: ${patient.name} (${patient_id})`
-      });
-
-      await connection.commit();
-      
-      res.json({ 
-        message: 'Patient and all related data deleted successfully',
-        patient_id: patient_id
-      });
-
-    } catch (dbErr) {
-      await connection.rollback();
-      throw dbErr;
-    } finally {
-      connection.release();
-    }
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/patients/stats - Get patient statistics
-router.get('/stats/overview', async (req, res, next) => {
-  try {
-    const [stats] = await pool.execute(`
-      SELECT 
-        COUNT(*) as total_patients,
-        SUM(CASE WHEN consent = TRUE THEN 1 ELSE 0 END) as consented_patients,
-        SUM(CASE WHEN hiv_status = 'Reactive' THEN 1 ELSE 0 END) as reactive_patients,
-        SUM(CASE WHEN hiv_status = 'Non-Reactive' THEN 1 ELSE 0 END) as non_reactive_patients,
-        COUNT(DISTINCT DATE(created_at)) as enrollment_days,
-        AVG(DATEDIFF(CURDATE(), date_of_birth)/365) as average_age
-      FROM patients
-    `);
-
-    const [weeklyEnrollment] = await pool.execute(`
-      SELECT 
-        DATE(created_at) as date,
-        COUNT(*) as enrollments
-      FROM patients 
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-      GROUP BY DATE(created_at)
-      ORDER BY date DESC
-    `);
-
-    const [statusDistribution] = await pool.execute(`
-      SELECT 
-        hiv_status,
-        COUNT(*) as count,
-        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM patients), 2) as percentage
-      FROM patients 
-      GROUP BY hiv_status
-    `);
-
-    res.json({
-      overview: stats[0],
-      weekly_enrollment: weeklyEnrollment,
-      status_distribution: statusDistribution
+    const userInfo = getUserInfo(req);
+   
+    // Log the action
+    await logAudit(userInfo.admin_user_id, {
+      action_type: 'PATIENT_CREATED',
+      patient_id: patient_id,
+      description: `Patient ${name} (${patient_id}) enrolled`,
+      ip_address: userInfo.ip_address
     });
 
+    // Create DLT hash
+    await createDltHash(patient_id);
+    
+    // Create biometric link
+    await createBiometricLink(patient_id);
+
+    res.status(201).json({
+      message: 'Patient created successfully',
+      patient: {
+        patient_id,
+        name,
+        date_of_birth,
+        contact,
+        contact_info,
+        consent: consentBool,
+        hiv_status,
+        dlt_status: 'pending'
+      }
+    });
   } catch (err) {
-    next(err);
+    console.error('Error creating patient:', err);
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Patient ID already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
 
-// GET /api/patients/search - Search patients
-router.get('/search', async (req, res, next) => {
+// PUT /api/patients/:id - Update patient
+router.put('/:id', async (req, res, next) => {
   try {
-    const { q } = req.query;
-    
-    if (!q) {
-      return res.status(400).json({ error: 'Search query is required' });
+    const { id } = req.params;
+    const { name, date_of_birth, contact, contact_info, consent, hiv_status } = req.body;
+
+    if (!name || !date_of_birth || !hiv_status) {
+      return res.status(400).json({ error: 'Missing required fields: name, date_of_birth, and hiv_status are required' });
     }
 
-    const [rows] = await pool.execute(
-      `SELECT p.*, bl.biometric_id
-       FROM patients p 
-       LEFT JOIN biometric_links bl ON p.patient_id = bl.patient_id
-       WHERE p.name LIKE ? OR p.patient_id LIKE ? OR p.contact LIKE ?
-       ORDER BY p.created_at DESC`,
-      [`%${q}%`, `%${q}%`, `%${q}%`]
+    const consentBool = Boolean(consent);
+
+    const [result] = await pool.execute(
+      `UPDATE patients
+       SET name = ?, date_of_birth = ?, contact = ?, contact_info = ?, consent = ?, hiv_status = ?, dlt_status = ?
+       WHERE patient_id = ?`,
+      [name, date_of_birth, contact || null, contact_info || null, consentBool, hiv_status, 'pending', id]
     );
-    
-    res.json(rows);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    const userInfo = getUserInfo(req);
+
+    // Log the action
+    await logAudit(userInfo.admin_user_id, {
+      action_type: 'PATIENT_UPDATED',
+      patient_id: id,
+      description: `Patient ${name} (${id}) updated`,
+      ip_address: userInfo.ip_address
+    });
+
+    // Update DLT hash
+    await createDltHash(id);
+
+    res.json({ message: 'Patient updated successfully' });
   } catch (err) {
-    next(err);
+    console.error('Error updating patient:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
+
+// DELETE /api/patients/:id - Delete patient
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // First, get patient name for audit log
+    const [patientRows] = await pool.execute(
+      'SELECT name FROM patients WHERE patient_id = ?',
+      [id]
+    );
+
+    if (patientRows.length === 0) {
+      return res.status(404).json({ error: 'Patient not found' });
+    }
+
+    const patientName = patientRows[0].name;
+
+    // Delete related records
+    await pool.execute('DELETE FROM dlt_hashes WHERE patient_id = ?', [id]);
+    await pool.execute('DELETE FROM biometric_links WHERE patient_id = ?', [id]);
+   
+    const [result] = await pool.execute('DELETE FROM patients WHERE patient_id = ?', [id]);
+
+    const userInfo = getUserInfo(req);
+
+    // Log the action
+    await logAudit(userInfo.admin_user_id, {
+      action_type: 'PATIENT_DELETED',
+      patient_id: id,
+      description: `Patient ${patientName} (${id}) deleted`,
+      ip_address: userInfo.ip_address
+    });
+
+    res.json({ message: 'Patient deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting patient:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
+  }
+});
+
+// DLT Hash creation function
+const createDltHash = async (patientId) => {
+  try {
+    const [patientRows] = await pool.execute(
+      'SELECT patient_id, name, date_of_birth, contact_info, consent, hiv_status, created_at FROM patients WHERE patient_id = ?',
+      [patientId]
+    );
+
+    if (patientRows.length === 0) {
+      throw new Error('Patient not found');
+    }
+
+    const patient = patientRows[0];
+    const crypto = require('crypto');
+    
+    const dataToHash = {
+      patient_id: patient.patient_id,
+      name: patient.name,
+      date_of_birth: patient.date_of_birth.toISOString().split('T')[0],
+      hiv_status: patient.hiv_status,
+      consent: Boolean(patient.consent),
+      timestamp: patient.created_at.toISOString()
+    };
+
+    const sortedData = {};
+    Object.keys(dataToHash).sort().forEach(key => {
+      sortedData[key] = dataToHash[key];
+    });
+
+    const data_hash = crypto.createHash('sha256').update(JSON.stringify(sortedData)).digest('hex');
+
+    await pool.execute(
+      `INSERT INTO dlt_hashes (patient_id, data_hash, verified) 
+       VALUES (?, ?, TRUE)
+       ON DUPLICATE KEY UPDATE data_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP`,
+      [patientId, data_hash, data_hash]
+    );
+
+    await pool.execute(
+      'UPDATE patients SET dlt_status = ? WHERE patient_id = ?',
+      ['verified', patientId]
+    );
+
+    return true;
+  } catch (error) {
+    console.error('Error creating DLT hash:', error.message);
+    return false;
+  }
+};
+
+// Biometric link creation function
+const createBiometricLink = async (patientId, biometricType = 'fingerprint') => {
+  try {
+    const biometricData = `biometric_${patientId}_${Date.now()}`;
+    const crypto = require('crypto');
+    const biometricHash = crypto.createHash('sha256').update(biometricData).digest('hex');
+
+    await pool.execute(
+      `INSERT INTO biometric_links 
+       (patient_id, biometric_type, biometric_data, biometric_hash, is_active) 
+       VALUES (?, ?, ?, ?, TRUE)
+       ON DUPLICATE KEY UPDATE 
+       biometric_data = ?, biometric_hash = ?, is_active = TRUE, updated_at = CURRENT_TIMESTAMP`,
+      [patientId, biometricType, biometricData, biometricHash, 
+       biometricData, biometricHash]
+    );
+
+    return true;
+  } catch (error) {
+    console.error('Error creating biometric link:', error.message);
+    return false;
+  }
+};
 
 module.exports = router;

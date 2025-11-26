@@ -16,7 +16,7 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'uwn8d7s9f8w7e6r5t4y3u2i1o0p');
     
     // Verify user still exists
     const [rows] = await pool.execute(
