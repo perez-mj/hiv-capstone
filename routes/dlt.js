@@ -1,11 +1,10 @@
-// backend/routes/dlt.js
+// backend/routes/dlt.js - Fix the column names
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const auth = require('../middleware/auth');
 const { logAudit } = require('../utils/auditLogger');
 
-// Apply auth middleware to all DLT routes
 router.use(auth);
 
 const calculateHash = (data) => {
@@ -19,7 +18,7 @@ const calculateHash = (data) => {
 
 const getUserInfo = (req) => {
   return {
-    admin_user_id: req.user?.id || null, // Assumes user info is attached by middleware (e.g., req.user)
+    admin_user_id: req.user?.id || null,
     ip_address: req.ip || req.connection.remoteAddress || null
   };
 };
@@ -60,11 +59,11 @@ router.post('/hash/:patient_id', async (req, res) => {
     const hash = calculateHash(dataToHash);
     console.log('Generated hash:', hash);
 
-    // Store hash in DLT table
+    // FIX: Use data_hash instead of dlt_hash to match your table schema
     const [result] = await pool.execute(
-      `INSERT INTO dlt_hashes (patient_id, dlt_hash, verified) 
+      `INSERT INTO dlt_hashes (patient_id, data_hash, verified) 
        VALUES (?, ?, TRUE)
-       ON DUPLICATE KEY UPDATE dlt_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE data_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP`,
       [patient_id, hash, hash]
     );
 
@@ -151,13 +150,17 @@ router.get('/verify/:patient_id', async (req, res) => {
     };
     
     const currentHash = calculateHash(dataToHash);
+    
+    // FIX: Use data_hash instead of dlt_hash
     const isVerified = currentHash === latestDltHash.data_hash;
 
     console.log('Verification result:', isVerified);
+    console.log('Current hash:', currentHash);
+    console.log('Stored hash:', latestDltHash.data_hash);
 
     // Update DLT verification status
     await pool.execute(
-      'UPDATE dlt_hashes SET verified = ? WHERE id = ?',
+      'UPDATE dlt_hashes SET verified = ?, verification_timestamp = CURRENT_TIMESTAMP WHERE id = ?',
       [isVerified, latestDltHash.id]
     );
 
@@ -180,7 +183,7 @@ router.get('/verify/:patient_id', async (req, res) => {
     res.json({
       patient_id,
       current_hash: currentHash,
-      stored_dlt_hash: latestDltHash.hash,
+      stored_hash: latestDltHash.data_hash, // FIX: Changed from stored_dlt_hash
       is_verified: isVerified,
       status: dltStatus,
       last_dlt_timestamp: latestDltHash.timestamp,
@@ -215,6 +218,52 @@ router.get('/hashes/:patient_id', async (req, res) => {
 
   } catch (err) {
     console.error('Error fetching DLT hashes:', err);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      message: err.message 
+    });
+  }
+});
+
+// NEW: Get all DLT hashes for admin view
+router.get('/hashes', async (req, res) => {
+  try {
+    const { page = 1, limit = 50, status } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT dh.*, p.name, p.date_of_birth 
+      FROM dlt_hashes dh 
+      JOIN patients p ON dh.patient_id = p.patient_id
+    `;
+    let countQuery = `
+      SELECT COUNT(*) as total 
+      FROM dlt_hashes dh 
+      JOIN patients p ON dh.patient_id = p.patient_id
+    `;
+    const queryParams = [];
+
+    if (status) {
+      query += ' WHERE dh.verified = ?';
+      countQuery += ' WHERE dh.verified = ?';
+      queryParams.push(status === 'verified' ? 1 : 0);
+    }
+
+    query += ` ORDER BY dh.timestamp DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+
+    const [rows] = await pool.execute(query, queryParams);
+    const [countRows] = await pool.execute(countQuery, queryParams.slice(0, -2)); // Remove limit/offset for count
+
+    res.json({
+      hashes: rows,
+      total: countRows[0].total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(countRows[0].total / limit)
+    });
+
+  } catch (err) {
+    console.error('Error fetching all DLT hashes:', err);
     res.status(500).json({ 
       error: 'Internal server error', 
       message: err.message 

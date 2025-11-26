@@ -14,6 +14,114 @@ const getUserInfo = (req) => {
   };
 };
 
+// backend/routes/patients.js - Add this route
+
+// GET /api/patients/stats - Get patient statistics for dashboard
+router.get('/stats', async (req, res) => {
+  try {
+    console.log('Fetching patient statistics...');
+    
+    // Get total patients count
+    const [totalResult] = await pool.execute('SELECT COUNT(*) as total FROM patients');
+    const total = totalResult[0].total;
+
+    // Get consented patients count
+    const [consentedResult] = await pool.execute('SELECT COUNT(*) as consented FROM patients WHERE consent = TRUE');
+    const consented = consentedResult[0].consented;
+
+    // Get HIV status counts
+    const [hivResults] = await pool.execute(`
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN hiv_status = 'Reactive' THEN 1 ELSE 0 END) as reactive,
+        SUM(CASE WHEN hiv_status = 'Non-Reactive' THEN 1 ELSE 0 END) as non_reactive
+      FROM patients
+    `);
+    const hivStats = hivResults[0];
+
+    // Get DLT verification counts
+    const [dltResults] = await pool.execute(`
+      SELECT 
+        COUNT(DISTINCT patient_id) as dlt_verified 
+      FROM patients 
+      WHERE dlt_status = 'verified'
+    `);
+    const dltVerified = dltResults[0].dlt_verified;
+
+    // Get daily enrollments (last 24 hours)
+    const [dailyResult] = await pool.execute(`
+      SELECT COUNT(*) as daily_enrollments 
+      FROM patients 
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+    `);
+    const dailyEnrollments = dailyResult[0].daily_enrollments;
+
+    // Get enrollment trends (last 7 days)
+    const [trendsResult] = await pool.execute(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as count
+      FROM patients 
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+    `);
+
+    // Get consent status breakdown
+    const [consentBreakdown] = await pool.execute(`
+      SELECT 
+        CASE 
+          WHEN consent = TRUE THEN 'Consented'
+          ELSE 'Not Consented'
+        END as status,
+        COUNT(*) as count
+      FROM patients
+      GROUP BY consent
+    `);
+
+    // Get DLT status breakdown
+    const [dltBreakdown] = await pool.execute(`
+      SELECT 
+        COALESCE(dlt_status, 'pending') as status,
+        COUNT(*) as count
+      FROM patients
+      GROUP BY dlt_status
+    `);
+
+    const stats = {
+      total: parseInt(total),
+      consented: parseInt(consented),
+      reactive: parseInt(hivStats.reactive),
+      non_reactive: parseInt(hivStats.non_reactive),
+      dlt_verified: parseInt(dltVerified),
+      daily_enrollments: parseInt(dailyEnrollments),
+      enrollment_trends: trendsResult,
+      consent_breakdown: consentBreakdown,
+      dlt_breakdown: dltBreakdown,
+      consent_rate: total > 0 ? Math.round((consented / total) * 100) : 0,
+      reactive_rate: total > 0 ? Math.round((hivStats.reactive / total) * 100) : 0,
+      non_reactive_rate: total > 0 ? Math.round((hivStats.non_reactive / total) * 100) : 0,
+      dlt_verification_rate: total > 0 ? Math.round((dltVerified / total) * 100) : 0
+    };
+
+    console.log('Patient statistics fetched successfully:', {
+      total: stats.total,
+      consented: stats.consented,
+      reactive: stats.reactive,
+      dlt_verified: stats.dlt_verified
+    });
+
+    res.json(stats);
+
+  } catch (err) {
+    console.error('Error fetching patient statistics:', err);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      message: err.message 
+    });
+  }
+});
+
 // GET /api/patients - Get all patients with pagination and filters
 router.get('/', async (req, res, next) => {
   try {
@@ -315,6 +423,7 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 // DLT Hash creation function
+// backend/routes/patients.js - Fix createDltHash function
 const createDltHash = async (patientId) => {
   try {
     const [patientRows] = await pool.execute(
@@ -343,14 +452,27 @@ const createDltHash = async (patientId) => {
       sortedData[key] = dataToHash[key];
     });
 
-    const data_hash = crypto.createHash('sha256').update(JSON.stringify(sortedData)).digest('hex');
+    const hash = crypto.createHash('sha256').update(JSON.stringify(sortedData)).digest('hex');
 
-    await pool.execute(
-      `INSERT INTO dlt_hashes (patient_id, data_hash, verified) 
-       VALUES (?, ?, TRUE)
-       ON DUPLICATE KEY UPDATE data_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP`,
-      [patientId, data_hash, data_hash]
+    // Check if DLT hash already exists for this patient
+    const [existingHashes] = await pool.execute(
+      'SELECT id FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
+      [patientId]
     );
+
+    if (existingHashes.length > 0) {
+      // Update existing hash
+      await pool.execute(
+        'UPDATE dlt_hashes SET data_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP WHERE id = ?',
+        [hash, existingHashes[0].id]
+      );
+    } else {
+      // Insert new hash
+      await pool.execute(
+        'INSERT INTO dlt_hashes (patient_id, data_hash, verified) VALUES (?, ?, TRUE)',
+        [patientId, hash]
+      );
+    }
 
     await pool.execute(
       'UPDATE patients SET dlt_status = ? WHERE patient_id = ?',

@@ -14,41 +14,115 @@ const getUserInfo = (req) => {
   };
 };
 
-// POST /api/biometric/link - Create biometric link for patient
+// Get all biometric links with patient information
+router.get('/links', async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        bl.id,
+        bl.patient_id,
+        p.name as patient_name,
+        bl.biometric_type,
+        bl.biometric_hash as biometric_id,
+        bl.is_active,
+        bl.created_at as linked_date,
+        bl.updated_at as last_verified
+      FROM biometric_links bl
+      LEFT JOIN patients p ON bl.patient_id = p.patient_id
+      ORDER BY bl.created_at DESC
+    `;
+    
+    const [links] = await pool.execute(query);
+    
+    const formattedLinks = links.map(link => ({
+      id: link.id,
+      biometricId: link.biometric_id,
+      patientId: link.patient_id,
+      patientName: link.patient_name || 'Unknown Patient',
+      biometricType: link.biometric_type,
+      status: link.is_active ? 'active' : 'inactive',
+      linkedDate: link.linked_date,
+      lastVerified: link.last_verified
+    }));
+    
+    res.json({
+      success: true,
+      biometric_links: formattedLinks
+    });
+  } catch (error) {
+    console.error('Error fetching biometric links:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch biometric links'
+    });
+  }
+});
+
+// Create new biometric link
 router.post('/link', async (req, res) => {
   try {
-    const { patient_id, biometric_type = 'fingerprint', biometric_data } = req.body;
-
-    if (!patient_id) {
-      return res.status(400).json({ error: 'Patient ID is required' });
-    }
-
-    const success = await createBiometricLink(patient_id, biometric_type, biometric_data);
-
-    if (success) {
-      // Log the action
-      const userInfo = getUserInfo(req);
-      await logAudit(userInfo.admin_user_id, {
-        action_type: 'BIOMETRIC_LINK_CREATED',
-        patient_id: patient_id,
-        description: `Biometric link created for patient`,
-        ip_address: userInfo.ip_address
+    const { patientId, biometricType, biometricData } = req.body;
+    
+    // In a real implementation, you'd generate a hash from the biometric data
+    const biometricHash = generateBiometricHash(biometricData);
+    
+    const query = `
+      INSERT INTO biometric_links 
+        (patient_id, biometric_type, biometric_data, biometric_hash, is_active)
+      VALUES (?, ?, ?, ?, 1)
+    `;
+    
+    const [result] = await pool.execute(query, [
+      patientId, 
+      biometricType, 
+      biometricData, 
+      biometricHash
+    ]);
+    
+    // Get the newly created link with patient info
+    const [newLink] = await pool.execute(`
+      SELECT 
+        bl.id,
+        bl.patient_id,
+        p.name as patient_name,
+        bl.biometric_type,
+        bl.biometric_hash as biometric_id,
+        bl.is_active,
+        bl.created_at as linked_date,
+        bl.updated_at as last_verified
+      FROM biometric_links bl
+      LEFT JOIN patients p ON bl.patient_id = p.patient_id
+      WHERE bl.id = ?
+    `, [result.insertId]);
+    
+    res.json({
+      success: true,
+      message: 'Biometric link created successfully',
+      biometric_link: {
+        id: newLink[0].id,
+        biometricId: newLink[0].biometric_id,
+        patientId: newLink[0].patient_id,
+        patientName: newLink[0].patient_name,
+        biometricType: newLink[0].biometric_type,
+        status: newLink[0].is_active ? 'active' : 'inactive',
+        linkedDate: newLink[0].linked_date,
+        lastVerified: newLink[0].last_verified
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error creating biometric link:', error);
+    
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({
+        success: false,
+        message: 'Biometric link already exists for this patient and type'
       });
-
-      res.json({
-        success: true,
-        patient_id,
-        biometric_type,
-        message: 'Biometric link created successfully'
-      });
-    } else {
-      res.status(500).json({ error: 'Failed to create biometric link' });
     }
-  } catch (err) {
-    console.error('Error creating biometric link:', err);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      message: err.message 
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create biometric link'
     });
   }
 });
@@ -171,31 +245,87 @@ router.put('/deactivate/:biometric_hash', async (req, res) => {
 });
 
 // GET /api/biometric/stats - Get biometric statistics
+// Get biometric stats
 router.get('/stats', async (req, res) => {
   try {
-    const [totalRows] = await pool.execute('SELECT COUNT(*) as count FROM biometric_links WHERE is_active = TRUE');
-    const [typeStats] = await pool.execute(`
-      SELECT biometric_type, COUNT(*) as count 
+    const query = `
+      SELECT 
+        COUNT(*) as total_links,
+        COUNT(CASE WHEN is_active = 1 THEN 1 END) as active_links,
+        COUNT(CASE WHEN is_active = 0 THEN 1 END) as inactive_links,
+        COUNT(CASE WHEN DATE(created_at) = CURDATE() THEN 1 END) as today_links,
+        biometric_type,
+        COUNT(*) as type_count
       FROM biometric_links 
-      WHERE is_active = TRUE 
       GROUP BY biometric_type
-    `);
-    const [recentLinks] = await pool.execute(`
-      SELECT COUNT(*) as count 
-      FROM biometric_links 
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND is_active = TRUE
-    `);
-
+    `;
+    
+    const [stats] = await pool.execute(query);
+    
+    const total = stats[0]?.total_links || 0;
+    const active = stats[0]?.active_links || 0;
+    const inactive = stats[0]?.inactive_links || 0;
+    const today = stats[0]?.today_links || 0;
+    
     res.json({
-      active_biometric_links: totalRows[0].count,
-      links_by_type: typeStats,
-      recent_links_24h: recentLinks[0].count
+      success: true,
+      data: {
+        // For biometric management page
+        total: total,
+        active: active,
+        inactive: inactive,
+        today: today,
+        
+        // For dashboard compatibility
+        active_biometric_links: active,
+        total_biometric_links: total,
+        
+        by_type: stats.reduce((acc, row) => {
+          acc[row.biometric_type] = row.type_count;
+          return acc;
+        }, {})
+      }
     });
-  } catch (err) {
-    console.error('Error fetching biometric stats:', err);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      message: err.message 
+    
+  } catch (error) {
+    console.error('Error fetching biometric stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch biometric stats'
+    });
+  }
+});
+
+// Helper function to generate biometric hash (simplified)
+function generateBiometricHash(biometricData) {
+  // In a real implementation, use a proper cryptographic hash
+  // This is a simplified version for demonstration
+  return 'BIO-' + require('crypto')
+    .createHash('sha256')
+    .update(biometricData + Date.now())
+    .digest('hex')
+    .substring(0, 16)
+    .toUpperCase();
+}
+
+// Unlink biometric (set inactive)
+router.delete('/unlink/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const query = 'UPDATE biometric_links SET is_active = 0 WHERE id = ?';
+    await pool.execute(query, [id]);
+    
+    res.json({
+      success: true,
+      message: 'Biometric link deactivated successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error unlinking biometric:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to unlink biometric'
     });
   }
 });

@@ -1,10 +1,83 @@
-// backend/routes/audit.js
+// backend/routes/audit.js - Add this if you don't have it
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const auth = require('../middleware/auth');
 
 router.use(auth);
+
+// GET /api/audit/stats - Get audit statistics for dashboard
+router.get('/stats', async (req, res) => {
+  try {
+    console.log('Fetching audit statistics...');
+    
+    // Get audit counts for last 30 days
+    const [last30Days] = await pool.execute(`
+      SELECT 
+        DATE(timestamp) as date,
+        COUNT(*) as count
+      FROM audit_logs 
+      WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      GROUP BY DATE(timestamp)
+      ORDER BY date DESC
+      LIMIT 30
+    `);
+
+    // Get audit counts for last 24 hours
+    const [last24Hours] = await pool.execute(`
+      SELECT 
+        HOUR(timestamp) as hour,
+        COUNT(*) as count
+      FROM audit_logs 
+      WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+      GROUP BY HOUR(timestamp)
+      ORDER BY hour ASC
+    `);
+
+    // Get action type breakdown
+    const [actionTypes] = await pool.execute(`
+      SELECT 
+        action_type,
+        COUNT(*) as count
+      FROM audit_logs 
+      WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY action_type
+      ORDER BY count DESC
+    `);
+
+    // Get top users by activity
+    const [topUsers] = await pool.execute(`
+      SELECT 
+        admin_user_id,
+        COUNT(*) as activity_count
+      FROM audit_logs 
+      WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      GROUP BY admin_user_id
+      ORDER BY activity_count DESC
+      LIMIT 10
+    `);
+
+    const stats = {
+      last_30_days: last30Days,
+      last_24_hours: last24Hours,
+      action_types: actionTypes,
+      top_users: topUsers,
+      total_actions_24h: last24Hours.reduce((sum, item) => sum + item.count, 0),
+      total_actions_30d: last30Days.reduce((sum, item) => sum + item.count, 0)
+    };
+
+    console.log('Audit statistics fetched successfully');
+    res.json(stats);
+
+  } catch (err) {
+    console.error('Error fetching audit statistics:', err);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      message: err.message 
+    });
+  }
+});
+
 
 // GET /api/audit/logs - Get audit logs
 router.get('/logs', async (req, res, next) => {
