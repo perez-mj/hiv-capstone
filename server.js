@@ -15,6 +15,7 @@ const dltRoutes = require('./routes/dlt');
 const biometricRoutes = require('./routes/biometric');
 const authRoutes = require('./routes/auth');
 const auditRoutes = require('./routes/audit');
+const adminRoutes = require('./routes/admin');
 
 // Routes
 app.use('/api/patients', patientRoutes);
@@ -22,6 +23,8 @@ app.use('/api/dlt', dltRoutes);
 app.use('/api/biometric', biometricRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/admin', adminRoutes);
+
 
 // Health check
 app.get('/', (req, res) => {
