@@ -1,4 +1,4 @@
-// backend/routes/dlt.js - Fix the column names
+// backend/routes/dlt.js - FIXED to be append-only
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -23,11 +23,11 @@ const getUserInfo = (req) => {
   };
 };
 
-// POST /api/dlt/hash/:patient_id - Create DLT hash for patient
+// POST /api/dlt/hash/:patient_id - Create NEW DLT hash (append-only)
 router.post('/hash/:patient_id', async (req, res) => {
   try {
     const { patient_id } = req.params;
-    console.log('Creating DLT hash for patient:', patient_id);
+    console.log('Creating NEW DLT hash for patient:', patient_id);
 
     // Get patient data
     const [patientRows] = await pool.execute(
@@ -44,14 +44,14 @@ router.post('/hash/:patient_id', async (req, res) => {
 
     const patient = patientRows[0];
     
-    // Prepare data for hashing
+    // Prepare data for hashing (SAME FORMAT EVERY TIME)
     const dataToHash = {
       patient_id: patient.patient_id,
       name: patient.name,
       date_of_birth: patient.date_of_birth.toISOString().split('T')[0],
       hiv_status: patient.hiv_status,
       consent: Boolean(patient.consent),
-      timestamp: patient.created_at.toISOString()
+      timestamp: patient.created_at.toISOString() // Use original creation timestamp for consistency
     };
 
     console.log('Data to hash:', dataToHash);
@@ -59,12 +59,27 @@ router.post('/hash/:patient_id', async (req, res) => {
     const hash = calculateHash(dataToHash);
     console.log('Generated hash:', hash);
 
-    // FIX: Use data_hash instead of dlt_hash to match your table schema
+    // 🚀 CRITICAL FIX: ALWAYS INSERT, NEVER UPDATE
+    // Get previous hash for simple chain linking
+    const [previousHashes] = await pool.execute(
+      'SELECT data_hash FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
+      [patient_id]
+    );
+
+    let block_hash = null;
+    if (previousHashes.length > 0) {
+      // Create simple chain: block_hash = SHA256(previous_hash + new_hash)
+      const crypto = require('crypto');
+      block_hash = crypto.createHash('sha256')
+        .update(previousHashes[0].data_hash + hash)
+        .digest('hex');
+    }
+
+    // INSERT NEW ROW - NEVER UPDATE EXISTING
     const [result] = await pool.execute(
-      `INSERT INTO dlt_hashes (patient_id, data_hash, verified) 
-       VALUES (?, ?, TRUE)
-       ON DUPLICATE KEY UPDATE data_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP`,
-      [patient_id, hash, hash]
+      `INSERT INTO dlt_hashes (patient_id, data_hash, block_hash, verified) 
+       VALUES (?, ?, ?, TRUE)`,
+      [patient_id, hash, block_hash]
     );
 
     // Update patient DLT status
@@ -78,7 +93,7 @@ router.post('/hash/:patient_id', async (req, res) => {
     await logAudit(userInfo.admin_user_id, {
       action_type: 'DLT_HASH_CREATED',
       patient_id: patient_id,
-      description: `DLT hash created for patient ${patient.name}`,
+      description: `NEW DLT hash created for patient ${patient.name}`,
       ip_address: userInfo.ip_address
     });
 
@@ -86,8 +101,10 @@ router.post('/hash/:patient_id', async (req, res) => {
       success: true,
       patient_id,
       hash,
+      block_hash,
       timestamp: new Date().toISOString(),
-      message: 'DLT hash created successfully'
+      message: 'NEW DLT hash created successfully',
+      is_new_record: true
     });
 
   } catch (err) {
@@ -99,11 +116,11 @@ router.post('/hash/:patient_id', async (req, res) => {
   }
 });
 
-// GET /api/dlt/verify/:patient_id - Verify DLT integrity
+// GET /api/dlt/verify/:patient_id - Verify DLT integrity against ORIGINAL snapshot
 router.get('/verify/:patient_id', async (req, res) => {
   try {
     const { patient_id } = req.params;
-    console.log('Verifying DLT for patient:', patient_id);
+    console.log('Verifying DLT integrity for patient:', patient_id);
 
     // Get current patient data
     const [patientRows] = await pool.execute(
@@ -120,13 +137,13 @@ router.get('/verify/:patient_id', async (req, res) => {
 
     const patient = patientRows[0];
     
-    // Get latest DLT hash
-    const [dltRows] = await pool.execute(
-      'SELECT * FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
+    // 🚀 CRITICAL FIX: Get the ORIGINAL snapshot (first hash ever created)
+    const [originalHashRows] = await pool.execute(
+      'SELECT * FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp ASC LIMIT 1',
       [patient_id]
     );
 
-    if (dltRows.length === 0) {
+    if (originalHashRows.length === 0) {
       console.log('No DLT hash found for patient:', patient_id);
       return res.json({
         patient_id,
@@ -137,28 +154,37 @@ router.get('/verify/:patient_id', async (req, res) => {
       });
     }
 
-    const latestDltHash = dltRows[0];
+    const originalSnapshot = originalHashRows[0];
     
-    // Prepare data for hashing (same format as when created)
+    // Prepare data for hashing (EXACT SAME format as original snapshot)
     const dataToHash = {
       patient_id: patient.patient_id,
       name: patient.name,
       date_of_birth: patient.date_of_birth.toISOString().split('T')[0],
       hiv_status: patient.hiv_status,
       consent: Boolean(patient.consent),
-      timestamp: patient.created_at.toISOString()
+      timestamp: patient.created_at.toISOString() // Use original creation timestamp
     };
     
     const currentHash = calculateHash(dataToHash);
     
-    // FIX: Use data_hash instead of dlt_hash
-    const isVerified = currentHash === latestDltHash.data_hash;
+    // 🚀 COMPARE: Current data hash vs ORIGINAL stored snapshot hash
+    const isVerified = currentHash === originalSnapshot.data_hash;
 
-    console.log('Verification result:', isVerified);
-    console.log('Current hash:', currentHash);
-    console.log('Stored hash:', latestDltHash.data_hash);
+    console.log('=== TAMPER DETECTION RESULTS ===');
+    console.log('Current data hash:', currentHash);
+    console.log('Original snapshot hash:', originalSnapshot.data_hash);
+    console.log('Hashes match (no tampering):', isVerified);
+    console.log('Data being verified:', dataToHash);
 
-    // Update DLT verification status
+    // Get latest hash for status update
+    const [latestHashRows] = await pool.execute(
+      'SELECT * FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
+      [patient_id]
+    );
+    const latestDltHash = latestHashRows[0];
+
+    // Update latest DLT verification status
     await pool.execute(
       'UPDATE dlt_hashes SET verified = ?, verification_timestamp = CURRENT_TIMESTAMP WHERE id = ?',
       [isVerified, latestDltHash.id]
@@ -176,19 +202,23 @@ router.get('/verify/:patient_id', async (req, res) => {
     await logAudit(userInfo.admin_user_id, {
       action_type: 'DLT_VERIFICATION',
       patient_id: patient_id,
-      description: `DLT verification ${isVerified ? 'passed' : 'failed'} for patient ${patient.name}`,
+      description: `DLT verification ${isVerified ? 'passed' : 'FAILED - POSSIBLE TAMPERING'} for patient ${patient.name}`,
       ip_address: userInfo.ip_address
     });
 
     res.json({
       patient_id,
       current_hash: currentHash,
-      stored_hash: latestDltHash.data_hash, // FIX: Changed from stored_dlt_hash
+      original_snapshot_hash: originalSnapshot.data_hash, // Changed from stored_hash
       is_verified: isVerified,
       status: dltStatus,
-      last_dlt_timestamp: latestDltHash.timestamp,
+      has_tampering: !isVerified, // 🚨 NEW: Explicit tampering flag
+      original_snapshot_timestamp: originalSnapshot.timestamp,
       verification_timestamp: new Date().toISOString(),
-      data_verified: dataToHash
+      data_verified: dataToHash,
+      message: isVerified 
+        ? 'Data integrity verified - no tampering detected' 
+        : '🚨 DATA TAMPERING DETECTED - Current data does not match original snapshot'
     });
 
   } catch (err) {
@@ -200,20 +230,21 @@ router.get('/verify/:patient_id', async (req, res) => {
   }
 });
 
-// GET /api/dlt/hashes/:patient_id - Get DLT history for patient
+// GET /api/dlt/hashes/:patient_id - Get ALL DLT history for patient (immutable timeline)
 router.get('/hashes/:patient_id', async (req, res) => {
   try {
     const { patient_id } = req.params;
 
     const [rows] = await pool.execute(
-      'SELECT * FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC',
+      'SELECT * FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp ASC', // Show timeline order
       [patient_id]
     );
 
     res.json({
       patient_id,
       hashes: rows,
-      total: rows.length
+      total: rows.length,
+      timeline: true
     });
 
   } catch (err) {
@@ -224,6 +255,8 @@ router.get('/hashes/:patient_id', async (req, res) => {
     });
   }
 });
+
+// ... rest of your dlt.js routes remain the same
 
 // NEW: Get all DLT hashes for admin view
 router.get('/hashes', async (req, res) => {

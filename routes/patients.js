@@ -422,7 +422,6 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// DLT Hash creation function
 // backend/routes/patients.js - Fix createDltHash function
 const createDltHash = async (patientId) => {
   try {
@@ -454,25 +453,25 @@ const createDltHash = async (patientId) => {
 
     const hash = crypto.createHash('sha256').update(JSON.stringify(sortedData)).digest('hex');
 
-    // Check if DLT hash already exists for this patient
-    const [existingHashes] = await pool.execute(
-      'SELECT id FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
+    // \U0001f680 CRITICAL FIX: Get previous hash for chain linking
+    const [previousHashes] = await pool.execute(
+      'SELECT data_hash FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
       [patientId]
     );
 
-    if (existingHashes.length > 0) {
-      // Update existing hash
-      await pool.execute(
-        'UPDATE dlt_hashes SET data_hash = ?, verified = TRUE, timestamp = CURRENT_TIMESTAMP WHERE id = ?',
-        [hash, existingHashes[0].id]
-      );
-    } else {
-      // Insert new hash
-      await pool.execute(
-        'INSERT INTO dlt_hashes (patient_id, data_hash, verified) VALUES (?, ?, TRUE)',
-        [patientId, hash]
-      );
+    let block_hash = null;
+    if (previousHashes.length > 0) {
+      // Create simple chain
+      block_hash = crypto.createHash('sha256')
+        .update(previousHashes[0].data_hash + hash)
+        .digest('hex');
     }
+
+    // \U0001f680 ALWAYS INSERT NEW ROW
+    await pool.execute(
+      'INSERT INTO dlt_hashes (patient_id, data_hash, block_hash, verified) VALUES (?, ?, ?, TRUE)',
+      [patientId, hash, block_hash]
+    );
 
     await pool.execute(
       'UPDATE patients SET dlt_status = ? WHERE patient_id = ?',
