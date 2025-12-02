@@ -1,0 +1,73 @@
+// src/styles/variables.scss
+
+// Vuetify color sync
+$primary: #206455; // same as your Vuetify primary color (green tone)#2e7d32; 
+$secondary: #9bb69d; // lighter green for accents#81c784;
+$accent: #388e3c;
+$error: #d32f2f;
+$info: #0288d1;
+$success: #4CAF50;
+$warning: #fbc02d;
+
+// Backgrounds and surfaces
+$background-light: #f4fff7;
+$background-card: #ffffff;
+$border-color: #d9f0e3;
+$shadow-light: rgba(0, 0, 0, 0.08);
+
+// Text colors
+$text-primary: #1b1b1b;
+$text-secondary: #444;
+$text-muted: #666;
+$text-white: #fff;
+$text-highlight: $primary;
+
+// Gradients
+$gradient-primary: linear-gradient(90deg, #f4fff7 0%, #ffffff 100%);
+$gradient-accent: linear-gradient(135deg, $primary, $secondary);
+
+// Layout breakpoints
+$breakpoint-sm: 600px;
+$breakpoint-md: 960px;
+$breakpoint-lg: 1264px;
+
+// Shared radius/shadows
+$radius-sm: 8px;
+$radius-md: 12px;
+$radius-lg: 20px;
+
+$shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+$shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+$shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.15);
+
+// :export {
+//     primary: #{$primary};
+//     secondary: #{$secondary};
+//     accent: #{$accent};
+//     error: #{$error};
+//     info: #{$info};
+//     success: #{$success};
+//     warning: #{$warning};
+
+//     background-light: #{$background-light};
+//     background-card: #{$background-card};
+//     border-color: #{$border-color};
+//     shadow-light: #{$shadow-light};
+
+//     text-primary: #{$text-primary};
+//     text-secondary: #{$text-secondary};
+//     text-muted: #{$text-muted};
+//     text-highlight: #{$text-highlight};
+
+//     breakpoint-sm: #{$breakpoint-sm};
+//     breakpoint-md: #{$breakpoint-md};
+//     breakpoint-lg: #{$breakpoint-lg};
+
+//     radius-sm:#{$radius-sm};
+//     radius-md:#{$radius-md};
+//     radius-lg:#{$radius-lg};
+
+//     shadow-sm:#{$radius-sm};
+//     shadow-md:#{$radius-md};
+//     shadow-lg:#{$radius-lg};
+// }

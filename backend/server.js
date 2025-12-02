@@ -17,6 +17,28 @@ const authRoutes = require('./routes/auth');
 const auditRoutes = require('./routes/audit');
 const adminRoutes = require('./routes/admin');
 
+const patientAuthRoutes = require('./routes/patientAuth');
+const patientAppointmentRoutes = require('./routes/patientAppointments');
+const patientMessageRoutes = require('./routes/patientMessages');
+const patientTestRoutes = require('./routes/patientTests');
+
+const adminAppointmentRoutes = require('./routes/adminAppointments');
+const adminMessagingRoutes = require('./routes/adminMessaging');
+// Add this import at the top with other imports
+const patientContactRoutes = require('./routes/patientContacts');
+
+// Add this with other route mounts
+app.use('/api/patient/contacts', patientContactRoutes);
+// Use the routes
+app.use('/api/admin/appointments', adminAppointmentRoutes);
+app.use('/api/admin/messaging', adminMessagingRoutes);
+
+// Patient routes
+app.use('/api/patient/auth', patientAuthRoutes);
+app.use('/api/patient/appointments', patientAppointmentRoutes);
+app.use('/api/patient/messages', patientMessageRoutes);
+app.use('/api/patient/tests', patientTestRoutes);
+
 // Routes
 app.use('/api/patients', patientRoutes);
 app.use('/api/dlt', dltRoutes);

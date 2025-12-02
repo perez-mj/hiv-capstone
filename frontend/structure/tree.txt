@@ -1,0 +1,64 @@
+Directory Tree — Generated on 11/26/2025, 10:24:16
+Root: frontend
+
+frontend/
+├─ .env
+├─ index.html
+├─ package-lock.json
+├─ package.json
+├─ vite.config.js
+├─ public/
+│  ├─ db.json
+│  └─ vite.svg
+└─ src/
+   ├─ App.vue
+   ├─ main.js
+   ├─ api/
+   │  ├─ auth.js
+   │  ├─ http.js
+   │  └─ patientApi.js
+   ├─ assets/
+   │  ├─ vue.svg
+   │  ├─ fonts/
+   │  ├─ icons/
+   │  └─ images/
+   │     └─ logo.png
+   ├─ components/
+   │  ├─ DltVerificationDialog.vue
+   │  ├─ PatientDialog.vue
+   │  ├─ charts/
+   │  ├─ layout/
+   │  │  ├─ Footer.vue
+   │  │  ├─ Header.vue
+   │  │  └─ Sidebar.vue
+   │  └─ ui/
+   │     └─ Button.vue
+   ├─ composables/
+   │  ├─ useAuth.js
+   │  └─ usePatientsApi.js
+   ├─ layouts/
+   │  ├─ AdminLayout.vue
+   │  └─ PublicLayout.vue
+   ├─ modules/
+   ├─ pages/
+   │  ├─ Login.vue
+   │  └─ admin/
+   │     ├─ Dashboard.vue
+   │     ├─ Enrollment.vue
+   │     ├─ Patients.vue
+   │     └─ settings/
+   │        ├─ Notifications.vue
+   │        ├─ Profile.vue
+   │        ├─ Security.vue
+   │        ├─ SettingsLayout.vue
+   │        └─ System.vue
+   ├─ plugins/
+   │  └─ vuetify.js
+   ├─ router/
+   │  └─ index.js
+   ├─ stores/
+   │  ├─ auth.js
+   │  └─ patient.js
+   └─ styles/
+      ├─ style.css
+      └─ variables.scss

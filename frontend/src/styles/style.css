@@ -1,0 +1,39 @@
+/* src/styles/style.css */
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f8f9fa;
+  margin: 0;
+}
+
+/* Override Vuetify button globally */
+.v-btn {
+  border-radius: 8px;
+  text-transform: none;
+  font-weight: 500;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Layout */
+.admin-layout {
+  display: flex;
+  height: 100vh;
+}
+
+.admin-sidebar {
+  width: 240px;
+  background: #1e1e2f;
+  color: white;
+}
+
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.v-input--hide-spin-buttons input[type=number] {
+  appearance: textfield;
+  /* works in all modern browsers */
+  -moz-appearance: textfield;
+}

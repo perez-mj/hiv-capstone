@@ -122,15 +122,51 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Add this to your patients.js routes
+// GET /api/patients/list - Get simple patient list for dropdowns
+router.get('/list', async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    let query = `
+      SELECT DISTINCT
+        patient_id,
+        name
+      FROM patients
+      WHERE 1=1
+    `;
+    
+    const params = [];
+
+    if (search) {
+      query += ` AND (name LIKE ? OR patient_id LIKE ?)`;
+      const searchTerm = `%${search}%`;
+      params.push(searchTerm, searchTerm);
+    }
+
+    query += ` ORDER BY name ASC`;
+
+    const [rows] = await pool.execute(query, params);
+
+    res.json({
+      patients: rows
+    });
+
+  } catch (err) {
+    console.error('Error fetching patient list:', err);
+    res.status(500).json({ error: 'Internal server error', message: err.message });
+  }
+});
+
 // GET /api/patients - Get all patients with pagination and filters
-router.get('/', async (req, res, next) => {
+router.get('/pagination', async (req, res, next) => {
   try {
     const { page = 1, limit = 10, search, consent, hiv_status, dlt_status } = req.query;
     const offset = (page - 1) * limit;
 
-    // Build the main query
+    // Build the main query - FIXED: Use DISTINCT and proper joins
     let query = `
-      SELECT 
+      SELECT DISTINCT
         p.patient_id,
         p.name,
         p.date_of_birth,
@@ -146,23 +182,16 @@ router.get('/', async (req, res, next) => {
           WHEN p.consent = 0 THEN 'NO'
           ELSE 'NO'
         END as consent_status,
-        COALESCE(dh.verified, FALSE) as dlt_verified,
-        COALESCE(biometric_count.active_biometrics, 0) as active_biometrics
+        COALESCE((SELECT verified FROM dlt_hashes WHERE patient_id = p.patient_id ORDER BY timestamp DESC LIMIT 1), FALSE) as dlt_verified,
+        COALESCE((SELECT COUNT(*) FROM biometric_links WHERE patient_id = p.patient_id AND is_active = TRUE), 0) as active_biometrics
       FROM patients p
-      LEFT JOIN dlt_hashes dh ON p.patient_id = dh.patient_id
-      LEFT JOIN (
-        SELECT patient_id, COUNT(*) as active_biometrics 
-        FROM biometric_links 
-        WHERE is_active = TRUE 
-        GROUP BY patient_id
-      ) biometric_count ON p.patient_id = biometric_count.patient_id
       WHERE 1=1
     `;
     
     const params = [];
 
     if (search) {
-      query += ` AND (p.name LIKE  OR p.patient_id LIKE %${search}% OR p.contact_info LIKE %${search}% OR p.contact LIKE %${search}%)`;
+      query += ` AND (p.name LIKE %${search}% OR p.patient_id LIKE %${search}% OR p.contact_info LIKE %${search}% OR p.contact LIKE %${search}%)`;
     }
 
     if (consent) {
@@ -185,9 +214,9 @@ router.get('/', async (req, res, next) => {
 
     const [rows] = await pool.execute(query, params);
 
-    // Get total count
+    // Get total count - FIXED: Count distinct patients
     let countQuery = `
-      SELECT COUNT(*) as total 
+      SELECT COUNT(DISTINCT p.patient_id) as total 
       FROM patients p
       WHERE 1=1
     `;
@@ -422,7 +451,7 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// backend/routes/patients.js - Fix createDltHash function
+// Also update the createDltHash function to NOT automatically set status to verified
 const createDltHash = async (patientId) => {
   try {
     const [patientRows] = await pool.execute(
@@ -453,7 +482,7 @@ const createDltHash = async (patientId) => {
 
     const hash = crypto.createHash('sha256').update(JSON.stringify(sortedData)).digest('hex');
 
-    // \U0001f680 CRITICAL FIX: Get previous hash for chain linking
+    // Get previous hash for chain linking
     const [previousHashes] = await pool.execute(
       'SELECT data_hash FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
       [patientId]
@@ -467,16 +496,14 @@ const createDltHash = async (patientId) => {
         .digest('hex');
     }
 
-    // \U0001f680 ALWAYS INSERT NEW ROW
+    // 🚀 FIX: Insert new hash but don't set verified status automatically
     await pool.execute(
-      'INSERT INTO dlt_hashes (patient_id, data_hash, block_hash, verified) VALUES (?, ?, ?, TRUE)',
+      'INSERT INTO dlt_hashes (patient_id, data_hash, block_hash, verified) VALUES (?, ?, ?, FALSE)', // 🚀 Set verified to FALSE initially
       [patientId, hash, block_hash]
     );
 
-    await pool.execute(
-      'UPDATE patients SET dlt_status = ? WHERE patient_id = ?',
-      ['verified', patientId]
-    );
+    // 🚀 FIX: Don't update patient DLT status here - let verification process handle it
+    // Status remains 'pending' until explicit verification
 
     return true;
   } catch (error) {

@@ -1,0 +1,119 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "email": "admin@example.com",
+      "password": "admin123",
+      "name": "Admin User",
+      "role": "admin"
+    },
+    {
+      "id": "9e3e",
+      "email": "1",
+      "password": ""
+    }
+  ],
+  "patients": [
+    {
+      "id": "P001",
+      "name": "Alice Johnson",
+      "age": 32,
+      "status": "Active",
+      "lastCheckup": "2025-10-15"
+    },
+    {
+      "id": "P002",
+      "name": "Michael Brown",
+      "age": 40,
+      "status": "Active",
+      "lastCheckup": "2025-09-22"
+    }
+  ],
+  "devices": [
+    {
+      "id": "DEV003",
+      "patientId": "P001",
+      "type": "Heartbeat Sensor",
+      "status": "Normal",
+      "lastReading": "2025-09-22 17:47",
+      "battery": "83",
+      "connection": "Connected",
+      "location": "Naujan Lake",
+      "responseTime": "6"
+    },
+    {
+      "id": "DEV002",
+      "patientId": "P001",
+      "type": "Oxygen level sensor",
+      "status": "Normal",
+      "lastReading": "",
+      "battery": "92",
+      "connection": "Connected",
+      "location": "Carable",
+      "responseTime": "7"
+    }
+  ],
+  "ai_analysis": [
+    {
+      "id": "A001",
+      "patient": "Alice Johnson",
+      "prediction": "Stable",
+      "confidence": 98.5,
+      "timestamp": "2025-11-01 09:45"
+    },
+    {
+      "id": "A002",
+      "patient": "David Lee",
+      "prediction": "Needs Review",
+      "confidence": 92.1,
+      "timestamp": "2025-11-01 09:50"
+    }
+  ],
+  "billings": [
+    {
+      "id": 1, 
+      "transactionId": "TXN001",
+      "patientId": "PNT101",
+      "service": "Dental Check-up",
+      "amount": 750000,
+      "status": "Paid", 
+      "date": "2025-10-25"
+    },
+    {
+      "id": 2, 
+      "transactionId": "TXN002",
+      "patientId": "PNT102",
+      "service": "Physical Therapy",
+      "amount": 2500000,
+      "status": "Pending", 
+      "date": "2025-10-26"
+    },
+    {
+      "id": 3, 
+      "transactionId": "TXN003",
+      "patientId": "PNT103",
+      "service": "General Consultation",
+      "amount": 500000,
+      "status": "Failed", 
+      "date": "2025-10-27"
+    },
+    {
+      "id": 4, 
+      "transactionId": "TXN004",
+      "patientId": "PNT101",
+      "service": "Blood Test Panel",
+      "amount": 1200000,
+      "status": "Paid", 
+      "date": "2025-10-27"
+    },
+    {
+      "id": 5, 
+      "transactionId": "TXN005",
+      "patientId": "PNT104",
+      "service": "X-Ray Imaging",
+      "amount": 1500000,
+      "status": "Paid", 
+      "date": "2025-10-28"
+    }
+  ]
+}
