@@ -99,63 +99,6 @@
       <v-col cols="12" sm="6" md="3">
         <v-card class="metric-card" elevation="2">
           <v-card-text class="d-flex align-center">
-            <v-avatar color="info" class="me-4" size="56">
-              <v-icon color="white">mdi-shield-check</v-icon>
-            </v-avatar>
-            <div>
-              <div class="metric-value">{{ stats.dlt?.verified_hashes || 0 }}</div>
-              <div class="metric-label">DLT Verified</div>
-              <div class="metric-change positive">
-                <v-icon small>mdi-shield-check</v-icon>
-                {{ dltVerificationRate }}% verified
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Additional Stats -->
-    <v-row class="metrics-row">
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="metric-card" elevation="2">
-          <v-card-text class="d-flex align-center">
-            <v-avatar color="deep-purple" class="me-4" size="56">
-              <v-icon color="white">mdi-fingerprint</v-icon>
-            </v-avatar>
-            <div>
-              <div class="metric-value">{{ stats.biometric?.active_biometric_links || 0 }}</div>
-              <div class="metric-label">Biometric Links</div>
-              <div class="metric-change info">
-                <v-icon small>mdi-link</v-icon>
-                Active associations
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="metric-card" elevation="2">
-          <v-card-text class="d-flex align-center">
-            <v-avatar color="green" class="me-4" size="56">
-              <v-icon color="white">mdi-shield-lock</v-icon>
-            </v-avatar>
-            <div>
-              <div class="metric-value">{{ stats.dlt?.total_hashes || 0 }}</div>
-              <div class="metric-label">Total DLT Hashes</div>
-              <div class="metric-change info">
-                <v-icon small>mdi-database</v-icon>
-                On blockchain
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="metric-card" elevation="2">
-          <v-card-text class="d-flex align-center">
             <v-avatar color="teal" class="me-4" size="56">
               <v-icon color="white">mdi-heart-pulse</v-icon>
             </v-avatar>
@@ -165,24 +108,6 @@
               <div class="metric-change positive">
                 <v-icon small>mdi-check</v-icon>
                 {{ nonReactiveRate }}% of total
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="metric-card" elevation="2">
-          <v-card-text class="d-flex align-center">
-            <v-avatar color="orange" class="me-4" size="56">
-              <v-icon color="white">mdi-clock-outline</v-icon>
-            </v-avatar>
-            <div>
-              <div class="metric-value">{{ formatUptime(stats.system_uptime) }}</div>
-              <div class="metric-label">System Uptime</div>
-              <div class="metric-change neutral">
-                <v-icon small>mdi-clock</v-icon>
-                Running smoothly
               </div>
             </div>
           </v-card-text>
@@ -259,24 +184,8 @@
               <div class="status-item">
                 <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
                 <div>
-                  <div class="status-label">DLT Service</div>
-                  <div class="status-value">{{ dltVerificationRate }}% Verified</div>
-                </div>
-              </div>
-              
-              <div class="status-item">
-                <v-icon color="success" class="me-2">mdi-check-circle</v-icon>
-                <div>
                   <div class="status-label">Audit Logging</div>
                   <div class="status-value">Active</div>
-                </div>
-              </div>
-              
-              <div class="status-item">
-                <v-icon :color="biometricStatus.color" class="me-2">{{ biometricStatus.icon }}</v-icon>
-                <div>
-                  <div class="status-label">Biometric Service</div>
-                  <div class="status-value">{{ biometricStatus.text }}</div>
                 </div>
               </div>
 
@@ -362,12 +271,6 @@ const nonReactiveRate = computed(() => {
   return Math.round((nonReactive / total) * 100)
 })
 
-const dltVerificationRate = computed(() => {
-  const total = stats.value.dlt?.total_hashes || 1
-  const verified = stats.value.dlt?.verified_hashes || 0
-  return Math.round((verified / total) * 100)
-})
-
 const systemAlerts = computed(() => {
   const alerts = []
   
@@ -381,22 +284,6 @@ const systemAlerts = computed(() => {
   }
   
   return alerts
-})
-
-const biometricStatus = computed(() => {
-  const activeLinks = stats.value.biometric?.active_biometric_links || 0
-  if (activeLinks > 0) {
-    return {
-      color: 'success',
-      icon: 'mdi-check-circle',
-      text: `${activeLinks} Active`
-    }
-  }
-  return {
-    color: 'warning',
-    icon: 'mdi-alert',
-    text: 'No active links'
-  }
 })
 
 const quickActions = computed(() => [
@@ -419,12 +306,6 @@ const quickActions = computed(() => [
     route: '/admin/audit-security'
   },
   {
-    title: 'Biometric',
-    icon: 'mdi-fingerprint',
-    color: 'deep-purple',
-    route: '/admin/biometric'
-  },
-  {
     title: 'Reports',
     icon: 'mdi-chart-box',
     color: 'warning',
@@ -445,11 +326,10 @@ async function refreshData() {
     const response = await dashboardApi.getStats()
     stats.value = response.data
 
-    // Debug: check biometric data structure
-    console.log('Biometric data structure:', {
-      raw: response.data.biometric,
-      activeLinks: response.data.biometric?.active_biometric_links,
-      active: response.data.biometric?.active
+    // Debug: check data structure
+    console.log('Dashboard data structure:', {
+      patients: response.data.patients,
+      raw: response.data
     })
     
     // Try to get recent logs separately
@@ -472,27 +352,12 @@ async function refreshData() {
     // Set fallback data
     stats.value = {
       patients: { total: 0, consented: 0, reactive: 0, non_reactive: 0, daily_enrollments: 0 },
-      audit: { last_30_days: [], last_24_hours: [] },
-      dlt: { total_hashes: 0, verified_hashes: 0 },
-      biometric: { active_biometric_links: 0 },
-      system_uptime: 0
+      audit: { last_30_days: [], last_24_hours: [] }
     }
     recentLogs.value = []
   } finally {
     loading.value = false
   }
-}
-
-function formatUptime(seconds) {
-  if (!seconds) return '0s'
-  
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
 }
 
 function formatTimeAgo(timestamp) {

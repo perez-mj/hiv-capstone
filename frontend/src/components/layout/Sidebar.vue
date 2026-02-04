@@ -143,20 +143,6 @@ const menu = ref([
     description: 'Manage patient records and data'
   },
   { 
-    title: 'DLT Verification', 
-    to: '/admin/dlt-verification', 
-    icon: 'mdi-notebook',
-    badge: null,
-    description: 'Verify data integrity on blockchain'
-  },
-  { 
-    title: 'Biometric Management', 
-    to: '/admin/biometric', 
-    icon: 'mdi-fingerprint',
-    badge: null,
-    description: 'Manage biometric associations'
-  },
-  { 
     title: 'Audit & Security', 
     to: '/admin/audit-security', 
     icon: 'mdi-shield-account',
