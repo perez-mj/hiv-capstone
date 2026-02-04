@@ -7,26 +7,37 @@ import { useRouter } from 'vue-router'
 export const useAuthStore = defineStore('auth', () => {
   const router = useRouter()
 
-  // State - initialize from localStorage
+  // State
   const token = ref(localStorage.getItem('authToken'))
   const user = ref(JSON.parse(localStorage.getItem('authUser') || 'null'))
   const loading = ref(false)
 
   // Getters
-  const isAuthenticated = computed(() => !!token.value)
-  const userRole = computed(() => user.value?.role)
-  const userName = computed(() => user.value?.username)
+  const isAuthenticated = computed(() => {
+    const hasToken = !!token.value
+    const hasUser = !!user.value
+    console.log('🔍 Admin Auth check:', { hasToken, hasUser, token: token.value?.slice(0, 20) + '...' })
+    return hasToken && hasUser
+  })
+  
+  const userRole = computed(() => user.value?.role || 'admin')
+  const userName = computed(() => user.value?.username || user.value?.fullName || 'Admin User')
 
   // Actions
   const login = async (credentials) => {
     loading.value = true
     try {
-      console.log('\U0001f504 Attempting login...', credentials)
+      console.log('🔐 Admin login attempt:', credentials.username)
 
       const response = await http.post('/auth/login', credentials)
+      console.log('✅ Admin login response:', response.data)
+
       const { token: newToken, user: userData } = response.data
 
-      console.log('\u2705 Login response:', response.data)
+      // Validate response
+      if (!newToken) {
+        throw new Error('No token received from server')
+      }
 
       // Update state
       token.value = newToken
@@ -36,60 +47,107 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('authToken', newToken)
       localStorage.setItem('authUser', JSON.stringify(userData))
 
-      console.log('\U0001f4be Stored in localStorage:', {
-        token: newToken,
-        user: userData
-      })
+      console.log('💾 Admin auth stored in localStorage')
 
-      // \u2705 FIX: Use the correct route path
+      // Navigate to admin dashboard
       if (router) {
-        console.log('\U0001f680 Navigating to admin dashboard...')
-        // Use the full path to ensure navigation works
         await router.push('/admin/dashboard')
       } else {
-        console.error('\u274c Router not available')
-        // Fallback: force page reload to ensure navigation
         window.location.href = '/admin/dashboard'
       }
 
       return response.data
     } catch (error) {
-      console.error('\u274c Login error:', error)
-      throw error
+      console.error('❌ Admin login failed:', error)
+      
+      // Provide user-friendly error message
+      let errorMessage = 'Login failed'
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error
+      } else if (error.message.includes('Network Error')) {
+        errorMessage = 'Cannot connect to server. Please check your connection.'
+      }
+      
+      throw new Error(errorMessage)
     } finally {
       loading.value = false
     }
   }
 
-  const logout = () => {
-    console.log('\U0001f6aa Logging out...')
-    token.value = null
-    user.value = null
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('authUser')
-
-    if (router) {
-      router.push('/login')
+  const logout = async () => {
+    console.log('🚪 Admin logging out...')
+    
+    try {
+      // Call logout API
+      await http.post('/auth/logout').catch(() => {
+        // Ignore if API fails
+      })
+    } finally {
+      // Clear local state
+      token.value = null
+      user.value = null
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('authUser')
+      
+      // Clear any patient data too
+      localStorage.removeItem('patientToken')
+      localStorage.removeItem('patientData')
+      
+      // Redirect to login
+      if (router) {
+        router.push('/login')
+      } else {
+        window.location.href = '/login'
+      }
     }
   }
 
   const checkAuth = async () => {
-    const storedToken = localStorage.getItem('authToken')
-    const storedUser = localStorage.getItem('authUser')
+    try {
+      console.log('🔄 Checking admin auth status...')
+      
+      // If no token stored, return false
+      if (!token.value) {
+        console.log('⚠️ No admin token found')
+        return false
+      }
 
-    console.log('\U0001f50d Checking auth:', { storedToken: !!storedToken, storedUser: !!storedUser })
-
-    if (storedToken && storedUser) {
-      token.value = storedToken
-      user.value = JSON.parse(storedUser)
-      return true
+      // Verify token with server
+      const response = await http.get('/auth/check')
+      
+      if (response.data && response.data.user) {
+        console.log('✅ Admin auth check successful')
+        return true
+      }
+      
+      return false
+    } catch (error) {
+      console.error('❌ Admin auth check failed:', error.message)
+      
+      // Clear invalid auth data
+      if (error.response?.status === 401) {
+        logout()
+      }
+      
+      return false
     }
-    return false
   }
 
-  // Initialize from localStorage on store creation
+  // Initialize from localStorage
   const initialize = () => {
-    checkAuth()
+    const storedToken = localStorage.getItem('authToken')
+    const storedUser = localStorage.getItem('authUser')
+    
+    if (storedToken && storedUser) {
+      try {
+        token.value = storedToken
+        user.value = JSON.parse(storedUser)
+        console.log('📋 Admin auth initialized from localStorage')
+      } catch (e) {
+        console.error('Failed to parse stored user:', e)
+        logout()
+      }
+    }
   }
 
   // Call initialize

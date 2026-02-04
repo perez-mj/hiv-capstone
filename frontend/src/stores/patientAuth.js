@@ -1,4 +1,4 @@
-// frontend/src/stores/patientAuth.js
+// src/stores/patientAuth.js
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import http from '@/api/http'
@@ -7,28 +7,38 @@ import { useRouter } from 'vue-router'
 export const usePatientAuthStore = defineStore('patientAuth', () => {
   const router = useRouter()
 
-  // State - initialize from localStorage
+  // State
   const token = ref(localStorage.getItem('patientToken'))
   const patient = ref(JSON.parse(localStorage.getItem('patientData') || 'null'))
   const loading = ref(false)
 
   // Getters
-  const isAuthenticated = computed(() => !!token.value)
-  const patientName = computed(() => patient.value?.name)
-  const patientId = computed(() => patient.value?.patient_id)
+  const isAuthenticated = computed(() => {
+    const hasToken = !!token.value
+    const hasPatient = !!patient.value
+    console.log('🔍 Patient Auth check:', { hasToken, hasPatient })
+    return hasToken && hasPatient
+  })
+  
+  const patientName = computed(() => patient.value?.name || 'Patient')
 
   // Actions
   const login = async (credentials) => {
     loading.value = true
     try {
-      console.log('\U0001f510 Patient login attempt:', credentials)
+      console.log('🔐 Patient login attempt:', credentials.patientId)
 
       const response = await http.post('/patient/auth/login', credentials)
+      console.log('✅ Patient login response:', response.data)
+
       const { token: newToken, patient: patientData } = response.data
 
-      console.log('\u2705 Patient login response received')
+      // Validate response
+      if (!newToken) {
+        throw new Error('No token received from server')
+      }
 
-      // CRITICAL: Update the store state
+      // Update state
       token.value = newToken
       patient.value = patientData
 
@@ -36,83 +46,99 @@ export const usePatientAuthStore = defineStore('patientAuth', () => {
       localStorage.setItem('patientToken', newToken)
       localStorage.setItem('patientData', JSON.stringify(patientData))
 
-      console.log('\U0001f4be Store and localStorage updated:', {
-        tokenSet: !!newToken,
-        patientData: !!patientData,
-        isAuthenticated: isAuthenticated.value
-      })
+      console.log('💾 Patient auth stored in localStorage')
 
       // Navigate to patient dashboard
-      console.log('\U0001f504 Navigating to patient dashboard...')
-      await router.push('/patient/dashboard')
+      if (router) {
+        await router.push('/patient/dashboard')
+      } else {
+        window.location.href = '/patient/dashboard'
+      }
 
       return response.data
-
     } catch (error) {
-      console.error('\u274c Patient login error in store:', error)
-      // Clear any partial authentication
-      token.value = null
-      patient.value = null
-      localStorage.removeItem('patientToken')
-      localStorage.removeItem('patientData')
-      throw error
+      console.error('❌ Patient login failed:', error)
+      
+      let errorMessage = 'Login failed'
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error
+      }
+      
+      throw new Error(errorMessage)
     } finally {
       loading.value = false
     }
   }
 
-  const logout = () => {
-    console.log('\U0001f6aa Patient logging out...')
-    token.value = null
-    patient.value = null
-    localStorage.removeItem('patientToken')
-    localStorage.removeItem('patientData')
-
-    if (router) {
-      router.push('/patient/login')
+  const logout = async () => {
+    console.log('🚪 Patient logging out...')
+    
+    try {
+      // Call logout API
+      await http.post('/patient/auth/logout').catch(() => {
+        // Ignore if API fails
+      })
+    } finally {
+      // Clear local state
+      token.value = null
+      patient.value = null
+      localStorage.removeItem('patientToken')
+      localStorage.removeItem('patientData')
+      
+      // Redirect to patient login
+      if (router) {
+        router.push('/patient/login')
+      } else {
+        window.location.href = '/patient/login'
+      }
     }
   }
 
   const checkAuth = async () => {
-    const storedToken = localStorage.getItem('patientToken')
-    const storedPatient = localStorage.getItem('patientData')
-
-    console.log('\U0001f50d Checking patient auth:', { 
-      storedToken: !!storedToken, 
-      storedPatient: !!storedPatient 
-    })
-
-    if (storedToken && storedPatient) {
-      try {
-        // Verify token is still valid
-        const response = await http.get('/patient/auth/check', {
-          headers: { Authorization: `Bearer ${storedToken}` }
-        })
-        
-        // Update store state
-        token.value = storedToken
-        patient.value = JSON.parse(storedPatient)
-        
-        console.log('\u2705 Patient auth check passed')
-        return true
-      } catch (error) {
-        console.error('\u274c Patient token validation failed:', error)
-        logout()
+    try {
+      console.log('🔄 Checking patient auth status...')
+      
+      if (!token.value) {
+        console.log('⚠️ No patient token found')
         return false
       }
+
+      const response = await http.get('/patient/auth/check')
+      
+      if (response.data && response.data.patient) {
+        console.log('✅ Patient auth check successful')
+        return true
+      }
+      
+      return false
+    } catch (error) {
+      console.error('❌ Patient auth check failed:', error.message)
+      
+      if (error.response?.status === 401) {
+        logout()
+      }
+      
+      return false
     }
-    
-    console.log('\u274c No patient auth data found')
-    return false
   }
 
-  // Initialize from localStorage
+  // Initialize
   const initialize = () => {
-    console.log('\U0001f504 Initializing patient auth store...')
-    checkAuth()
+    const storedToken = localStorage.getItem('patientToken')
+    const storedPatient = localStorage.getItem('patientData')
+    
+    if (storedToken && storedPatient) {
+      try {
+        token.value = storedToken
+        patient.value = JSON.parse(storedPatient)
+        console.log('📋 Patient auth initialized from localStorage')
+      } catch (e) {
+        console.error('Failed to parse stored patient:', e)
+        logout()
+      }
+    }
   }
 
-  // Call initialize
   initialize()
 
   return {
@@ -124,7 +150,6 @@ export const usePatientAuthStore = defineStore('patientAuth', () => {
     // Getters
     isAuthenticated,
     patientName,
-    patientId,
 
     // Actions
     login,

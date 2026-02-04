@@ -51,18 +51,45 @@
                 </p>
               </div>
 
+              <!-- Connection Test (Development Only) -->
+              <TestConnection v-if="isDevelopment" class="mb-4" />
+
               <!-- Login Form -->
               <v-form @submit.prevent="handleLogin" class="login-form">
-                <v-text-field v-model="credentials.username" label="Username" variant="outlined" density="comfortable"
-                  prepend-inner-icon="mdi-account" :rules="[requiredRule]" :disabled="loading" class="mb-4" />
+                <v-text-field 
+                  v-model="credentials.username" 
+                  label="Username" 
+                  variant="outlined" 
+                  density="comfortable"
+                  prepend-inner-icon="mdi-account" 
+                  :rules="[requiredRule]" 
+                  :disabled="loading" 
+                  class="mb-4" 
+                />
 
-                <v-text-field v-model="credentials.password" label="Password" variant="outlined" density="comfortable"
-                  prepend-inner-icon="mdi-lock" :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                  :type="showPassword ? 'text' : 'password'" :rules="[requiredRule]" :disabled="loading"
-                  @click:append-inner="showPassword = !showPassword" class="mb-2" />
+                <v-text-field 
+                  v-model="credentials.password" 
+                  label="Password" 
+                  variant="outlined" 
+                  density="comfortable"
+                  prepend-inner-icon="mdi-lock" 
+                  :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+                  :type="showPassword ? 'text' : 'password'" 
+                  :rules="[requiredRule]" 
+                  :disabled="loading"
+                  @click:append-inner="showPassword = !showPassword" 
+                  class="mb-2" 
+                />
 
-                <v-btn type="submit" color="primary" size="large" :loading="loading" :disabled="loading" block
-                  class="mt-2 login-btn">
+                <v-btn 
+                  type="submit" 
+                  color="primary" 
+                  size="large" 
+                  :loading="loading" 
+                  :disabled="loading" 
+                  block
+                  class="mt-2 login-btn"
+                >
                   <template v-slot:loader>
                     <v-progress-circular indeterminate size="24" color="white" />
                   </template>
@@ -71,8 +98,17 @@
                 </v-btn>
 
                 <!-- Error Message -->
-                <v-alert v-if="error" type="error" variant="tonal" density="compact" class="mt-4">
+                <v-alert 
+                  v-if="error" 
+                  type="error" 
+                  variant="tonal" 
+                  density="compact" 
+                  class="mt-4"
+                >
                   {{ error }}
+                  <div v-if="debugError" class="text-caption mt-1">
+                    <small>{{ debugError }}</small>
+                  </div>
                 </v-alert>
               </v-form>
 
@@ -98,7 +134,15 @@
                           <v-icon color="primary" size="small">mdi-key</v-icon>
                         </template>
                         <v-list-item-title class="text-caption">
-                          <strong>Password:</strong> admin
+                          <strong>Password:</strong> admin123
+                        </v-list-item-title>
+                      </v-list-item>
+                      <v-list-item class="px-0">
+                        <template v-slot:prepend>
+                          <v-icon color="info" size="small">mdi-information-outline</v-icon>
+                        </template>
+                        <v-list-item-title class="text-caption">
+                          <em>Password is "admin123" not "admin"</em>
                         </v-list-item-title>
                       </v-list-item>
                     </v-list>
@@ -132,11 +176,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import TestConnection from '@/components/TestConnection.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
 const credentials = ref({
@@ -146,26 +189,48 @@ const credentials = ref({
 
 const loading = ref(false)
 const error = ref('')
+const debugError = ref('')
 const showPassword = ref(false)
+
+// Check if we're in development mode
+const isDevelopment = computed(() => import.meta.env.DEV || import.meta.env.MODE === 'development')
 
 // Validation rule
 const requiredRule = value => !!value || 'This field is required'
 
 const handleLogin = async () => {
+  // Reset errors
+  error.value = ''
+  debugError.value = ''
+
+  // Validate inputs
   if (!credentials.value.username || !credentials.value.password) {
     error.value = 'Please enter both username and password'
     return
   }
 
   loading.value = true
-  error.value = ''
 
   try {
+    console.log('🔄 Starting login process...')
     await authStore.login(credentials.value)
-    console.log('\u2705 Login successful, navigation handled by auth store')
+    console.log('✅ Login completed successfully - navigation handled by auth store')
   } catch (err) {
-    error.value = err.response?.data?.error || err.message || 'Login failed. Please check your credentials.'
-    console.error('\u274c Login error details:', err)
+    console.error('❌ Login error:', err)
+    
+    // User-friendly error messages
+    if (err.message.includes('Network Error') || err.message.includes('Failed to fetch')) {
+      error.value = 'Cannot connect to the server. Please check:'
+      debugError.value = '1. Is the backend running? (npm run dev in backend folder)\n2. Check http://localhost:5000/api/auth/login'
+    } else if (err.message.includes('Invalid credentials') || err.message.includes('401')) {
+      error.value = 'Invalid username or password. Please try again.'
+      debugError.value = 'Default credentials: username: admin, password: admin123'
+    } else if (err.message.includes('Timeout')) {
+      error.value = 'Connection timeout. Server might be busy or offline.'
+    } else {
+      error.value = err.message || 'Login failed. Please try again.'
+      debugError.value = err.toString()
+    }
   } finally {
     loading.value = false
   }

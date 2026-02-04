@@ -11,8 +11,6 @@ app.use(express.json());
 
 // Import routes
 const patientRoutes = require('./routes/patients');
-const dltRoutes = require('./routes/dlt');
-const biometricRoutes = require('./routes/biometric');
 const authRoutes = require('./routes/auth');
 const auditRoutes = require('./routes/audit');
 const adminRoutes = require('./routes/admin');
@@ -41,8 +39,6 @@ app.use('/api/patient/tests', patientTestRoutes);
 
 // Routes
 app.use('/api/patients', patientRoutes);
-app.use('/api/dlt', dltRoutes);
-app.use('/api/biometric', biometricRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/admin', adminRoutes);

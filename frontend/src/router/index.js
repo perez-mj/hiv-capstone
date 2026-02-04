@@ -1,4 +1,4 @@
-// /src/router/index.js
+// src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { usePatientAuthStore } from '@/stores/patientAuth'
@@ -17,17 +17,14 @@ const routes = [
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, adminOnly: true },
     children: [
       { path: '', redirect: '/admin/dashboard' },
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/pages/admin/Dashboard.vue') },
       { path: 'patients', name: 'Patients', component: () => import('@/pages/admin/Patients.vue') },
       { path: 'enroll', name: 'Enrollment', component: () => import('@/pages/admin/Enrollment.vue') },
-      { path: 'dlt-verification', name: 'DltVerification', component: () => import('@/pages/admin/DltVerification.vue') },
-      { path: 'biometric', name: 'Biometric', component: () => import('@/pages/admin/Biometric.vue') },
       { path: 'audit-security', name: 'AuditSecurity', component: () => import('@/pages/admin/AuditSecurity.vue') },
       { path: 'management', name: 'Management', component: () => import('@/pages/admin/Management.vue') },
-      { path: 'reports', name: 'Reports', component: () => import('@/pages/admin/Reports.vue') },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
       {
@@ -43,46 +40,42 @@ const routes = [
       }
     ]
   },
-  // Patient routes - FIXED: Remove meta from parent and apply to individual routes
+  // Patient routes
   {
     path: '/patient/login',
     name: 'PatientLogin',
     component: () => import('@/pages/patient/PatientLogin.vue'),
-    meta: { requiresGuest: true }
+    meta: { requiresGuest: true, patientOnly: true }
   },
   {
     path: '/patient',
     component: () => import('@/layouts/PatientLayout.vue'),
+    meta: { requiresPatientAuth: true },
     children: [
       {
         path: 'dashboard',
         name: 'PatientDashboard',
-        component: () => import('@/pages/patient/PatientDashboard.vue'),
-        meta: { requiresPatientAuth: true }
+        component: () => import('@/pages/patient/PatientDashboard.vue')
       },
       {
         path: 'profile',
         name: 'PatientProfile',
-        component: () => import('@/pages/patient/PatientProfile.vue'),
-        meta: { requiresPatientAuth: true }
+        component: () => import('@/pages/patient/PatientProfile.vue')
       },
       {
         path: 'test-history',
         name: 'PatientTestHistory',
-        component: () => import('@/pages/patient/HIVTestHistory.vue'),
-        meta: { requiresPatientAuth: true }
+        component: () => import('@/pages/patient/HIVTestHistory.vue')
       },
       {
         path: 'appointments',
         name: 'PatientAppointments',
-        component: () => import('@/pages/patient/PatientAppointments.vue'),
-        meta: { requiresPatientAuth: true }
+        component: () => import('@/pages/patient/PatientAppointments.vue')
       },
       {
         path: 'messages',
         name: 'PatientMessages',
-        component: () => import('@/pages/patient/PatientMessages.vue'),
-        meta: { requiresPatientAuth: true }
+        component: () => import('@/pages/patient/PatientMessages.vue')
       }
     ]
   },
@@ -94,62 +87,70 @@ const router = createRouter({
   routes
 })
 
-// Navigation guards - UPDATED with better logic
-router.beforeEach((to, from, next) => {
+// Navigation guards - SIMPLIFIED
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const patientAuthStore = usePatientAuthStore()
 
   console.log('🛣️ Navigation:', {
     to: to.path,
-    matchedRoutes: to.matched.map(r => ({ path: r.path, meta: r.meta })),
-    isPatientAuthenticated: patientAuthStore.isAuthenticated,
-    isAdminAuthenticated: authStore.isAuthenticated
+    from: from.path,
+    requiresAuth: to.meta.requiresAuth,
+    requiresPatientAuth: to.meta.requiresPatientAuth,
+    requiresGuest: to.meta.requiresGuest
   })
 
-  // Get all meta from matched routes
-  const requiresPatientAuth = to.matched.some(record => record.meta.requiresPatientAuth)
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const requiresGuest = to.matched.some(record => record.meta.requiresGuest)
-
-  // Patient authentication check
-  if (requiresPatientAuth) {
-    if (!patientAuthStore.isAuthenticated) {
-      console.log('🔐 Patient auth required - redirecting to patient login')
-      next('/patient/login')
-      return
-    }
-  }
-
-  // Admin authentication check
-  if (requiresAuth) {
-    if (!authStore.isAuthenticated) {
-      console.log('🔐 Admin auth required - redirecting to admin login')
-      next('/login')
-      return
-    }
-  }
-
-  // Guest route check (user should NOT be authenticated)
-  if (requiresGuest) {
-    // For patient guest routes
-    if (to.path.includes('/patient')) {
+  // Handle guest routes (login pages)
+  if (to.meta.requiresGuest) {
+    // For patient login page
+    if (to.path.includes('/patient/login')) {
       if (patientAuthStore.isAuthenticated) {
-        console.log('👤 Patient already authenticated - redirecting to patient dashboard')
+        console.log('➡️ Patient already logged in, redirecting to patient dashboard')
         next('/patient/dashboard')
         return
       }
-    }
-    // For admin guest routes
+      if (authStore.isAuthenticated) {
+        console.log('➡️ Admin logged in, allowing access to patient login')
+      }
+    } 
+    // For admin login page
     else {
       if (authStore.isAuthenticated) {
-        console.log('👤 Admin already authenticated - redirecting to admin dashboard')
+        console.log('➡️ Admin already logged in, redirecting to admin dashboard')
         next('/admin/dashboard')
         return
       }
+      if (patientAuthStore.isAuthenticated) {
+        console.log('➡️ Patient logged in, allowing access to admin login')
+      }
     }
+    next()
+    return
   }
 
-  // Allow access if no restrictions apply
+  // Handle admin routes
+  if (to.meta.requiresAuth) {
+    if (!authStore.isAuthenticated) {
+      console.log('🔒 Admin auth required but not logged in, redirecting to login')
+      next('/login')
+      return
+    }
+    next()
+    return
+  }
+
+  // Handle patient routes
+  if (to.meta.requiresPatientAuth) {
+    if (!patientAuthStore.isAuthenticated) {
+      console.log('🔒 Patient auth required but not logged in, redirecting to patient login')
+      next('/patient/login')
+      return
+    }
+    next()
+    return
+  }
+
+  // Default - allow access
   next()
 })
 

@@ -3,30 +3,26 @@ import axios from 'axios'
 const http = axios.create({
   baseURL: 'http://localhost:5000/api',
   timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 })
 
-// Add auth token to requests
+// Add auth token to requests - SIMPLIFIED VERSION
 http.interceptors.request.use(
   (config) => {
-    // Check if this is a patient route (excluding patient login)
-    const isPatientRoute = config.url.includes('/patient/') && 
-                          !config.url.includes('/patient/auth/login')
+    // Always try to use admin token first
+    const adminToken = localStorage.getItem('authToken')
     
-    if (isPatientRoute) {
-      // Use patient token for patient routes
+    if (adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`
+      console.log('🔐 Adding ADMIN token to request:', config.url)
+    } else {
+      // If no admin token, check for patient token (for patient-specific routes)
       const patientToken = localStorage.getItem('patientToken')
-      if (patientToken) {
+      if (patientToken && config.url.includes('/patient/')) {
         config.headers.Authorization = `Bearer ${patientToken}`
         console.log('🔐 Adding PATIENT token to request:', config.url)
-      } else {
-        console.log('⚠️ No patient token found for patient route:', config.url)
-      }
-    } else {
-      // Use admin token for all other routes
-      const adminToken = localStorage.getItem('authToken')
-      if (adminToken) {
-        config.headers.Authorization = `Bearer ${adminToken}`
-        console.log('🔐 Adding ADMIN token to request:', config.url)
       }
     }
     
@@ -37,7 +33,7 @@ http.interceptors.request.use(
   }
 )
 
-// Handle auth errors
+// Handle auth errors - SIMPLIFIED VERSION
 http.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -50,27 +46,21 @@ http.interceptors.response.use(
     if (error.response?.status === 401) {
       const url = error.config?.url || ''
       
-      // Check if this is a patient route
       if (url.includes('/patient/')) {
         console.log('❌ Patient token invalid - clearing patient auth data')
-        // Clear invalid patient auth data
         localStorage.removeItem('patientToken')
         localStorage.removeItem('patientData')
         
-        // Only redirect if we're not already on the patient login page
-        if (!window.location.pathname.includes('/patient/login')) {
-          console.log('🔄 Redirecting to patient login')
+        if (!window.location.pathname.includes('/patient/login') && 
+            !window.location.pathname.includes('/login')) {
           window.location.href = '/patient/login'
         }
       } else {
         console.log('❌ Admin token invalid - clearing admin auth data')
-        // Clear invalid admin auth data
         localStorage.removeItem('authToken')
         localStorage.removeItem('authUser')
         
-        // Only redirect if we're not already on the login page
         if (!window.location.pathname.includes('/login')) {
-          console.log('🔄 Redirecting to admin login')
           window.location.href = '/login'
         }
       }
