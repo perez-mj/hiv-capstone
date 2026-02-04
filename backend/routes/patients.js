@@ -14,7 +14,51 @@ const getUserInfo = (req) => {
   };
 };
 
-// backend/routes/patients.js - Add this route
+// Helper function to generate patient ID
+function generatePatientId(name, hivStatus, year) {
+  // Get initials from name: Firstname + Middlename + Lastname
+  const nameParts = name.trim().split(' ');
+  let initials = '';
+  
+  if (nameParts.length >= 1) {
+    initials += nameParts[0].charAt(0).toUpperCase(); // Firstname initial
+  }
+  if (nameParts.length >= 2) {
+    // Check if middle name has a period (like "P.") or is a single letter
+    const middlePart = nameParts[1];
+    if (middlePart.length === 1 || (middlePart.length === 2 && middlePart.endsWith('.'))) {
+      initials += middlePart.charAt(0).toUpperCase(); // Middle initial
+    } else if (nameParts.length >= 3) {
+      // If second part is not a middle initial, try third part
+      initials += nameParts[2].charAt(0).toUpperCase(); // Lastname initial
+    } else {
+      initials += nameParts[1].charAt(0).toUpperCase(); // Use second part as lastname
+    }
+  }
+  if (nameParts.length >= 3) {
+    initials += nameParts[nameParts.length - 1].charAt(0).toUpperCase(); // Lastname initial
+  }
+  
+  // Ensure we have at least 3 initials, pad with X if needed
+  while (initials.length < 3) {
+    initials += 'X';
+  }
+  
+  // Take first 3 characters only
+  initials = initials.substring(0, 3);
+  
+  // Generate suffix (3 random uppercase letters)
+  const randomLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let suffix = '';
+  for (let i = 0; i < 3; i++) {
+    suffix += randomLetters.charAt(Math.floor(Math.random() * randomLetters.length));
+  }
+  
+  // Format: PR19-JPR or P19-JPR
+  const prefix = hivStatus === 'Reactive' ? 'PR' : 'P';
+  
+  return `${prefix}${year}-${initials}${suffix}`;
+}
 
 // GET /api/patients/stats - Get patient statistics for dashboard
 router.get('/stats', async (req, res) => {
@@ -38,15 +82,6 @@ router.get('/stats', async (req, res) => {
       FROM patients
     `);
     const hivStats = hivResults[0];
-
-    // Get DLT verification counts
-    const [dltResults] = await pool.execute(`
-      SELECT 
-        COUNT(DISTINCT patient_id) as dlt_verified 
-      FROM patients 
-      WHERE dlt_status = 'verified'
-    `);
-    const dltVerified = dltResults[0].dlt_verified;
 
     // Get daily enrollments (last 24 hours)
     const [dailyResult] = await pool.execute(`
@@ -79,36 +114,23 @@ router.get('/stats', async (req, res) => {
       GROUP BY consent
     `);
 
-    // Get DLT status breakdown
-    const [dltBreakdown] = await pool.execute(`
-      SELECT 
-        COALESCE(dlt_status, 'pending') as status,
-        COUNT(*) as count
-      FROM patients
-      GROUP BY dlt_status
-    `);
-
     const stats = {
       total: parseInt(total),
       consented: parseInt(consented),
-      reactive: parseInt(hivStats.reactive),
-      non_reactive: parseInt(hivStats.non_reactive),
-      dlt_verified: parseInt(dltVerified),
+      reactive: parseInt(hivStats.reactive) || 0,
+      non_reactive: parseInt(hivStats.non_reactive) || 0,
       daily_enrollments: parseInt(dailyEnrollments),
       enrollment_trends: trendsResult,
       consent_breakdown: consentBreakdown,
-      dlt_breakdown: dltBreakdown,
       consent_rate: total > 0 ? Math.round((consented / total) * 100) : 0,
       reactive_rate: total > 0 ? Math.round((hivStats.reactive / total) * 100) : 0,
-      non_reactive_rate: total > 0 ? Math.round((hivStats.non_reactive / total) * 100) : 0,
-      dlt_verification_rate: total > 0 ? Math.round((dltVerified / total) * 100) : 0
+      non_reactive_rate: total > 0 ? Math.round((hivStats.non_reactive / total) * 100) : 0
     };
 
     console.log('Patient statistics fetched successfully:', {
       total: stats.total,
       consented: stats.consented,
-      reactive: stats.reactive,
-      dlt_verified: stats.dlt_verified
+      reactive: stats.reactive
     });
 
     res.json(stats);
@@ -122,7 +144,6 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Add this to your patients.js routes
 // GET /api/patients/list - Get simple patient list for dropdowns
 router.get('/list', async (req, res) => {
   try {
@@ -161,29 +182,26 @@ router.get('/list', async (req, res) => {
 // GET /api/patients - Get all patients with pagination and filters
 router.get('/pagination', async (req, res, next) => {
   try {
-    const { page = 1, limit = 10, search, consent, hiv_status, dlt_status } = req.query;
+    const { page = 1, limit = 10, search, consent, hiv_status } = req.query;
     const offset = (page - 1) * limit;
 
-    // Build the main query - FIXED: Use DISTINCT and proper joins
+    // Build the main query
     let query = `
-      SELECT DISTINCT
+      SELECT 
+        p.id,
         p.patient_id,
         p.name,
         p.date_of_birth,
         p.contact_info,
-        p.contact,
         p.consent,
         p.hiv_status,
-        p.dlt_status,
         p.created_at,
         p.updated_at,
         CASE 
           WHEN p.consent = 1 THEN 'YES'
           WHEN p.consent = 0 THEN 'NO'
           ELSE 'NO'
-        END as consent_status,
-        COALESCE((SELECT verified FROM dlt_hashes WHERE patient_id = p.patient_id ORDER BY timestamp DESC LIMIT 1), FALSE) as dlt_verified,
-        COALESCE((SELECT COUNT(*) FROM biometric_links WHERE patient_id = p.patient_id AND is_active = TRUE), 0) as active_biometrics
+        END as consent_status
       FROM patients p
       WHERE 1=1
     `;
@@ -191,7 +209,9 @@ router.get('/pagination', async (req, res, next) => {
     const params = [];
 
     if (search) {
-      query += ` AND (p.name LIKE %${search}% OR p.patient_id LIKE %${search}% OR p.contact_info LIKE %${search}% OR p.contact LIKE %${search}%)`;
+      query += ` AND (p.name LIKE ? OR p.patient_id LIKE ? OR p.contact_info LIKE ?)`;
+      const searchTerm = `%${search}%`;
+      params.push(searchTerm, searchTerm, searchTerm);
     }
 
     if (consent) {
@@ -203,27 +223,27 @@ router.get('/pagination', async (req, res, next) => {
     }
 
     if (hiv_status) {
-      query += ` AND p.hiv_status = ${hiv_status}`;
+      query += ` AND p.hiv_status = ?`;
+      params.push(hiv_status);
     }
 
-    if (dlt_status) {
-      query += ` AND p.dlt_status = ${dlt_status}`;
-    }
-
-    query += ` ORDER BY p.created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+    query += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), parseInt(offset));
 
     const [rows] = await pool.execute(query, params);
 
-    // Get total count - FIXED: Count distinct patients
+    // Get total count
     let countQuery = `
-      SELECT COUNT(DISTINCT p.patient_id) as total 
+      SELECT COUNT(*) as total 
       FROM patients p
       WHERE 1=1
     `;
     const countParams = [];
 
     if (search) {
-      countQuery += ` AND (p.name LIKE %${search}% OR p.patient_id LIKE %${search}% OR p.contact_info LIKE %${search}% OR p.contact LIKE %${search}%)`;
+      countQuery += ` AND (p.name LIKE ? OR p.patient_id LIKE ? OR p.contact_info LIKE ?)`;
+      const searchTerm = `%${search}%`;
+      countParams.push(searchTerm, searchTerm, searchTerm);
     }
 
     if (consent) {
@@ -235,11 +255,8 @@ router.get('/pagination', async (req, res, next) => {
     }
 
     if (hiv_status) {
-      countQuery += ` AND p.hiv_status = ${hiv_status}`;
-    }
-
-    if (dlt_status) {
-      countQuery += ` AND p.dlt_status = ${dlt_status}`;
+      countQuery += ` AND p.hiv_status = ?`;
+      countParams.push(hiv_status);
     }
 
     const [countRows] = await pool.execute(countQuery, countParams);
@@ -268,33 +285,21 @@ router.get('/:id', async (req, res, next) => {
 
     const query = `
       SELECT 
+        p.id,
         p.patient_id,
         p.name,
         p.date_of_birth,
         p.contact_info,
-        p.contact,
         p.consent,
         p.hiv_status,
-        p.dlt_status,
         p.created_at,
         p.updated_at,
         CASE 
           WHEN p.consent = 1 THEN 'YES'
           WHEN p.consent = 0 THEN 'NO'
           ELSE 'NO'
-        END as consent_status,
-        COALESCE(dh.verified, FALSE) as dlt_verified,
-        COALESCE(dh.data_hash, '') as dlt_hash,
-        COALESCE(dh.timestamp, p.created_at) as dlt_timestamp,
-        COALESCE(biometric_count.active_biometrics, 0) as active_biometrics
+        END as consent_status
       FROM patients p
-      LEFT JOIN dlt_hashes dh ON p.patient_id = dh.patient_id
-      LEFT JOIN (
-        SELECT patient_id, COUNT(*) as active_biometrics 
-        FROM biometric_links 
-        WHERE is_active = TRUE 
-        GROUP BY patient_id
-      ) biometric_count ON p.patient_id = biometric_count.patient_id
       WHERE p.patient_id = ?
     `;
 
@@ -314,20 +319,58 @@ router.get('/:id', async (req, res, next) => {
 // POST /api/patients - Create new patient
 router.post('/', async (req, res, next) => {
   try {
-    const { patient_id, name, date_of_birth, contact, contact_info, consent, hiv_status } = req.body;
+    let { patient_id, name, date_of_birth, contact_info, consent, hiv_status } = req.body;
 
     // Validate required fields
-    if (!patient_id || !name || !date_of_birth || !hiv_status) {
-      return res.status(400).json({ error: 'Missing required fields: patient_id, name, date_of_birth, and hiv_status are required' });
+    if (!name || !date_of_birth || !hiv_status) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: name, date_of_birth, and hiv_status are required' 
+      });
+    }
+
+    // Validate HIV status
+    if (!['Reactive', 'Non-Reactive'].includes(hiv_status)) {
+      return res.status(400).json({ 
+        error: 'Invalid hiv_status. Must be either "Reactive" or "Non-Reactive"' 
+      });
     }
 
     const consentBool = Boolean(consent);
+    
+    // If patient_id is not provided, generate one
+    if (!patient_id) {
+      // Get current year (2-digit format)
+      const currentYear = new Date().getFullYear().toString().slice(-2);
+      
+      // For new patients, use current year
+      const year = currentYear;
+      
+      // Generate patient ID
+      patient_id = generatePatientId(name, hiv_status, year);
+      
+      // Check if patient ID already exists, if yes, generate a new one
+      let attempts = 0;
+      while (attempts < 10) {
+        const [existing] = await pool.execute(
+          'SELECT patient_id FROM patients WHERE patient_id = ?',
+          [patient_id]
+        );
+        
+        if (existing.length === 0) {
+          break; // ID is unique
+        }
+        
+        // Regenerate with new random suffix
+        patient_id = generatePatientId(name, hiv_status, year);
+        attempts++;
+      }
+    }
 
     const [result] = await pool.execute(
       `INSERT INTO patients
-       (patient_id, name, date_of_birth, contact, contact_info, consent, hiv_status, dlt_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [patient_id, name, date_of_birth, contact || null, contact_info || null, consentBool, hiv_status, 'pending']
+       (patient_id, name, date_of_birth, contact_info, consent, hiv_status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [patient_id, name, date_of_birth, contact_info || null, consentBool, hiv_status]
     );
 
     const userInfo = getUserInfo(req);
@@ -340,23 +383,15 @@ router.post('/', async (req, res, next) => {
       ip_address: userInfo.ip_address
     });
 
-    // Create DLT hash
-    await createDltHash(patient_id);
-    
-    // Create biometric link
-    await createBiometricLink(patient_id);
-
     res.status(201).json({
       message: 'Patient created successfully',
       patient: {
         patient_id,
         name,
         date_of_birth,
-        contact,
         contact_info,
         consent: consentBool,
-        hiv_status,
-        dlt_status: 'pending'
+        hiv_status
       }
     });
   } catch (err) {
@@ -372,24 +407,45 @@ router.post('/', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, date_of_birth, contact, contact_info, consent, hiv_status } = req.body;
+    const { name, date_of_birth, contact_info, consent, hiv_status } = req.body;
 
     if (!name || !date_of_birth || !hiv_status) {
-      return res.status(400).json({ error: 'Missing required fields: name, date_of_birth, and hiv_status are required' });
+      return res.status(400).json({ 
+        error: 'Missing required fields: name, date_of_birth, and hiv_status are required' 
+      });
+    }
+
+    // Validate HIV status
+    if (!['Reactive', 'Non-Reactive'].includes(hiv_status)) {
+      return res.status(400).json({ 
+        error: 'Invalid hiv_status. Must be either "Reactive" or "Non-Reactive"' 
+      });
     }
 
     const consentBool = Boolean(consent);
 
-    const [result] = await pool.execute(
-      `UPDATE patients
-       SET name = ?, date_of_birth = ?, contact = ?, contact_info = ?, consent = ?, hiv_status = ?, dlt_status = ?
-       WHERE patient_id = ?`,
-      [name, date_of_birth, contact || null, contact_info || null, consentBool, hiv_status, 'pending', id]
+    // First, check if patient exists and get current data
+    const [checkRows] = await pool.execute(
+      'SELECT patient_id, hiv_status, created_at FROM patients WHERE patient_id = ?',
+      [id]
     );
 
-    if (result.affectedRows === 0) {
+    if (checkRows.length === 0) {
       return res.status(404).json({ error: 'Patient not found' });
     }
+
+    const currentPatient = checkRows[0];
+    
+    // If HIV status changes from Non-Reactive to Reactive, we might want to update the patient ID
+    // But for simplicity, we'll keep the original ID for updates
+    // You can add logic here to regenerate ID if needed
+
+    const [result] = await pool.execute(
+      `UPDATE patients
+       SET name = ?, date_of_birth = ?, contact_info = ?, consent = ?, hiv_status = ?
+       WHERE patient_id = ?`,
+      [name, date_of_birth, contact_info || null, consentBool, hiv_status, id]
+    );
 
     const userInfo = getUserInfo(req);
 
@@ -400,9 +456,6 @@ router.put('/:id', async (req, res, next) => {
       description: `Patient ${name} (${id}) updated`,
       ip_address: userInfo.ip_address
     });
-
-    // Update DLT hash
-    await createDltHash(id);
 
     res.json({ message: 'Patient updated successfully' });
   } catch (err) {
@@ -416,7 +469,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // First, get patient name for audit log
+    // First, get patient info for audit log
     const [patientRows] = await pool.execute(
       'SELECT name FROM patients WHERE patient_id = ?',
       [id]
@@ -428,10 +481,10 @@ router.delete('/:id', async (req, res, next) => {
 
     const patientName = patientRows[0].name;
 
-    // Delete related records
-    await pool.execute('DELETE FROM dlt_hashes WHERE patient_id = ?', [id]);
-    await pool.execute('DELETE FROM biometric_links WHERE patient_id = ?', [id]);
-   
+    // Delete related audit logs first (optional, but keeps data clean)
+    await pool.execute('DELETE FROM audit_logs WHERE patient_id = ?', [id]);
+    
+    // Delete patient
     const [result] = await pool.execute('DELETE FROM patients WHERE patient_id = ?', [id]);
 
     const userInfo = getUserInfo(req);
@@ -447,93 +500,16 @@ router.delete('/:id', async (req, res, next) => {
     res.json({ message: 'Patient deleted successfully' });
   } catch (err) {
     console.error('Error deleting patient:', err);
+    
+    // Check if foreign key constraint error
+    if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(400).json({ 
+        error: 'Cannot delete patient. There are related audit logs. Please contact administrator.' 
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
-
-// Also update the createDltHash function to NOT automatically set status to verified
-const createDltHash = async (patientId) => {
-  try {
-    const [patientRows] = await pool.execute(
-      'SELECT patient_id, name, date_of_birth, contact_info, consent, hiv_status, created_at FROM patients WHERE patient_id = ?',
-      [patientId]
-    );
-
-    if (patientRows.length === 0) {
-      throw new Error('Patient not found');
-    }
-
-    const patient = patientRows[0];
-    const crypto = require('crypto');
-    
-    const dataToHash = {
-      patient_id: patient.patient_id,
-      name: patient.name,
-      date_of_birth: patient.date_of_birth.toISOString().split('T')[0],
-      hiv_status: patient.hiv_status,
-      consent: Boolean(patient.consent),
-      timestamp: patient.created_at.toISOString()
-    };
-
-    const sortedData = {};
-    Object.keys(dataToHash).sort().forEach(key => {
-      sortedData[key] = dataToHash[key];
-    });
-
-    const hash = crypto.createHash('sha256').update(JSON.stringify(sortedData)).digest('hex');
-
-    // Get previous hash for chain linking
-    const [previousHashes] = await pool.execute(
-      'SELECT data_hash FROM dlt_hashes WHERE patient_id = ? ORDER BY timestamp DESC LIMIT 1',
-      [patientId]
-    );
-
-    let block_hash = null;
-    if (previousHashes.length > 0) {
-      // Create simple chain
-      block_hash = crypto.createHash('sha256')
-        .update(previousHashes[0].data_hash + hash)
-        .digest('hex');
-    }
-
-    // 🚀 FIX: Insert new hash but don't set verified status automatically
-    await pool.execute(
-      'INSERT INTO dlt_hashes (patient_id, data_hash, block_hash, verified) VALUES (?, ?, ?, FALSE)', // 🚀 Set verified to FALSE initially
-      [patientId, hash, block_hash]
-    );
-
-    // 🚀 FIX: Don't update patient DLT status here - let verification process handle it
-    // Status remains 'pending' until explicit verification
-
-    return true;
-  } catch (error) {
-    console.error('Error creating DLT hash:', error.message);
-    return false;
-  }
-};
-
-// Biometric link creation function
-const createBiometricLink = async (patientId, biometricType = 'fingerprint') => {
-  try {
-    const biometricData = `biometric_${patientId}_${Date.now()}`;
-    const crypto = require('crypto');
-    const biometricHash = crypto.createHash('sha256').update(biometricData).digest('hex');
-
-    await pool.execute(
-      `INSERT INTO biometric_links 
-       (patient_id, biometric_type, biometric_data, biometric_hash, is_active) 
-       VALUES (?, ?, ?, ?, TRUE)
-       ON DUPLICATE KEY UPDATE 
-       biometric_data = ?, biometric_hash = ?, is_active = TRUE, updated_at = CURRENT_TIMESTAMP`,
-      [patientId, biometricType, biometricData, biometricHash, 
-       biometricData, biometricHash]
-    );
-
-    return true;
-  } catch (error) {
-    console.error('Error creating biometric link:', error.message);
-    return false;
-  }
-};
 
 module.exports = router;

@@ -1,3 +1,4 @@
+<!-- frontend\src\pages\admin\Dashboard.vue -->
 <template>
   <v-container fluid class="dashboard-page">
     <!-- Header -->
@@ -6,7 +7,7 @@
         <h1 class="text-h4 font-weight-bold mb-2">Dashboard Overview</h1>
         <p class="text-body-1 text-medium-emphasis">
           Welcome back, {{ authStore.user?.username }}! 
-          Here's what's happening with your HIV DLT system.
+          Here's what's happening with your HIV system.
         </p>
         <div class="last-updated text-caption text-medium-emphasis">
           Last updated: {{ lastUpdated }}
@@ -241,13 +242,21 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { dashboardApi, auditApi } from '@/api'
+import { patientsApi, auditApi } from '@/api' // Import specific APIs
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
-const stats = ref({})
+const stats = ref({
+  patients: {
+    total: 0,
+    consented: 0,
+    reactive: 0,
+    non_reactive: 0,
+    daily_enrollments: 0
+  }
+})
 const recentLogs = ref([])
 const lastUpdated = ref('')
 const refreshInterval = ref(null)
@@ -274,12 +283,11 @@ const nonReactiveRate = computed(() => {
 const systemAlerts = computed(() => {
   const alerts = []
   
-  // Check for unverified DLT records
-  if (stats.value.dlt && stats.value.dlt.total_hashes > stats.value.dlt.verified_hashes) {
-    const unverified = stats.value.dlt.total_hashes - stats.value.dlt.verified_hashes
+  // Example: Alert if no patients enrolled
+  if (stats.value.patients?.total === 0) {
     alerts.push({
-      type: 'warning',
-      message: `${unverified} DLT records need verification`
+      type: 'info',
+      message: 'No patients enrolled yet. Start by enrolling your first patient.'
     })
   }
   
@@ -291,25 +299,13 @@ const quickActions = computed(() => [
     title: 'New Enrollment',
     icon: 'mdi-account-plus',
     color: 'primary',
-    route: '/admin/enroll'
-  },
-  {
-    title: 'DLT Verification',
-    icon: 'mdi-shield-check',
-    color: 'success',
-    route: '/admin/dlt-verification'
+    route: '/admin/patients'
   },
   {
     title: 'Audit Logs',
     icon: 'mdi-shield-account',
     color: 'error',
     route: '/admin/audit-security'
-  },
-  {
-    title: 'Reports',
-    icon: 'mdi-chart-box',
-    color: 'warning',
-    route: '/admin/reports'
   },
   {
     title: 'All Patients',
@@ -323,19 +319,14 @@ const quickActions = computed(() => [
 async function refreshData() {
   loading.value = true
   try {
-    const response = await dashboardApi.getStats()
-    stats.value = response.data
-
-    // Debug: check data structure
-    console.log('Dashboard data structure:', {
-      patients: response.data.patients,
-      raw: response.data
-    })
+    // Get patient statistics
+    const patientsResponse = await patientsApi.getStats()
+    stats.value.patients = patientsResponse.data
     
     // Try to get recent logs separately
     try {
       const logsResponse = await auditApi.getLogs({ limit: 4 })
-      recentLogs.value = logsResponse.data.logs
+      recentLogs.value = logsResponse.data.logs || []
     } catch (logError) {
       console.warn('Could not fetch recent logs:', logError)
       recentLogs.value = []
@@ -351,8 +342,7 @@ async function refreshData() {
     console.error('Error refreshing dashboard data:', error)
     // Set fallback data
     stats.value = {
-      patients: { total: 0, consented: 0, reactive: 0, non_reactive: 0, daily_enrollments: 0 },
-      audit: { last_30_days: [], last_24_hours: [] }
+      patients: { total: 0, consented: 0, reactive: 0, non_reactive: 0, daily_enrollments: 0 }
     }
     recentLogs.value = []
   } finally {
@@ -389,7 +379,7 @@ function getLogColor(actionType) {
     'LOGOUT': 'warning',
     'PATIENT_CREATED': 'primary',
     'PATIENT_UPDATED': 'info',
-    'DLT_VERIFIED': 'success'
+    'PATIENT_DELETED': 'error'
   }
   return colors[actionType] || 'grey'
 }

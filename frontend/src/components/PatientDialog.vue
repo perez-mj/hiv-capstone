@@ -85,50 +85,40 @@
               />
             </v-col>
 
-            <!-- Enhanced Security Information -->
-            <v-col cols="12">
-              <v-alert
-                :type="isEdit ? 'info' : 'success'"
-                variant="tonal"
-                density="compact"
-              >
-                <div class="d-flex align-center">
-                  <v-icon class="me-2">{{ isEdit ? 'mdi-information' : 'mdi-shield-check' }}</v-icon>
-                  <span>
-                    <strong>{{ isEdit ? 'Security Update:' : 'Complete Security Enrollment:' }}</strong> 
-                    {{ isEdit 
-                      ? 'Changes will create new DLT hash and update biometric verification.'
-                      : 'Patient will be secured with blockchain DLT hash and biometric identity link.'
-                    }}
-                  </span>
-                </div>
-              </v-alert>
+            <!-- Patient ID Field for Create mode -->
+            <v-col cols="12" v-if="isCreate && !isView">
+              <v-text-field
+                v-model="formData.patient_id"
+                label="Patient ID"
+                variant="outlined"
+                density="comfortable"
+                hint="Leave blank to auto-generate"
+                persistent-hint
+                :disabled="loading"
+              />
             </v-col>
 
-            <!-- View Mode Display - Enhanced -->
+            <!-- View Mode Display - SIMPLIFIED without DLT/Biometric -->
             <v-col cols="12" v-if="isView && props.patient">
               <v-row>
-                <v-col cols="6">
+                <v-col cols="12">
                   <v-card variant="outlined">
-                    <v-card-text class="text-center">
-                      <v-icon :color="getDltStatusColor(props.patient.dlt_status)" size="large" class="mb-2">
-                        {{ getDltStatusIcon(props.patient.dlt_status) }}
-                      </v-icon>
-                      <div class="text-subtitle-2">DLT Status</div>
-                      <v-chip :color="getDltStatusColor(props.patient.dlt_status)" variant="flat" size="small">
-                        {{ props.patient.dlt_status || 'pending' }}
-                      </v-chip>
-                    </v-card-text>
-                  </v-card>
-                </v-col>
-                <v-col cols="6">
-                  <v-card variant="outlined">
-                    <v-card-text class="text-center">
-                      <v-icon color="blue" size="large" class="mb-2">mdi-fingerprint</v-icon>
-                      <div class="text-subtitle-2">Biometric</div>
-                      <v-chip color="green" variant="flat" size="small">
-                        Linked
-                      </v-chip>
+                    <v-card-text>
+                      <div class="d-flex align-center mb-2">
+                        <v-icon color="info" class="me-2">mdi-information</v-icon>
+                        <strong>Patient Information</strong>
+                      </div>
+                      <v-divider class="mb-2" />
+                      <v-row>
+                        <v-col cols="6">
+                          <div class="text-caption text-medium-emphasis">Patient ID</div>
+                          <div class="text-body-1">{{ props.patient.patient_id }}</div>
+                        </v-col>
+                        <v-col cols="6">
+                          <div class="text-caption text-medium-emphasis">Enrollment Date</div>
+                          <div class="text-body-1">{{ formatDate(props.patient.created_at) }}</div>
+                        </v-col>
+                      </v-row>
                     </v-card-text>
                   </v-card>
                 </v-col>
@@ -154,27 +144,23 @@
           :disabled="!valid || loading"
           @click="savePatient"
         >
-          {{ isEdit ? 'Update Security' : 'Enroll with Security' }}
+          {{ isEdit ? 'Update Patient' : 'Enroll Patient' }}
         </v-btn>
       </v-card-actions>
 
-      <!-- Enhanced Loading Overlay -->
+      <!-- Loading Overlay -->
       <v-overlay :model-value="loading" contained scrim="white" class="align-center justify-center">
         <div class="text-center">
           <v-progress-circular color="primary" indeterminate size="64" />
           <div class="text-h6 mt-4">
-            {{ isEdit ? 'Updating Security...' : 'Securing Enrollment...' }}
+            {{ isEdit ? 'Updating Patient...' : 'Enrolling Patient...' }}
           </div>
           <div class="text-body-2 text-medium-emphasis mt-2">
             <div v-if="!isEdit">
               <div>✓ Creating patient record</div>
-              <div>✓ Generating blockchain DLT hash</div>
-              <div>✓ Establishing biometric identity link</div>
             </div>
             <div v-else>
               <div>✓ Updating patient information</div>
-              <div>✓ Regenerating DLT hash</div>
-              <div>✓ Updating biometric verification</div>
             </div>
           </div>
         </div>
@@ -202,6 +188,7 @@ const loading = ref(false)
 const form = ref(null)
 
 const formData = ref({
+  patient_id: '',
   name: '',
   date_of_birth: '',
   contact_info: '',
@@ -266,15 +253,17 @@ function initializeForm() {
   if ((isEdit.value || isView.value) && props.patient) {
     // Populate form with existing patient data
     formData.value = {
+      patient_id: props.patient.patient_id || '',
       name: props.patient.name || '',
       date_of_birth: formatDateForInput(props.patient.date_of_birth),
-      contact_info: props.patient.contact_info || props.patient.contact || '',
+      contact_info: props.patient.contact_info || '',
       consent: props.patient.consent_status === 'YES' || props.patient.consent === true,
       hiv_status: props.patient.hiv_status || ''
     }
   } else {
     // Reset form for new patient
     formData.value = {
+      patient_id: '',
       name: '',
       date_of_birth: '',
       contact_info: '',
@@ -299,25 +288,14 @@ function formatDateForInput(dateString) {
 
 function formatDate(dateString) {
   if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleString()
-}
-
-function getDltStatusColor(status) {
-  const colors = {
-    'verified': 'green',
-    'pending': 'orange',
-    'failed': 'red'
-  }
-  return colors[status] || 'grey'
-}
-
-function getDltStatusIcon(status) {
-  const icons = {
-    'verified': 'mdi-check-circle',
-    'pending': 'mdi-clock',
-    'failed': 'mdi-alert-circle'
-  }
-  return icons[status] || 'mdi-help-circle'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 async function savePatient() {
@@ -325,6 +303,7 @@ async function savePatient() {
 
   loading.value = true
   try {
+    // Prepare patient data
     const patientData = {
       name: formData.value.name,
       date_of_birth: formData.value.date_of_birth,
@@ -337,10 +316,13 @@ async function savePatient() {
       // Update existing patient
       await patientsApi.update(props.patient.patient_id, patientData)
     } else {
-      // Create new patient - generate patient_id on backend or use a simple one
-      const patientId = `HIV-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+      // Create new patient
+      const finalPatientId = formData.value.patient_id.trim() 
+        ? formData.value.patient_id 
+        : `HIV-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+      
       await patientsApi.create({
-        patient_id: patientId,
+        patient_id: finalPatientId,
         ...patientData
       })
     }
@@ -349,7 +331,8 @@ async function savePatient() {
     closeDialog()
   } catch (error) {
     console.error('Failed to save patient:', error)
-    // You can show an error message here
+    // You could show an error message here
+    alert(error.response?.data?.error || error.message || 'Failed to save patient')
   } finally {
     loading.value = false
   }
@@ -361,3 +344,7 @@ function closeDialog() {
   }
 }
 </script>
+
+<style scoped>
+/* Add any custom styles if needed */
+</style>

@@ -24,6 +24,9 @@ const adminAppointmentRoutes = require('./routes/adminAppointments');
 const adminMessagingRoutes = require('./routes/adminMessaging');
 // Add this import at the top with other imports
 const patientContactRoutes = require('./routes/patientContacts');
+// In your main app.js or server.js
+const dashboardRoutes = require('./routes/dashboard');
+app.use('/api/dashboard', dashboardRoutes);
 
 // Add this with other route mounts
 app.use('/api/patient/contacts', patientContactRoutes);

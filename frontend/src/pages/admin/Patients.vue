@@ -1,4 +1,4 @@
-<!-- frontend/src/pages/admin/Patients.vue - UPDATED DESIGN -->
+<!-- frontend/src/pages/admin/Patients.vue - UPDATED WITH EXISTING FIELDS ONLY -->
 <template>
   <v-container fluid class="pa-6">
     <!-- Header Section -->
@@ -6,7 +6,7 @@
       <div>
         <h1 class="text-h4 font-weight-bold text-primary">Patient Management</h1>
         <p class="text-body-1 text-medium-emphasis mt-2">
-          Manage patient records, enrollment, and data integrity verification
+          Manage patient records and enrollment
         </p>
       </div>
       
@@ -49,6 +49,9 @@
             <v-icon color="success" size="48" class="mb-2">mdi-checkbox-marked-circle</v-icon>
             <div class="text-h5 font-weight-bold">{{ stats.consented }}</div>
             <div class="text-body-2 text-medium-emphasis">Consented</div>
+            <div class="text-caption text-success mt-1">
+              {{ stats.consent_rate || 0 }}% consent rate
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -58,15 +61,18 @@
             <v-icon color="warning" size="48" class="mb-2">mdi-alert-circle</v-icon>
             <div class="text-h5 font-weight-bold">{{ stats.reactive }}</div>
             <div class="text-body-2 text-medium-emphasis">Reactive Status</div>
+            <div class="text-caption text-warning mt-1">
+              {{ stats.reactive_rate || 0 }}% of total
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" sm="6" md="3">
         <v-card elevation="2" border>
           <v-card-text class="text-center">
-            <v-icon color="info" size="48" class="mb-2">mdi-shield-check</v-icon>
-            <div class="text-h5 font-weight-bold">{{ stats.dlt_verified }}</div>
-            <div class="text-body-2 text-medium-emphasis">DLT Verified</div>
+            <v-icon color="info" size="48" class="mb-2">mdi-chart-line</v-icon>
+            <div class="text-h5 font-weight-bold">{{ stats.daily_enrollments }}</div>
+            <div class="text-body-2 text-medium-emphasis">Today's Enrollments</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -124,17 +130,6 @@
           </v-col>
           <v-col cols="12" md="2">
             <v-select
-              v-model="filters.dltStatus"
-              density="comfortable"
-              variant="outlined"
-              :items="dltStatusOptions"
-              placeholder="DLT Status"
-              hide-details
-              clearable
-            />
-          </v-col>
-          <v-col cols="12" md="2">
-            <v-select
               v-model="sortBy"
               density="comfortable"
               variant="outlined"
@@ -142,6 +137,17 @@
               placeholder="Sort By"
               hide-details
             />
+          </v-col>
+          <v-col cols="12" md="2">
+            <v-btn
+              variant="text"
+              color="primary"
+              prepend-icon="mdi-filter-remove"
+              @click="clearFilters"
+              :disabled="!hasActiveFilters"
+            >
+              Clear Filters
+            </v-btn>
           </v-col>
         </v-row>
       </v-card-text>
@@ -174,8 +180,15 @@
 
           <!-- Patient ID Column -->
           <template v-slot:item.patient_id="{ item }">
-            <div class="font-weight-medium text-primary">
-              {{ item.patient_id }}
+            <div class="font-weight-medium">
+              <v-chip
+                size="small"
+                :color="getPatientIdColor(item.patient_id)"
+                variant="flat"
+                :prepend-icon="getPatientIdIcon(item.patient_id)"
+              >
+                {{ item.patient_id }}
+              </v-chip>
             </div>
           </template>
 
@@ -204,9 +217,9 @@
           </template>
 
           <!-- Contact Column -->
-          <template v-slot:item.contact="{ item }">
+          <template v-slot:item.contact_info="{ item }">
             <div class="contact-info">
-              {{ item.contact_info || item.contact || 'N/A' }}
+              {{ item.contact_info || 'N/A' }}
             </div>
           </template>
 
@@ -232,21 +245,6 @@
             >
               {{ item.hiv_status }}
             </v-chip>
-          </template>
-
-          <!-- DLT Status Column -->
-          <template v-slot:item.dlt_status="{ item }">
-            <v-chip
-              size="small"
-              :color="getDltStatusColor(item.dlt_status)"
-              variant="flat"
-              :prepend-icon="getDltStatusIcon(item.dlt_status)"
-            >
-              {{ item.dlt_status || 'pending' }}
-            </v-chip>
-            <div v-if="item.dlt_timestamp" class="text-caption text-medium-emphasis">
-              {{ formatTimeAgo(item.dlt_timestamp) }}
-            </div>
           </template>
 
           <!-- Enrollment Date Column -->
@@ -315,7 +313,7 @@
     </v-card>
 
     <!-- Patient Dialog -->
-    <patient-dialog
+    <PatientDialog
       v-model="showPatientDialog"
       :patient="selectedPatient"
       :mode="dialogMode"
@@ -341,8 +339,7 @@ const router = useRouter()
 const search = ref('')
 const filters = ref({
   consentStatus: null,
-  hivStatus: null,
-  dltStatus: null
+  hivStatus: null
 })
 const sortBy = ref('created_at')
 const page = ref(1)
@@ -354,7 +351,11 @@ const stats = ref({
   total: 0,
   consented: 0,
   reactive: 0,
-  dlt_verified: 0
+  non_reactive: 0,
+  daily_enrollments: 0,
+  consent_rate: 0,
+  reactive_rate: 0,
+  non_reactive_rate: 0
 })
 
 const showPatientDialog = ref(false)
@@ -367,15 +368,14 @@ const snackbar = ref({
   color: 'success'
 })
 
-// Table headers
+// Table headers - SIMPLIFIED based on your schema
 const headers = ref([
   { title: 'Patient ID', key: 'patient_id', sortable: true },
   { title: 'Name', key: 'name', sortable: true },
-  { title: 'Age', key: 'age', sortable: true },
-  { title: 'Contact', key: 'contact', sortable: true },
+  { title: 'Age', key: 'age', sortable: false },
+  { title: 'Contact', key: 'contact_info', sortable: true },
   { title: 'Consent', key: 'consent_status', sortable: true },
   { title: 'HIV Status', key: 'hiv_status', sortable: true },
-  { title: 'DLT Status', key: 'dlt_status', sortable: true },
   { title: 'Enrollment Date', key: 'created_at', sortable: true },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
 ])
@@ -389,12 +389,6 @@ const consentOptions = [
 const hivStatusOptions = [
   { title: 'Reactive', value: 'Reactive' },
   { title: 'Non-Reactive', value: 'Non-Reactive' }
-]
-
-const dltStatusOptions = [
-  { title: 'Verified', value: 'verified' },
-  { title: 'Pending', value: 'pending' },
-  { title: 'Failed', value: 'failed' }
 ]
 
 const sortOptions = [
@@ -414,8 +408,7 @@ const filteredPatients = computed(() => {
     filtered = filtered.filter(patient =>
       patient.name?.toLowerCase().includes(query) ||
       patient.patient_id?.toLowerCase().includes(query) ||
-      (patient.contact_info && patient.contact_info.toLowerCase().includes(query)) ||
-      (patient.contact && patient.contact.toLowerCase().includes(query))
+      (patient.contact_info && patient.contact_info.toLowerCase().includes(query))
     )
   }
 
@@ -430,11 +423,6 @@ const filteredPatients = computed(() => {
   // HIV status filter
   if (filters.value.hivStatus) {
     filtered = filtered.filter(patient => patient.hiv_status === filters.value.hivStatus)
-  }
-
-  // DLT status filter
-  if (filters.value.dltStatus) {
-    filtered = filtered.filter(patient => patient.dlt_status === filters.value.dltStatus)
   }
 
   // Sorting
@@ -453,7 +441,7 @@ const paginationStart = computed(() => (page.value - 1) * perPage + 1)
 const paginationEnd = computed(() => Math.min(page.value * perPage, filteredPatients.value.length))
 
 const hasActiveFilters = computed(() => {
-  return search.value || filters.value.consentStatus || filters.value.hivStatus || filters.value.dltStatus
+  return search.value || filters.value.consentStatus || filters.value.hivStatus
 })
 
 // Lifecycle
@@ -467,29 +455,20 @@ async function fetchPatients() {
   loading.value = true
   error.value = ''
   try {
+    // Use getPagination with limit to get all patients
     const response = await patientsApi.getPagination({
+      page: 1,
       limit: 1000 // Get all patients for client-side filtering
     })
     
-    // Remove duplicate patients (keep the latest one)
-    const uniquePatients = response.data.patients.reduce((acc, current) => {
-      const existing = acc.find(patient => patient.patient_id === current.patient_id);
-      if (!existing) {
-        acc.push(current);
-      } else {
-        // If duplicate found, keep the one with the latest created_at timestamp
-        const existingDate = new Date(existing.created_at);
-        const currentDate = new Date(current.created_at);
-        if (currentDate > existingDate) {
-          const index = acc.indexOf(existing);
-          acc[index] = current;
-        }
-      }
-      return acc;
-    }, []);
+    patients.value = response.data.patients || []
+    console.log('Patients loaded:', patients.value.length)
     
-    patients.value = uniquePatients || [];
-    console.log('Patients loaded:', patients.value.length, 'Unique:', uniquePatients.length);
+    // Debug: Check patient IDs
+    patients.value.forEach(patient => {
+      console.log('Patient ID format:', patient.patient_id, 'HIV Status:', patient.hiv_status)
+    })
+    
   } catch (err) {
     console.error('Error fetching patients:', err)
     error.value = err.response?.data?.message || 'Failed to load patients'
@@ -504,14 +483,29 @@ async function fetchStats() {
   try {
     const response = await patientsApi.getStats()
     stats.value = response.data
+    console.log('Stats loaded:', stats.value)
   } catch (err) {
     console.error('Error fetching stats:', err)
     // Set fallback stats based on loaded patients
+    const total = patients.value.length
+    const consented = patients.value.filter(p => p.consent_status === 'YES' || p.consent).length
+    const reactive = patients.value.filter(p => p.hiv_status === 'Reactive').length
+    const nonReactive = patients.value.filter(p => p.hiv_status === 'Non-Reactive').length
+    
     stats.value = {
-      total: patients.value.length,
-      consented: patients.value.filter(p => p.consent_status === 'YES' || p.consent).length,
-      reactive: patients.value.filter(p => p.hiv_status === 'Reactive').length,
-      dlt_verified: patients.value.filter(p => p.dlt_status === 'verified').length
+      total: total,
+      consented: consented,
+      reactive: reactive,
+      non_reactive: nonReactive,
+      daily_enrollments: patients.value.filter(p => {
+        const createdAt = new Date(p.created_at)
+        const now = new Date()
+        const diffHours = (now - createdAt) / (1000 * 60 * 60)
+        return diffHours <= 24
+      }).length,
+      consent_rate: total > 0 ? Math.round((consented / total) * 100) : 0,
+      reactive_rate: total > 0 ? Math.round((reactive / total) * 100) : 0,
+      non_reactive_rate: total > 0 ? Math.round((nonReactive / total) * 100) : 0
     }
   }
 }
@@ -590,6 +584,25 @@ function getInitials(name) {
     .substring(0, 2)
 }
 
+function getPatientIdColor(patientId) {
+  // Check if patient ID starts with PR (HIV Positive/Reactive)
+  if (patientId && patientId.startsWith('PR')) {
+    return 'warning' // Orange/Red for positive
+  } else if (patientId && patientId.startsWith('P')) {
+    return 'success' // Green for negative
+  }
+  return 'primary' // Default
+}
+
+function getPatientIdIcon(patientId) {
+  if (patientId && patientId.startsWith('PR')) {
+    return 'mdi-alert' // Alert icon for positive
+  } else if (patientId && patientId.startsWith('P')) {
+    return 'mdi-check' // Check icon for negative
+  }
+  return 'mdi-account'
+}
+
 function getConsentColor(consentStatus) {
   return consentStatus === 'YES' ? 'green' : 'red'
 }
@@ -600,32 +613,14 @@ function getConsentIcon(consentStatus) {
 
 function getHivStatusColor(status) {
   const colors = {
-    'Reactive': 'red',
-    'Non-Reactive': 'green'
+    'Reactive': 'warning',
+    'Non-Reactive': 'success'
   }
   return colors[status] || 'grey'
 }
 
 function getHivStatusIcon(status) {
   return status === 'Reactive' ? 'mdi-alert' : 'mdi-check'
-}
-
-function getDltStatusColor(status) {
-  const colors = {
-    'verified': 'green',
-    'pending': 'orange',
-    'failed': 'red'
-  }
-  return colors[status] || 'grey'
-}
-
-function getDltStatusIcon(status) {
-  const icons = {
-    'verified': 'mdi-check-circle',
-    'pending': 'mdi-clock',
-    'failed': 'mdi-alert-circle'
-  }
-  return icons[status] || 'mdi-help-circle'
 }
 
 function showSnackbar(message, color = 'success') {
@@ -641,8 +636,7 @@ function clearFilters() {
   search.value = ''
   filters.value = {
     consentStatus: null,
-    hivStatus: null,
-    dltStatus: null
+    hivStatus: null
   }
   sortBy.value = 'created_at'
   page.value = 1
@@ -685,7 +679,20 @@ async function deletePatient(patient) {
 
 function exportPatientData() {
   try {
-    const dataStr = JSON.stringify(patients.value, null, 2)
+    // Prepare data for export
+    const exportData = patients.value.map(patient => ({
+      patient_id: patient.patient_id,
+      name: patient.name,
+      date_of_birth: patient.date_of_birth,
+      age: calculateAge(patient.date_of_birth),
+      contact_info: patient.contact_info,
+      consent: patient.consent_status || (patient.consent ? 'YES' : 'NO'),
+      hiv_status: patient.hiv_status,
+      enrollment_date: patient.created_at,
+      updated_at: patient.updated_at
+    }))
+    
+    const dataStr = JSON.stringify(exportData, null, 2)
     const dataBlob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement('a')

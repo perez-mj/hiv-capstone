@@ -170,13 +170,6 @@ const menu = ref([
     badge: null,
     description: 'Appointment scheduling and management'
   },
-  { 
-    title: 'Reports & Analytics', 
-    to: '/admin/reports', 
-    icon: 'mdi-chart-box',
-    badge: null,
-    description: 'Comprehensive reporting tools'
-  },
 ])
 
 // Auth computed properties

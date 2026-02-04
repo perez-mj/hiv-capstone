@@ -48,11 +48,11 @@ router.get('/stats', async (req, res) => {
     // Get top users by activity
     const [topUsers] = await pool.execute(`
       SELECT 
-        admin_user_id,
+        user_id,
         COUNT(*) as activity_count
       FROM audit_logs 
       WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-      GROUP BY admin_user_id
+      GROUP BY user_id
       ORDER BY activity_count DESC
       LIMIT 10
     `);

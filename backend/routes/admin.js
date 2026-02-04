@@ -28,7 +28,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     const [rows] = await pool.execute(
-      'SELECT * FROM admin_users WHERE username = ? AND is_active = TRUE',
+      'SELECT * FROM users WHERE username = ? AND is_active = TRUE',
       [username]
     );
 
@@ -62,7 +62,7 @@ router.post('/login', async (req, res, next) => {
 
     // Update last login
     await pool.execute(
-      'UPDATE admin_users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
       [admin.id]
     );
 
@@ -160,7 +160,7 @@ router.get('/users', async (req, res, next) => {
   try {
     const [rows] = await pool.execute(`
       SELECT id, username, full_name, email, is_active, last_login, created_at, updated_at 
-      FROM admin_users 
+      FROM users 
       ORDER BY created_at DESC
     `);
 
@@ -181,7 +181,7 @@ router.post('/users', async (req, res, next) => {
 
     // Check if username already exists
     const [existing] = await pool.execute(
-      'SELECT id FROM admin_users WHERE username = ?',
+      'SELECT id FROM users WHERE username = ?',
       [username]
     );
 
@@ -194,13 +194,13 @@ router.post('/users', async (req, res, next) => {
     const password_hash = await bcrypt.hash(password, saltRounds);
 
     const [result] = await pool.execute(
-      'INSERT INTO admin_users (username, full_name, email, password_hash, is_active) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO users (username, full_name, email, password_hash, is_active) VALUES (?, ?, ?, ?, ?)',
       [username, full_name, email, password_hash, is_active]
     );
 
     // Get the created admin
     const [rows] = await pool.execute(
-      'SELECT id, username, full_name, email, is_active, last_login, created_at, updated_at FROM admin_users WHERE username = ?',
+      'SELECT id, username, full_name, email, is_active, last_login, created_at, updated_at FROM users WHERE username = ?',
       [username]
     );
 
@@ -227,7 +227,7 @@ router.put('/users/:id', async (req, res, next) => {
 
     // Check if admin exists
     const [existing] = await pool.execute(
-      'SELECT id, username FROM admin_users WHERE id = ?',
+      'SELECT id, username FROM users WHERE id = ?',
       [id]
     );
 
@@ -236,13 +236,13 @@ router.put('/users/:id', async (req, res, next) => {
     }
 
     await pool.execute(
-      'UPDATE admin_users SET full_name = ?, email = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE users SET full_name = ?, email = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [full_name, email, is_active, parseInt(id)]
     );
 
     // Get the updated admin
     const [rows] = await pool.execute(
-      'SELECT id, username, full_name, email, is_active, last_login, created_at, updated_at FROM admin_users WHERE id = ?',
+      'SELECT id, username, full_name, email, is_active, last_login, created_at, updated_at FROM users WHERE id = ?',
       [id]
     );
 
@@ -269,7 +269,7 @@ router.delete('/users/:id', async (req, res, next) => {
 
     // Check if admin exists
     const [existing] = await pool.execute(
-      'SELECT id, username, full_name FROM admin_users WHERE id = ?',
+      'SELECT id, username, full_name FROM users WHERE id = ?',
       [id]
     );
 
@@ -282,7 +282,7 @@ router.delete('/users/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    await pool.execute('DELETE FROM admin_users WHERE id = ?', [id]);
+    await pool.execute('DELETE FROM users WHERE id = ?', [id]);
 
     // Audit log
     await logAudit(userInfo.admin_user_id, {
