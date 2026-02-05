@@ -6,19 +6,21 @@ import router from './router'
 
 import '@mdi/font/css/materialdesignicons.css'
 
-// ✅ Import Vuetify setup
-import vuetify from './plugins/vuetify'
+// Import Vuetify setup
+import vuetify from '@/plugins/vuetify'
 
-// ✅ Import global styles
-import './styles/style.css'
+// Import global styles
+import '@/styles/variables.css'
+import '@/styles/global.css'
+import '@/styles/style.css'
 
-// ✅ Create app instance
+// Create app instance
 const app = createApp(App)
 
-// ✅ Use plugins
+// Use plugins
 app.use(createPinia())
 app.use(router)
 app.use(vuetify)
 
-// ✅ Mount
+// Mount
 app.mount('#app')
