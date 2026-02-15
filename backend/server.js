@@ -12,39 +12,11 @@ app.use(express.json());
 // Import routes
 const patientRoutes = require('./routes/patients');
 const authRoutes = require('./routes/auth');
-const auditRoutes = require('./routes/audit');
-const adminRoutes = require('./routes/admin');
+const usersRoutes = require('./routes/users');
 
-const patientAuthRoutes = require('./routes/patientAuth');
-const patientAppointmentRoutes = require('./routes/patientAppointments');
-const patientMessageRoutes = require('./routes/patientMessages');
-const patientTestRoutes = require('./routes/patientTests');
-
-const adminAppointmentRoutes = require('./routes/adminAppointments');
-const adminMessagingRoutes = require('./routes/adminMessaging');
-// Add this import at the top with other imports
-const patientContactRoutes = require('./routes/patientContacts');
-// In your main app.js or server.js
-const dashboardRoutes = require('./routes/dashboard');
-app.use('/api/dashboard', dashboardRoutes);
-
-// Add this with other route mounts
-app.use('/api/patient/contacts', patientContactRoutes);
-// Use the routes
-app.use('/api/admin/appointments', adminAppointmentRoutes);
-app.use('/api/admin/messaging', adminMessagingRoutes);
-
-// Patient routes
-app.use('/api/patient/auth', patientAuthRoutes);
-app.use('/api/patient/appointments', patientAppointmentRoutes);
-app.use('/api/patient/messages', patientMessageRoutes);
-app.use('/api/patient/tests', patientTestRoutes);
-
-// Routes
+app.use('/api/users', usersRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/audit', auditRoutes);
-app.use('/api/admin', adminRoutes);
 
 
 // Health check

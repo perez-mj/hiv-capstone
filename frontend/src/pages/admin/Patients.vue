@@ -1,4 +1,4 @@
-<!-- frontend/src/pages/admin/Patients.vue - UPDATED WITH EXISTING FIELDS ONLY -->
+<!-- frontend/src/pages/admin/Patients.vue - UPDATED FOR FIXED API -->
 <template>
   <v-container fluid class="pa-6">
     <!-- Header Section -->
@@ -455,12 +455,16 @@ async function fetchPatients() {
   loading.value = true
   error.value = ''
   try {
-    // Use getPagination with limit to get all patients
+    // Use the main endpoint with pagination parameters
     const response = await patientsApi.getPagination({
       page: 1,
-      limit: 1000 // Get all patients for client-side filtering
+      limit: 1000, // Get all patients for client-side filtering
+      search: search.value,
+      consent: filters.value.consentStatus,
+      hiv_status: filters.value.hivStatus
     })
     
+    // Extract patients from the response
     patients.value = response.data.patients || []
     console.log('Patients loaded:', patients.value.length)
     
@@ -716,9 +720,18 @@ async function handlePatientSaved() {
   showSnackbar('Patient saved successfully')
 }
 
-// Watch for page changes to reset to first page when data changes
-watch([search, filters, sortBy], () => {
+// Watch for search/filter changes to reload data from server
+watch([search, filters], async () => {
+  // Reset to first page when filters change
   page.value = 1
+  // Reload patients from server with new filters
+  await fetchPatients()
+}, { deep: true })
+
+// Watch for page changes (client-side pagination)
+watch(page, () => {
+  // Just scroll to top when page changes
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 })
 </script>
 

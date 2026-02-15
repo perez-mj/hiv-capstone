@@ -3,7 +3,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const auth = require('../middleware/auth');
-const { logAudit } = require('../utils/auditLogger');
 
 router.use(auth);
 
@@ -14,7 +13,7 @@ const getUserInfo = (req) => {
   };
 };
 
-// Helper function to generate patient ID
+// Helper function to generate patient ID (HIV-YY-ABCXYZ format)
 function generatePatientId(name, hivStatus, year) {
   // Get initials from name: Firstname + Middlename + Lastname
   const nameParts = name.trim().split(' ');
@@ -180,12 +179,16 @@ router.get('/list', async (req, res) => {
 });
 
 // GET /api/patients - Get all patients with pagination and filters
-router.get('/pagination', async (req, res, next) => {
+router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 10, search, consent, hiv_status } = req.query;
-    const offset = (page - 1) * limit;
+    
+    // Convert to integers with defaults
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+    const offset = (pageNum - 1) * limitNum;
 
-    // Build the main query
+    // Build the main query WITHOUT parameterized LIMIT/OFFSET
     let query = `
       SELECT 
         p.id,
@@ -227,8 +230,8 @@ router.get('/pagination', async (req, res, next) => {
       params.push(hiv_status);
     }
 
-    query += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`;
-    params.push(parseInt(limit), parseInt(offset));
+    // Use string interpolation for LIMIT/OFFSET to avoid parameter issues
+    query += ` ORDER BY p.created_at DESC LIMIT ${limitNum} OFFSET ${offset}`;
 
     const [rows] = await pool.execute(query, params);
 
@@ -260,15 +263,15 @@ router.get('/pagination', async (req, res, next) => {
     }
 
     const [countRows] = await pool.execute(countQuery, countParams);
-    const total = countRows[0].total;
+    const total = parseInt(countRows[0].total);
 
     res.json({
       patients: rows,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: pageNum,
+        limit: limitNum,
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limitNum)
       }
     });
 
@@ -279,7 +282,7 @@ router.get('/pagination', async (req, res, next) => {
 });
 
 // GET /api/patients/:id - Get single patient
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -316,8 +319,8 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/patients - Create new patient
-router.post('/', async (req, res, next) => {
+// POST /api/patients - Create new patient (UPDATED TO REMOVE DEFAULT ID GENERATION)
+router.post('/', async (req, res) => {
   try {
     let { patient_id, name, date_of_birth, contact_info, consent, hiv_status } = req.body;
 
@@ -337,7 +340,8 @@ router.post('/', async (req, res, next) => {
 
     const consentBool = Boolean(consent);
     
-    // If patient_id is not provided, generate one
+    // REMOVED: The default ID generation (HIV-timestamp-random)
+    // Only use the custom generatePatientId function if no patient_id provided
     if (!patient_id) {
       // Get current year (2-digit format)
       const currentYear = new Date().getFullYear().toString().slice(-2);
@@ -345,12 +349,14 @@ router.post('/', async (req, res, next) => {
       // For new patients, use current year
       const year = currentYear;
       
-      // Generate patient ID
+      // Generate patient ID using custom function
       patient_id = generatePatientId(name, hiv_status, year);
       
       // Check if patient ID already exists, if yes, generate a new one
       let attempts = 0;
-      while (attempts < 10) {
+      const maxAttempts = 10;
+      
+      while (attempts < maxAttempts) {
         const [existing] = await pool.execute(
           'SELECT patient_id FROM patients WHERE patient_id = ?',
           [patient_id]
@@ -364,6 +370,13 @@ router.post('/', async (req, res, next) => {
         patient_id = generatePatientId(name, hiv_status, year);
         attempts++;
       }
+      
+      // If we couldn't find a unique ID after max attempts
+      if (attempts >= maxAttempts) {
+        return res.status(500).json({ 
+          error: 'Failed to generate unique patient ID. Please try again.' 
+        });
+      }
     }
 
     const [result] = await pool.execute(
@@ -376,12 +389,7 @@ router.post('/', async (req, res, next) => {
     const userInfo = getUserInfo(req);
    
     // Log the action
-    await logAudit(userInfo.admin_user_id, {
-      action_type: 'PATIENT_CREATED',
-      patient_id: patient_id,
-      description: `Patient ${name} (${patient_id}) enrolled`,
-      ip_address: userInfo.ip_address
-    });
+
 
     res.status(201).json({
       message: 'Patient created successfully',
@@ -404,7 +412,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /api/patients/:id - Update patient
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, date_of_birth, contact_info, consent, hiv_status } = req.body;
@@ -436,28 +444,53 @@ router.put('/:id', async (req, res, next) => {
 
     const currentPatient = checkRows[0];
     
-    // If HIV status changes from Non-Reactive to Reactive, we might want to update the patient ID
-    // But for simplicity, we'll keep the original ID for updates
-    // You can add logic here to regenerate ID if needed
+    // Check if HIV status changed from Non-Reactive to Reactive
+    // If so, we should update the patient ID to reflect the new status
+    let newPatientId = id;
+    if (currentPatient.hiv_status === 'Non-Reactive' && hiv_status === 'Reactive') {
+      // Generate new patient ID with PR prefix
+      const currentYear = new Date().getFullYear().toString().slice(-2);
+      const year = new Date(currentPatient.created_at).getFullYear().toString().slice(-2) || currentYear;
+      newPatientId = generatePatientId(name, hiv_status, year);
+      
+      // Check if new ID already exists
+      const [existing] = await pool.execute(
+        'SELECT patient_id FROM patients WHERE patient_id = ?',
+        [newPatientId]
+      );
+      
+      if (existing.length > 0) {
+        // Append a number to make it unique
+        let counter = 1;
+        while (counter < 10) {
+          newPatientId = generatePatientId(name, hiv_status, year) + counter;
+          const [check] = await pool.execute(
+            'SELECT patient_id FROM patients WHERE patient_id = ?',
+            [newPatientId]
+          );
+          if (check.length === 0) break;
+          counter++;
+        }
+      }
+    }
 
+    // Update patient
     const [result] = await pool.execute(
       `UPDATE patients
-       SET name = ?, date_of_birth = ?, contact_info = ?, consent = ?, hiv_status = ?
+       SET patient_id = ?, name = ?, date_of_birth = ?, contact_info = ?, consent = ?, hiv_status = ?
        WHERE patient_id = ?`,
-      [name, date_of_birth, contact_info || null, consentBool, hiv_status, id]
+      [newPatientId, name, date_of_birth, contact_info || null, consentBool, hiv_status, id]
     );
 
     const userInfo = getUserInfo(req);
 
     // Log the action
-    await logAudit(userInfo.admin_user_id, {
-      action_type: 'PATIENT_UPDATED',
-      patient_id: id,
-      description: `Patient ${name} (${id}) updated`,
-      ip_address: userInfo.ip_address
-    });
 
-    res.json({ message: 'Patient updated successfully' });
+
+    res.json({ 
+      message: 'Patient updated successfully',
+      new_patient_id: newPatientId !== id ? newPatientId : undefined
+    });
   } catch (err) {
     console.error('Error updating patient:', err);
     res.status(500).json({ error: 'Internal server error', message: err.message });
@@ -465,7 +498,7 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/patients/:id - Delete patient
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -490,12 +523,7 @@ router.delete('/:id', async (req, res, next) => {
     const userInfo = getUserInfo(req);
 
     // Log the action
-    await logAudit(userInfo.admin_user_id, {
-      action_type: 'PATIENT_DELETED',
-      patient_id: id,
-      description: `Patient ${patientName} (${id}) deleted`,
-      ip_address: userInfo.ip_address
-    });
+
 
     res.json({ message: 'Patient deleted successfully' });
   } catch (err) {
@@ -504,7 +532,7 @@ router.delete('/:id', async (req, res, next) => {
     // Check if foreign key constraint error
     if (err.code === 'ER_ROW_IS_REFERENCED_2') {
       return res.status(400).json({ 
-        error: 'Cannot delete patient. There are related audit logs. Please contact administrator.' 
+        error: 'Cannot delete patient. There are related records. Please contact administrator.' 
       });
     }
     

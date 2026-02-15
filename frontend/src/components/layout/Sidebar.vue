@@ -150,11 +150,11 @@ const menu = ref([
     description: 'System logs and security monitoring'
   },
   { 
-    title: 'Admin Management', 
-    to: '/admin/management', 
+    title: 'User Management', 
+    to: '/admin/users', 
     icon: 'mdi-account-cog',
     badge: null,
-    description: 'User and system administration'
+    description: 'Manage users'
   },
   { 
     title: 'Messaging Center', 

@@ -127,9 +127,6 @@
                 </p>
               </div>
 
-              <!-- Connection Test (Development Only) -->
-              <TestConnection v-if="isDevelopment" class="mb-4" />
-
               <!-- Login Form -->
               <v-form @submit.prevent="handleLogin" class="login-form">
                 <v-text-field v-model="credentials.username" label="Username" variant="outlined" density="comfortable"
@@ -224,7 +221,6 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import TestConnection from '@/components/TestConnection.vue'
 
 const authStore = useAuthStore()
 

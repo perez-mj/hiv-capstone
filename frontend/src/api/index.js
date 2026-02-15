@@ -2,7 +2,7 @@
 import http from './http'
 
 // ==========================================================================================================
-// ADMIN APIs (Based on your schema and routes)
+// ADMIN APIs (Updated for new users.js route)
 // ==========================================================================================================
 
 // Auth API
@@ -12,22 +12,26 @@ export const authApi = {
   logout: () => http.post('/auth/logout')
 }
 
-// Patients API
+// Patients API - UPDATED for /patients endpoint
 export const patientsApi = {
-  // List for dropdown/search
   getAll: () => http.get('/patients/list'),
-  // Single patient details
   getById: (id) => http.get(`/patients/${id}`),
-  // Create new patient
   create: (data) => http.post('/patients', data),
-  // Update patient
   update: (id, data) => http.put(`/patients/${id}`, data),
-  // Delete patient
   delete: (id) => http.delete(`/patients/${id}`),
-  // Dashboard statistics
   getStats: () => http.get('/patients/stats'),
-  // Paginated patient list
-  getPagination: (params) => http.get('/patients/pagination', { params })
+  // Use the main endpoint for pagination
+  getPagination: (params) => http.get('/patients', { params })
+}
+
+// Appointments API
+export const appointmentsApi = {
+  getAll: (params) => http.get('/admin/appointments', { params }),
+  getCalendar: (params) => http.get('/admin/appointments/calendar', { params }),
+  create: (data) => http.post('/admin/appointments', data),
+  update: (id, data) => http.put(`/admin/appointments/${id}`, data),
+  cancel: (id) => http.put(`/admin/appointments/${id}/cancel`),
+  getStats: () => http.get('/admin/appointments/stats')
 }
 
 // Audit API
@@ -36,26 +40,34 @@ export const auditApi = {
   getStats: () => http.get('/audit/stats')
 }
 
-// Users API (for admin management)
+// Users API (Updated for new route structure)
 export const usersApi = {
-  getAll: () => http.get('/admin/users'),
-  getById: (id) => http.get(`/admin/users/${id}`),
-  create: (data) => http.post('/admin/users', data),
-  update: (id, data) => http.put(`/admin/users/${id}`, data),
-  delete: (id) => http.delete(`/admin/users/${id}`),
-  toggleStatus: (id) => http.put(`/admin/users/${id}/toggle-status`),
-  changePassword: (id, data) => http.put(`/admin/users/${id}/password`, data)
+  // Get all users
+  getAll: () => http.get('/users'),
+  // Get single user by ID
+  getById: (id) => http.get(`/users/${id}`),
+  // Create new user
+  create: (data) => http.post('/users', data),
+  // Update user
+  update: (id, data) => http.put(`/users/${id}`, data),
+  // Delete user
+  delete: (id) => http.delete(`/users/${id}`),
+  // Toggle user status (activate/deactivate)
+  toggleStatus: (id) => http.put(`/users/${id}/toggle-status`),
+  // Change user password
+  changePassword: (id, data) => http.put(`/users/${id}/password`, data),
+  // Get user statistics
+  getStats: () => http.get('/users/stats')
 }
 
 // ==========================================================================================================
-// SIMPLE VERSION - Only includes what's actually implemented based on your schema
+// SIMPLE VERSION - Only includes what's actually implemented
 // ==========================================================================================================
 
 export default {
-  // Currently implemented APIs
   auth: authApi,
   patients: patientsApi,
+  appointments: appointmentsApi,
   audit: auditApi,
   users: usersApi
-  // Note: dashboardApi removed since no backend route exists
 }
