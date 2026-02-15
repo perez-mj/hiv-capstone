@@ -78,6 +78,15 @@
   --spacing-xxl: 48px;
   --spacing-3xl: 64px;
   
+  /* Responsive font sizes */
+  --font-size-xs: 10px;
+  --font-size-sm: 11px;
+  --font-size-base: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-xxl: 18px;
+  
   /* Transitions */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;

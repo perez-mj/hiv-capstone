@@ -37,3 +37,54 @@ body {
   /* works in all modern browsers */
   -moz-appearance: textfield;
 }
+
+/* src/App.vue or src/assets/main.css */
+html {
+  overflow-y: auto !important;
+}
+
+.v-application {
+  background: var(--color-background);
+}
+
+/* Fix for 1024x600 displays */
+@media screen and (max-height: 600px) {
+  .v-container {
+    padding: 4px;
+  }
+  
+  .v-card-title {
+    padding: 6px 12px !important;
+  }
+  
+  .v-card-text {
+    padding: 8px !important;
+  }
+  
+  /* Reduce spacing for small heights */
+  .v-row {
+    margin: -2px;
+  }
+  
+  .v-col {
+    padding: 2px;
+  }
+}
+
+/* Ensure proper box sizing */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Fix for flex children */
+.flex-grow-1 {
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Fix for scrolling containers */
+.overflow-auto {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}

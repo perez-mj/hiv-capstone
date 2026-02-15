@@ -78,6 +78,27 @@ const routes = [
       }
     ]
   },
+
+  // Add these to your routes array
+  {
+    path: '/kiosk',
+    name: 'KioskQueuing',
+    component: () => import('@/pages/kiosk/KioskQueuing.vue'),
+    meta: { 
+      layout: 'empty', // Use empty layout without sidebars
+      requiresGuest: true 
+    }
+  },
+  {
+    path: '/kiosk/display',
+    name: 'QueueDisplay',
+    component: () => import('@/pages/kiosk/QueueDisplay.vue'),
+    meta: { 
+      layout: 'empty',
+      requiresGuest: true 
+    }
+  },
+
   { path: '/:pathMatch(.*)*', redirect: '/login' }
 ]
 
