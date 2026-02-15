@@ -303,7 +303,6 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { messagingApi, patientsApi } from '@/api'
 
 const conversations = ref([])
 const messages = ref([])

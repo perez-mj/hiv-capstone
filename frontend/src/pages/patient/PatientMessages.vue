@@ -119,7 +119,6 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { patientApi } from '@/api'
 
 const contacts = ref([])
 const messages = ref([])

@@ -141,7 +141,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { patientApi } from '@/api'
 
 const router = useRouter()
 

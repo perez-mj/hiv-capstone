@@ -253,7 +253,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { patientApi } from '@/api'
 
 const loading = ref(false)
 const bookingLoading = ref(false)

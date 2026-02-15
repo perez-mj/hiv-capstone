@@ -126,7 +126,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { patientApi } from '@/api'
 
 const loading = ref(false)
 const tests = ref([])
