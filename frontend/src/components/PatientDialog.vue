@@ -1,9 +1,9 @@
-<!-- frontend/src/components/PatientDialog.vue -->
+<!-- frontend/src/components/PatientDialog.vue - UPDATED FOR NEW SCHEMA -->
 <template>
-  <v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="600">
+  <v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="800">
     <v-card>
       <v-card-title class="d-flex justify-space-between align-center">
-        <span class="text-h5">{{ mode === 'create' ? 'New Patient Enrollment' : mode === 'edit' ? 'Edit Patient' : 'Patient Details' }}</span>
+        <span class="text-h5">{{ dialogTitle }}</span>
         <v-btn icon @click="closeDialog">
           <v-icon>mdi-close</v-icon>
         </v-btn>
@@ -12,41 +12,77 @@
       <v-card-text>
         <v-form ref="form" @submit.prevent="savePatient">
           <v-row>
-            <!-- Patient ID Field -->
+            <!-- Patient ID Field (Read-only for edit, auto-generated for create) -->
             <v-col cols="12" md="6">
               <v-text-field
-                :model-value="formData.patient_id"
-                @update:model-value="formData.patient_id = $event"
+                v-model="formData.patient_id"
                 label="Patient ID"
-                :readonly="mode === 'view' || mode === 'edit'"
+                :readonly="mode !== 'create'"
                 variant="outlined"
                 density="comfortable"
-                :rules="mode === 'create' ? [] : [v => !!v || 'Patient ID is required']"
-                :placeholder="mode === 'create' ? 'Leave blank to auto-generate' : ''"
-                :hint="mode === 'create' ? 'Auto-generated if left blank' : ''"
+                :rules="mode !== 'create' ? [v => !!v || 'Patient ID is required'] : []"
+                :placeholder="mode === 'create' ? 'Auto-generated if left blank' : ''"
+                :hint="mode === 'create' ? 'Leave blank for automatic generation' : ''"
                 persistent-hint
               />
             </v-col>
             
-            <!-- Name Field -->
+            <!-- HIV Status -->
             <v-col cols="12" md="6">
-              <v-text-field
-                :model-value="formData.name"
-                @update:model-value="formData.name = $event"
-                label="Full Name"
+              <v-select
+                v-model="formData.hiv_status"
+                label="HIV Status"
                 :readonly="mode === 'view'"
                 variant="outlined"
                 density="comfortable"
-                :rules="[v => !!v || 'Name is required']"
+                :items="hivStatusOptions"
+                :rules="[v => !!v || 'HIV Status is required']"
                 required
+              />
+            </v-col>
+            
+            <!-- Last Name -->
+            <v-col cols="12" md="4">
+              <v-text-field
+                v-model="formData.last_name"
+                label="Last Name"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                :rules="[v => !!v || 'Last Name is required']"
+                required
+              />
+            </v-col>
+            
+            <!-- First Name -->
+            <v-col cols="12" md="4">
+              <v-text-field
+                v-model="formData.first_name"
+                label="First Name"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                :rules="[v => !!v || 'First Name is required']"
+                required
+              />
+            </v-col>
+            
+            <!-- Middle Name -->
+            <v-col cols="12" md="4">
+              <v-text-field
+                v-model="formData.middle_name"
+                label="Middle Name"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Optional"
               />
             </v-col>
             
             <!-- Date of Birth -->
             <v-col cols="12" md="6">
               <v-text-field
-                :model-value="formData.date_of_birth"
-                @update:model-value="formData.date_of_birth = $event"
+                v-model="formData.date_of_birth"
                 label="Date of Birth"
                 type="date"
                 :readonly="mode === 'view'"
@@ -57,40 +93,103 @@
               />
             </v-col>
             
-            <!-- Contact Info -->
-            <v-col cols="12" md="6">
-              <v-text-field
-                :model-value="formData.contact_info"
-                @update:model-value="formData.contact_info = $event"
-                label="Contact Information"
-                :readonly="mode === 'view'"
-                variant="outlined"
-                density="comfortable"
-                placeholder="Phone number or email"
-              />
-            </v-col>
-            
-            <!-- HIV Status -->
+            <!-- Gender -->
             <v-col cols="12" md="6">
               <v-select
-                :model-value="formData.hiv_status"
-                @update:model-value="formData.hiv_status = $event"
-                label="HIV Status"
+                v-model="formData.gender"
+                label="Gender"
                 :readonly="mode === 'view'"
                 variant="outlined"
                 density="comfortable"
-                :items="['Reactive', 'Non-Reactive']"
-                :rules="[v => !!v || 'HIV Status is required']"
+                :items="genderOptions"
+                :rules="[v => !!v || 'Gender is required']"
                 required
               />
             </v-col>
             
-            <!-- Consent Checkbox -->
+            <!-- Contact Number -->
             <v-col cols="12" md="6">
+              <v-text-field
+                v-model="formData.contact_number"
+                label="Contact Number"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Phone number"
+              />
+            </v-col>
+            
+            <!-- Address -->
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="formData.address"
+                label="Address"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Complete address"
+              />
+            </v-col>
+            
+            <!-- Diagnosis Date -->
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="formData.diagnosis_date"
+                label="Diagnosis Date"
+                type="date"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                :disabled="formData.hiv_status !== 'REACTIVE'"
+              />
+            </v-col>
+            
+            <!-- ART Start Date -->
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="formData.art_start_date"
+                label="ART Start Date"
+                type="date"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                :disabled="formData.hiv_status !== 'REACTIVE'"
+              />
+            </v-col>
+            
+            <!-- Latest CD4 Count -->
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="formData.latest_cd4_count"
+                label="Latest CD4 Count"
+                type="number"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                :disabled="formData.hiv_status !== 'REACTIVE'"
+                suffix="cells/mm³"
+              />
+            </v-col>
+            
+            <!-- Latest Viral Load -->
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="formData.latest_viral_load"
+                label="Latest Viral Load"
+                type="number"
+                :readonly="mode === 'view'"
+                variant="outlined"
+                density="comfortable"
+                :disabled="formData.hiv_status !== 'REACTIVE'"
+                suffix="copies/mL"
+              />
+            </v-col>
+            
+            <!-- Consent Checkbox -->
+            <v-col cols="12">
               <v-checkbox
-                :model-value="formData.consent"
-                @update:model-value="formData.consent = $event"
-                label="Patient has given consent"
+                v-model="formData.consent"
+                label="Patient has given consent for data collection and processing"
                 :readonly="mode === 'view'"
                 color="primary"
                 hide-details
@@ -100,7 +199,7 @@
           
           <!-- Preview of generated ID -->
           <v-alert
-            v-if="mode === 'create' && !formData.patient_id && formData.name && formData.hiv_status"
+            v-if="mode === 'create' && !formData.patient_id && formData.first_name && formData.last_name && formData.hiv_status"
             type="info"
             variant="tonal"
             class="mb-4"
@@ -155,45 +254,74 @@ const emit = defineEmits(['update:modelValue', 'saved'])
 const form = ref(null)
 const loading = ref(false)
 
+// Form data structure matching the new schema
 const formData = ref({
   patient_id: '',
-  name: '',
+  first_name: '',
+  last_name: '',
+  middle_name: '',
   date_of_birth: '',
-  contact_info: '',
+  gender: '',
+  address: '',
+  contact_number: '',
+  consent: false,
   hiv_status: '',
-  consent: false
+  diagnosis_date: '',
+  art_start_date: '',
+  latest_cd4_count: null,
+  latest_viral_load: null
+})
+
+// Options for select fields
+const hivStatusOptions = [
+  { title: 'Reactive', value: 'REACTIVE' },
+  { title: 'Non-Reactive', value: 'NON_REACTIVE' }
+]
+
+const genderOptions = [
+  { title: 'Male', value: 'MALE' },
+  { title: 'Female', value: 'FEMALE' },
+  { title: 'Other', value: 'OTHER' }
+]
+
+// Computed property for dialog title
+const dialogTitle = computed(() => {
+  switch (props.mode) {
+    case 'create': return 'New Patient Enrollment'
+    case 'edit': return 'Edit Patient'
+    case 'view': return 'Patient Details'
+    default: return 'Patient'
+  }
 })
 
 // Computed property to show ID preview
 const generateIdPreview = computed(() => {
-  if (!formData.value.name || !formData.value.hiv_status) return ''
+  if (!formData.value.first_name || !formData.value.last_name || !formData.value.hiv_status) return ''
   
-  const name = formData.value.name
+  const firstName = formData.value.first_name
+  const lastName = formData.value.last_name
+  const middleName = formData.value.middle_name
   const hivStatus = formData.value.hiv_status
   
   // Get current year (2-digit format)
   const currentYear = new Date().getFullYear().toString().slice(-2)
   const year = currentYear
   
-  // Get initials from name
-  const nameParts = name.trim().split(' ')
+  // Get initials
   let initials = ''
   
-  if (nameParts.length >= 1) {
-    initials += nameParts[0].charAt(0).toUpperCase()
+  if (firstName && firstName.length > 0) {
+    initials += firstName.charAt(0).toUpperCase()
   }
-  if (nameParts.length >= 2) {
-    const middlePart = nameParts[1]
-    if (middlePart.length === 1 || (middlePart.length === 2 && middlePart.endsWith('.'))) {
-      initials += middlePart.charAt(0).toUpperCase()
-    } else if (nameParts.length >= 3) {
-      initials += nameParts[2].charAt(0).toUpperCase()
-    } else {
-      initials += nameParts[1].charAt(0).toUpperCase()
-    }
+  
+  if (middleName && middleName.length > 0) {
+    initials += middleName.charAt(0).toUpperCase()
+  } else {
+    initials += 'X'
   }
-  if (nameParts.length >= 3) {
-    initials += nameParts[nameParts.length - 1].charAt(0).toUpperCase()
+  
+  if (lastName && lastName.length > 0) {
+    initials += lastName.charAt(0).toUpperCase()
   }
   
   // Ensure we have at least 3 initials
@@ -205,7 +333,7 @@ const generateIdPreview = computed(() => {
   initials = initials.substring(0, 3)
   
   // Format: PR25-JDX or P25-JDX (without suffix for preview)
-  const prefix = hivStatus === 'Reactive' ? 'PR' : 'P'
+  const prefix = hivStatus === 'REACTIVE' ? 'PR' : 'P'
   
   return `${prefix}${year}-${initials}XXX`
 })
@@ -217,21 +345,37 @@ watch(() => props.modelValue, (newVal) => {
     if (props.patient && (props.mode === 'edit' || props.mode === 'view')) {
       formData.value = {
         patient_id: props.patient.patient_id || '',
-        name: props.patient.name || '',
+        first_name: props.patient.first_name || '',
+        last_name: props.patient.last_name || '',
+        middle_name: props.patient.middle_name || '',
         date_of_birth: props.patient.date_of_birth || '',
-        contact_info: props.patient.contact_info || '',
+        gender: props.patient.gender || '',
+        address: props.patient.address || '',
+        contact_number: props.patient.contact_number || '',
+        consent: props.patient.consent || false,
         hiv_status: props.patient.hiv_status || '',
-        consent: props.patient.consent || props.patient.consent_status === 'YES'
+        diagnosis_date: props.patient.diagnosis_date || '',
+        art_start_date: props.patient.art_start_date || '',
+        latest_cd4_count: props.patient.latest_cd4_count || null,
+        latest_viral_load: props.patient.latest_viral_load || null
       }
     } else {
       // Reset for new patient
       formData.value = {
         patient_id: '',
-        name: '',
+        first_name: '',
+        last_name: '',
+        middle_name: '',
         date_of_birth: '',
-        contact_info: '',
+        gender: '',
+        address: '',
+        contact_number: '',
+        consent: false,
         hiv_status: '',
-        consent: false
+        diagnosis_date: '',
+        art_start_date: '',
+        latest_cd4_count: null,
+        latest_viral_load: null
       }
     }
   }
@@ -251,23 +395,34 @@ const savePatient = async () => {
   
   loading.value = true
   try {
-    // Prepare patient data
+    // Prepare patient data - only send fields that are not empty
     const patientData = {
-      name: formData.value.name,
+      first_name: formData.value.first_name,
+      last_name: formData.value.last_name,
       date_of_birth: formData.value.date_of_birth,
-      contact_info: formData.value.contact_info || '',
+      gender: formData.value.gender,
       hiv_status: formData.value.hiv_status,
       consent: formData.value.consent,
-      // Send empty string instead of null if patient_id is empty
-      patient_id: formData.value.patient_id || ''
+      // Optional fields - send null if empty
+      middle_name: formData.value.middle_name || null,
+      address: formData.value.address || null,
+      contact_number: formData.value.contact_number || null,
+      diagnosis_date: formData.value.diagnosis_date || null,
+      art_start_date: formData.value.art_start_date || null,
+      latest_cd4_count: formData.value.latest_cd4_count ? parseInt(formData.value.latest_cd4_count) : null,
+      latest_viral_load: formData.value.latest_viral_load ? parseInt(formData.value.latest_viral_load) : null,
+      // Only send patient_id if provided (for create mode)
+      ...(formData.value.patient_id ? { patient_id: formData.value.patient_id } : {})
     }
     
     console.log('Sending patient data:', patientData)
     
     let response
     if (props.mode === 'create') {
+      // POST /patients - Creates new patient
       response = await patientsApi.create(patientData)
     } else if (props.mode === 'edit') {
+      // PUT /patients/:id - Updates existing patient
       response = await patientsApi.update(props.patient.patient_id, patientData)
     }
     
@@ -277,9 +432,23 @@ const savePatient = async () => {
   } catch (error) {
     console.error('Error saving patient:', error)
     console.error('Error details:', error.response?.data)
-    alert(error.response?.data?.error || 'Failed to save patient')
+    
+    // Show user-friendly error message
+    const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Failed to save patient'
+    alert(errorMessage)
   } finally {
     loading.value = false
   }
 }
+
+// Watch for HIV status changes to clear/disable dependent fields
+watch(() => formData.value.hiv_status, (newVal) => {
+  if (newVal !== 'REACTIVE') {
+    // Clear HIV-specific fields if status is not REACTIVE
+    formData.value.diagnosis_date = ''
+    formData.value.art_start_date = ''
+    formData.value.latest_cd4_count = null
+    formData.value.latest_viral_load = null
+  }
+})
 </script>

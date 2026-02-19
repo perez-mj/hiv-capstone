@@ -1,3 +1,4 @@
+<!-- frontend/src/App.vue -->
 <template>
   <div id="app">
     <!-- TODO: Add transition effects -->

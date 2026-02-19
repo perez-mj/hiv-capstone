@@ -1,4 +1,4 @@
-<!-- frontend/src/pages/admin/Patients.vue - UPDATED FOR FIXED API -->
+<!-- frontend/src/pages/admin/Patients.vue - UPDATED FOR NEW SCHEMA -->
 <template>
   <v-container fluid class="pa-6">
     <!-- Header Section -->
@@ -193,15 +193,15 @@
           </template>
 
           <!-- Name Column -->
-          <template v-slot:item.name="{ item }">
+          <template v-slot:item.full_name="{ item }">
             <div class="d-flex align-center">
               <v-avatar size="32" color="primary" class="mr-3">
                 <span class="text-caption text-white">
-                  {{ getInitials(item.name) }}
+                  {{ getInitials(item.first_name, item.last_name) }}
                 </span>
               </v-avatar>
               <div>
-                <div class="font-weight-medium">{{ item.name }}</div>
+                <div class="font-weight-medium">{{ item.last_name }}, {{ item.first_name }} {{ item.middle_name || '' }}</div>
                 <div class="text-caption text-medium-emphasis">
                   {{ formatDateOfBirth(item.date_of_birth) }}
                 </div>
@@ -212,14 +212,21 @@
           <!-- Age Column -->
           <template v-slot:item.age="{ item }">
             <div class="text-no-wrap">
-              {{ calculateAge(item.date_of_birth) }} years
+              {{ item.age || calculateAge(item.date_of_birth) }} years
             </div>
           </template>
 
+          <!-- Gender Column -->
+          <template v-slot:item.gender="{ item }">
+            <v-chip size="small" variant="flat">
+              {{ item.gender || 'N/A' }}
+            </v-chip>
+          </template>
+
           <!-- Contact Column -->
-          <template v-slot:item.contact_info="{ item }">
+          <template v-slot:item.contact_number="{ item }">
             <div class="contact-info">
-              {{ item.contact_info || 'N/A' }}
+              {{ item.contact_number || 'N/A' }}
             </div>
           </template>
 
@@ -227,11 +234,11 @@
           <template v-slot:item.consent_status="{ item }">
             <v-chip
               size="small"
-              :color="getConsentColor(item.consent_status || (item.consent ? 'YES' : 'NO'))"
+              :color="getConsentColor(item.consent)"
               variant="flat"
-              :prepend-icon="getConsentIcon(item.consent_status || (item.consent ? 'YES' : 'NO'))"
+              :prepend-icon="getConsentIcon(item.consent)"
             >
-              {{ item.consent_status || (item.consent ? 'YES' : 'NO') }}
+              {{ item.consent ? 'YES' : 'NO' }}
             </v-chip>
           </template>
 
@@ -355,7 +362,9 @@ const stats = ref({
   daily_enrollments: 0,
   consent_rate: 0,
   reactive_rate: 0,
-  non_reactive_rate: 0
+  non_reactive_rate: 0,
+  enrollment_trends: [],
+  consent_breakdown: []
 })
 
 const showPatientDialog = ref(false)
@@ -368,12 +377,13 @@ const snackbar = ref({
   color: 'success'
 })
 
-// Table headers - SIMPLIFIED based on your schema
+// Table headers - UPDATED for new schema
 const headers = ref([
   { title: 'Patient ID', key: 'patient_id', sortable: true },
-  { title: 'Name', key: 'name', sortable: true },
-  { title: 'Age', key: 'age', sortable: false },
-  { title: 'Contact', key: 'contact_info', sortable: true },
+  { title: 'Name', key: 'full_name', sortable: true },
+  { title: 'Age', key: 'age', sortable: true },
+  { title: 'Gender', key: 'gender', sortable: true },
+  { title: 'Contact', key: 'contact_number', sortable: true },
   { title: 'Consent', key: 'consent_status', sortable: true },
   { title: 'HIV Status', key: 'hiv_status', sortable: true },
   { title: 'Enrollment Date', key: 'created_at', sortable: true },
@@ -387,15 +397,15 @@ const consentOptions = [
 ]
 
 const hivStatusOptions = [
-  { title: 'Reactive', value: 'Reactive' },
-  { title: 'Non-Reactive', value: 'Non-Reactive' }
+  { title: 'Reactive', value: 'REACTIVE' },
+  { title: 'Non-Reactive', value: 'NON_REACTIVE' }
 ]
 
 const sortOptions = [
   { title: 'Newest First', value: 'created_at' },
   { title: 'Oldest First', value: 'created_at_asc' },
-  { title: 'Name A-Z', value: 'name' },
-  { title: 'Name Z-A', value: 'name_desc' }
+  { title: 'Name A-Z', value: 'full_name' },
+  { title: 'Name Z-A', value: 'full_name_desc' }
 ]
 
 // Computed properties
@@ -406,17 +416,16 @@ const filteredPatients = computed(() => {
   if (search.value) {
     const query = search.value.toLowerCase()
     filtered = filtered.filter(patient =>
-      patient.name?.toLowerCase().includes(query) ||
+      `${patient.last_name} ${patient.first_name} ${patient.middle_name || ''}`.toLowerCase().includes(query) ||
       patient.patient_id?.toLowerCase().includes(query) ||
-      (patient.contact_info && patient.contact_info.toLowerCase().includes(query))
+      (patient.contact_number && patient.contact_number.toLowerCase().includes(query))
     )
   }
 
   // Consent status filter
   if (filters.value.consentStatus) {
     filtered = filtered.filter(patient => {
-      const consentValue = patient.consent_status || (patient.consent ? 'YES' : 'NO')
-      return consentValue === filters.value.consentStatus
+      return filters.value.consentStatus === 'YES' ? patient.consent : !patient.consent
     })
   }
 
@@ -455,11 +464,11 @@ async function fetchPatients() {
   loading.value = true
   error.value = ''
   try {
-    // Use the main endpoint with pagination parameters
+    // GET /patients - Returns { patients: [], pagination: { page, limit, total, pages } }
     const response = await patientsApi.getPagination({
       page: 1,
       limit: 1000, // Get all patients for client-side filtering
-      search: search.value,
+      search: search.value || undefined,
       consent: filters.value.consentStatus,
       hiv_status: filters.value.hivStatus
     })
@@ -467,11 +476,6 @@ async function fetchPatients() {
     // Extract patients from the response
     patients.value = response.data.patients || []
     console.log('Patients loaded:', patients.value.length)
-    
-    // Debug: Check patient IDs
-    patients.value.forEach(patient => {
-      console.log('Patient ID format:', patient.patient_id, 'HIV Status:', patient.hiv_status)
-    })
     
   } catch (err) {
     console.error('Error fetching patients:', err)
@@ -485,6 +489,7 @@ async function fetchPatients() {
 
 async function fetchStats() {
   try {
+    // GET /patients/stats - Returns stats object with total, consented, reactive, non_reactive, etc.
     const response = await patientsApi.getStats()
     stats.value = response.data
     console.log('Stats loaded:', stats.value)
@@ -492,9 +497,9 @@ async function fetchStats() {
     console.error('Error fetching stats:', err)
     // Set fallback stats based on loaded patients
     const total = patients.value.length
-    const consented = patients.value.filter(p => p.consent_status === 'YES' || p.consent).length
-    const reactive = patients.value.filter(p => p.hiv_status === 'Reactive').length
-    const nonReactive = patients.value.filter(p => p.hiv_status === 'Non-Reactive').length
+    const consented = patients.value.filter(p => p.consent).length
+    const reactive = patients.value.filter(p => p.hiv_status === 'REACTIVE').length
+    const nonReactive = patients.value.filter(p => p.hiv_status === 'NON_REACTIVE').length
     
     stats.value = {
       total: total,
@@ -509,7 +514,9 @@ async function fetchStats() {
       }).length,
       consent_rate: total > 0 ? Math.round((consented / total) * 100) : 0,
       reactive_rate: total > 0 ? Math.round((reactive / total) * 100) : 0,
-      non_reactive_rate: total > 0 ? Math.round((nonReactive / total) * 100) : 0
+      non_reactive_rate: total > 0 ? Math.round((nonReactive / total) * 100) : 0,
+      enrollment_trends: [],
+      consent_breakdown: []
     }
   }
 }
@@ -521,10 +528,18 @@ function sortPatients(patients, sortKey) {
       return sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     case 'created_at_asc':
       return sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    case 'name':
-      return sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-    case 'name_desc':
-      return sorted.sort((a, b) => (b.name || '').localeCompare(a.name || ''))
+    case 'full_name':
+      return sorted.sort((a, b) => {
+        const nameA = `${a.last_name} ${a.first_name}`.toLowerCase()
+        const nameB = `${b.last_name} ${b.first_name}`.toLowerCase()
+        return nameA.localeCompare(nameB)
+      })
+    case 'full_name_desc':
+      return sorted.sort((a, b) => {
+        const nameA = `${a.last_name} ${a.first_name}`.toLowerCase()
+        const nameB = `${b.last_name} ${b.first_name}`.toLowerCase()
+        return nameB.localeCompare(nameA)
+      })
     default:
       return sorted
   }
@@ -578,14 +593,9 @@ function formatTimeAgo(dateString) {
   return `${Math.floor(diffHours / 24)}d ago`
 }
 
-function getInitials(name) {
-  if (!name) return 'NA'
-  return name
-    .split(' ')
-    .map(part => part.charAt(0))
-    .join('')
-    .toUpperCase()
-    .substring(0, 2)
+function getInitials(firstName, lastName) {
+  if (!firstName && !lastName) return 'NA'
+  return ((firstName?.charAt(0) || '') + (lastName?.charAt(0) || '')).toUpperCase()
 }
 
 function getPatientIdColor(patientId) {
@@ -607,24 +617,24 @@ function getPatientIdIcon(patientId) {
   return 'mdi-account'
 }
 
-function getConsentColor(consentStatus) {
-  return consentStatus === 'YES' ? 'green' : 'red'
+function getConsentColor(consent) {
+  return consent ? 'success' : 'error'
 }
 
-function getConsentIcon(consentStatus) {
-  return consentStatus === 'YES' ? 'mdi-check' : 'mdi-close'
+function getConsentIcon(consent) {
+  return consent ? 'mdi-check' : 'mdi-close'
 }
 
 function getHivStatusColor(status) {
   const colors = {
-    'Reactive': 'warning',
-    'Non-Reactive': 'success'
+    'REACTIVE': 'warning',
+    'NON_REACTIVE': 'success'
   }
   return colors[status] || 'grey'
 }
 
 function getHivStatusIcon(status) {
-  return status === 'Reactive' ? 'mdi-alert' : 'mdi-check'
+  return status === 'REACTIVE' ? 'mdi-alert' : 'mdi-check'
 }
 
 function showSnackbar(message, color = 'success') {
@@ -665,9 +675,10 @@ function editPatient(patient) {
 }
 
 async function deletePatient(patient) {
-  if (confirm(`Are you sure you want to delete patient ${patient.patient_id} (${patient.name})? This action cannot be undone.`)) {
+  if (confirm(`Are you sure you want to delete patient ${patient.patient_id} (${patient.last_name}, ${patient.first_name})? This action cannot be undone.`)) {
     try {
       loading.value = true
+      // DELETE /patients/:id - Returns { message: 'Patient deleted successfully' }
       await patientsApi.delete(patient.patient_id)
       await fetchPatients() // Refresh the list
       await fetchStats() // Refresh stats
@@ -686,14 +697,23 @@ function exportPatientData() {
     // Prepare data for export
     const exportData = patients.value.map(patient => ({
       patient_id: patient.patient_id,
-      name: patient.name,
+      first_name: patient.first_name,
+      last_name: patient.last_name,
+      middle_name: patient.middle_name,
+      full_name: `${patient.last_name}, ${patient.first_name}${patient.middle_name ? ' ' + patient.middle_name : ''}`,
       date_of_birth: patient.date_of_birth,
-      age: calculateAge(patient.date_of_birth),
-      contact_info: patient.contact_info,
-      consent: patient.consent_status || (patient.consent ? 'YES' : 'NO'),
+      age: patient.age || calculateAge(patient.date_of_birth),
+      gender: patient.gender,
+      contact_number: patient.contact_number,
+      address: patient.address,
+      consent: patient.consent ? 'YES' : 'NO',
       hiv_status: patient.hiv_status,
+      diagnosis_date: patient.diagnosis_date,
+      art_start_date: patient.art_start_date,
+      latest_cd4_count: patient.latest_cd4_count,
+      latest_viral_load: patient.latest_viral_load,
       enrollment_date: patient.created_at,
-      updated_at: patient.updated_at
+      last_updated: patient.updated_at
     }))
     
     const dataStr = JSON.stringify(exportData, null, 2)
@@ -726,7 +746,7 @@ watch([search, filters], async () => {
   page.value = 1
   // Reload patients from server with new filters
   await fetchPatients()
-}, { deep: true })
+}, { deep: true, debounce: 300 })
 
 // Watch for page changes (client-side pagination)
 watch(page, () => {
