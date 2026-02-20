@@ -19,9 +19,9 @@ const verifyAdmin = async (req, res, next) => {
       process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production'
     );
     
-    // Check if user exists and is active
+    // Check if user exists, is active, and has ADMIN role
     const [rows] = await pool.execute(
-      'SELECT id, username, full_name, email, is_active FROM users WHERE id = ?',
+      'SELECT id, username, email, role, is_active FROM users WHERE id = ?',
       [decoded.userId]
     );
 
@@ -33,6 +33,11 @@ const verifyAdmin = async (req, res, next) => {
     
     if (user.is_active !== 1) {
       return res.status(401).json({ error: 'Account is inactive' });
+    }
+
+    // Check if user has ADMIN role
+    if (user.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
     }
 
     // Attach user to request
@@ -59,8 +64,8 @@ router.get('/', verifyAdmin, async (req, res) => {
       `SELECT 
         id, 
         username, 
-        full_name, 
         email, 
+        role,
         is_active, 
         last_login, 
         created_at, 
@@ -71,7 +76,7 @@ router.get('/', verifyAdmin, async (req, res) => {
 
     res.json({
       success: true,
-      admins: rows
+      users: rows
     });
 
   } catch (err) {
@@ -94,6 +99,11 @@ router.get('/stats', verifyAdmin, async (req, res) => {
     const [activeRows] = await pool.execute('SELECT COUNT(*) as count FROM users WHERE is_active = 1');
     const active = activeRows[0].count;
     
+    // By role
+    const [adminRows] = await pool.execute('SELECT COUNT(*) as count FROM users WHERE role = "ADMIN"');
+    const [nurseRows] = await pool.execute('SELECT COUNT(*) as count FROM users WHERE role = "NURSE"');
+    const [patientRows] = await pool.execute('SELECT COUNT(*) as count FROM users WHERE role = "PATIENT"');
+    
     // Active today
     const [todayRows] = await pool.execute(
       'SELECT COUNT(*) as count FROM users WHERE DATE(last_login) = CURDATE()'
@@ -111,6 +121,11 @@ router.get('/stats', verifyAdmin, async (req, res) => {
       stats: {
         total: parseInt(total),
         active: parseInt(active),
+        byRole: {
+          admin: parseInt(adminRows[0].count),
+          nurse: parseInt(nurseRows[0].count),
+          patient: parseInt(patientRows[0].count)
+        },
         activeToday: parseInt(activeToday),
         newThisWeek: parseInt(newThisWeek)
       }
@@ -134,8 +149,8 @@ router.get('/:id', verifyAdmin, async (req, res) => {
       `SELECT 
         id, 
         username, 
-        full_name, 
         email, 
+        role,
         is_active, 
         last_login, 
         created_at, 
@@ -154,7 +169,7 @@ router.get('/:id', verifyAdmin, async (req, res) => {
 
     res.json({
       success: true,
-      admin: rows[0]
+      user: rows[0]
     });
 
   } catch (err) {
@@ -169,13 +184,21 @@ router.get('/:id', verifyAdmin, async (req, res) => {
 // POST /api/users - Create new user
 router.post('/', verifyAdmin, async (req, res) => {
   try {
-    const { username, password, full_name, email, is_active } = req.body;
+    const { username, password, email, role, is_active } = req.body;
     
     // Validate required fields
-    if (!username || !password || !full_name) {
+    if (!username || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Username, password, and full name are required'
+        error: 'Username and password are required'
+      });
+    }
+
+    // Validate role if provided
+    if (role && !['ADMIN', 'NURSE', 'PATIENT'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid role. Must be ADMIN, NURSE, or PATIENT'
       });
     }
 
@@ -214,13 +237,13 @@ router.post('/', verifyAdmin, async (req, res) => {
     // Create user
     const [result] = await pool.execute(
       `INSERT INTO users 
-        (username, password_hash, full_name, email, is_active) 
+        (username, password_hash, email, role, is_active) 
        VALUES (?, ?, ?, ?, ?)`,
       [
         username, 
         password_hash, 
-        full_name, 
         email || null, 
+        role || 'PATIENT', 
         is_active !== undefined ? is_active : 1
       ]
     );
@@ -230,8 +253,8 @@ router.post('/', verifyAdmin, async (req, res) => {
       `SELECT 
         id, 
         username, 
-        full_name, 
         email, 
+        role,
         is_active, 
         last_login, 
         created_at, 
@@ -244,12 +267,14 @@ router.post('/', verifyAdmin, async (req, res) => {
     // Log the action
     await pool.execute(
       `INSERT INTO audit_logs 
-        (action_type, user_id, description, ip_address) 
-       VALUES (?, ?, ?, ?)`,
+        (user_id, action_type, table_name, record_id, description, ip_address) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        'USER_CREATED',
         req.user.id,
-        `User ${full_name} (@${username}) created by ${req.user.username}`,
+        'USER_CREATED',
+        'users',
+        result.insertId.toString(),
+        `User ${username} created by ${req.user.username}`,
         req.ip
       ]
     );
@@ -257,7 +282,7 @@ router.post('/', verifyAdmin, async (req, res) => {
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      admin: newUserRows[0]
+      user: newUserRows[0]
     });
 
   } catch (err) {
@@ -273,11 +298,11 @@ router.post('/', verifyAdmin, async (req, res) => {
 router.put('/:id', verifyAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, is_active } = req.body;
+    const { email, role, is_active } = req.body;
     
     // Check if user exists
     const [existingRows] = await pool.execute(
-      'SELECT id, username, email FROM users WHERE id = ?',
+      'SELECT id, username, email, role FROM users WHERE id = ?',
       [id]
     );
     
@@ -289,6 +314,14 @@ router.put('/:id', verifyAdmin, async (req, res) => {
     }
 
     const existingUser = existingRows[0];
+    
+    // Validate role if provided
+    if (role && !['ADMIN', 'NURSE', 'PATIENT'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid role. Must be ADMIN, NURSE, or PATIENT'
+      });
+    }
     
     // Check if email already exists (if provided and changed)
     if (email && email !== existingUser.email) {
@@ -309,23 +342,20 @@ router.put('/:id', verifyAdmin, async (req, res) => {
     const updateFields = [];
     const updateValues = [];
     
-    if (full_name !== undefined) {
-      updateFields.push('full_name = ?');
-      updateValues.push(full_name);
-    }
-    
     if (email !== undefined) {
       updateFields.push('email = ?');
       updateValues.push(email || null);
+    }
+    
+    if (role !== undefined) {
+      updateFields.push('role = ?');
+      updateValues.push(role);
     }
     
     if (is_active !== undefined) {
       updateFields.push('is_active = ?');
       updateValues.push(is_active);
     }
-    
-    // Always update the timestamp
-    updateFields.push('updated_at = CURRENT_TIMESTAMP');
     
     // If no fields to update
     if (updateFields.length === 0) {
@@ -349,8 +379,8 @@ router.put('/:id', verifyAdmin, async (req, res) => {
       `SELECT 
         id, 
         username, 
-        full_name, 
         email, 
+        role,
         is_active, 
         last_login, 
         created_at, 
@@ -363,12 +393,14 @@ router.put('/:id', verifyAdmin, async (req, res) => {
     // Log the action
     await pool.execute(
       `INSERT INTO audit_logs 
-        (action_type, user_id, description, ip_address) 
-       VALUES (?, ?, ?, ?)`,
+        (user_id, action_type, table_name, record_id, description, ip_address) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        'USER_UPDATED',
         req.user.id,
-        `User ${updatedRows[0].full_name} (@${updatedRows[0].username}) updated by ${req.user.username}`,
+        'USER_UPDATED',
+        'users',
+        id,
+        `User ${existingUser.username} updated by ${req.user.username}`,
         req.ip
       ]
     );
@@ -376,7 +408,7 @@ router.put('/:id', verifyAdmin, async (req, res) => {
     res.json({
       success: true,
       message: 'User updated successfully',
-      admin: updatedRows[0]
+      user: updatedRows[0]
     });
 
   } catch (err) {
@@ -403,7 +435,7 @@ router.put('/:id/toggle-status', verifyAdmin, async (req, res) => {
 
     // Check if user exists
     const [existingRows] = await pool.execute(
-      'SELECT id, username, full_name, is_active FROM users WHERE id = ?',
+      'SELECT id, username, is_active FROM users WHERE id = ?',
       [id]
     );
     
@@ -419,7 +451,7 @@ router.put('/:id/toggle-status', verifyAdmin, async (req, res) => {
     
     // Update status
     await pool.execute(
-      'UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE users SET is_active = ? WHERE id = ?',
       [newStatus, id]
     );
 
@@ -428,8 +460,8 @@ router.put('/:id/toggle-status', verifyAdmin, async (req, res) => {
       `SELECT 
         id, 
         username, 
-        full_name, 
         email, 
+        role,
         is_active, 
         last_login, 
         created_at, 
@@ -442,12 +474,14 @@ router.put('/:id/toggle-status', verifyAdmin, async (req, res) => {
     // Log the action
     await pool.execute(
       `INSERT INTO audit_logs 
-        (action_type, user_id, description, ip_address) 
-       VALUES (?, ?, ?, ?)`,
+        (user_id, action_type, table_name, record_id, description, ip_address) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        'USER_STATUS_CHANGED',
         req.user.id,
-        `User ${existingUser.full_name} (@${existingUser.username}) ${newStatus ? 'activated' : 'deactivated'} by ${req.user.username}`,
+        'USER_STATUS_CHANGED',
+        'users',
+        id,
+        `User ${existingUser.username} ${newStatus ? 'activated' : 'deactivated'} by ${req.user.username}`,
         req.ip
       ]
     );
@@ -455,7 +489,7 @@ router.put('/:id/toggle-status', verifyAdmin, async (req, res) => {
     res.json({
       success: true,
       message: `User ${newStatus ? 'activated' : 'deactivated'} successfully`,
-      admin: updatedRows[0]
+      user: updatedRows[0]
     });
 
   } catch (err) {
@@ -482,7 +516,7 @@ router.put('/:id/password', verifyAdmin, async (req, res) => {
     
     // Check if user exists
     const [existingRows] = await pool.execute(
-      'SELECT id, username, full_name FROM users WHERE id = ?',
+      'SELECT id, username FROM users WHERE id = ?',
       [id]
     );
     
@@ -501,19 +535,21 @@ router.put('/:id/password', verifyAdmin, async (req, res) => {
     
     // Update password
     await pool.execute(
-      'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE users SET password_hash = ? WHERE id = ?',
       [password_hash, id]
     );
 
     // Log the action
     await pool.execute(
       `INSERT INTO audit_logs 
-        (action_type, user_id, description, ip_address) 
-       VALUES (?, ?, ?, ?)`,
+        (user_id, action_type, table_name, record_id, description, ip_address) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        'USER_PASSWORD_CHANGED',
         req.user.id,
-        `Password changed for user ${existingUser.full_name} (@${existingUser.username}) by ${req.user.username}`,
+        'USER_PASSWORD_CHANGED',
+        'users',
+        id,
+        `Password changed for user ${existingUser.username} by ${req.user.username}`,
         req.ip
       ]
     );
@@ -539,7 +575,7 @@ router.delete('/:id', verifyAdmin, async (req, res) => {
     
     // Check if user exists
     const [existingRows] = await pool.execute(
-      'SELECT id, username, full_name FROM users WHERE id = ?',
+      'SELECT id, username FROM users WHERE id = ?',
       [id]
     );
     
@@ -566,12 +602,14 @@ router.delete('/:id', verifyAdmin, async (req, res) => {
     // Log the action
     await pool.execute(
       `INSERT INTO audit_logs 
-        (action_type, user_id, description, ip_address) 
-       VALUES (?, ?, ?, ?)`,
+        (user_id, action_type, table_name, record_id, description, ip_address) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        'USER_DELETED',
         req.user.id,
-        `User ${existingUser.full_name} (@${existingUser.username}) deleted by ${req.user.username}`,
+        'USER_DELETED',
+        'users',
+        id,
+        `User ${existingUser.username} deleted by ${req.user.username}`,
         req.ip
       ]
     );
