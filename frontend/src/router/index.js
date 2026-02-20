@@ -1,4 +1,4 @@
-// src/router/index.js
+// frontend/src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -16,14 +16,14 @@ const routes = [
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
-    meta: { requiresAuth: true, adminOnly: true },
+    meta: { requiresAuth: true, allowedRoles: ['ADMIN', 'NURSE'] },
     children: [
       { path: '', redirect: '/admin/dashboard' },
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/pages/admin/Dashboard.vue') },
       { path: 'patients', name: 'Patients', component: () => import('@/pages/admin/Patients.vue') },
       { path: 'enroll', name: 'Enrollment', component: () => import('@/pages/admin/Enrollment.vue') },
       { path: 'audit-security', name: 'AuditSecurity', component: () => import('@/pages/admin/AuditSecurity.vue') },
-      { path: '/admin/users', name: 'UserManagement', component: () => import('@/pages/admin/UserManagement.vue'), meta: { requiresAuth: true }},
+      { path: 'users', name: 'UserManagement', component: () => import('@/pages/admin/UserManagement.vue'), meta: { allowedRoles: ['ADMIN'] } },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
       {
@@ -34,23 +34,17 @@ const routes = [
           { path: 'profile', name: 'Profile', component: () => import('@/pages/admin/settings/Profile.vue') },
           { path: 'security', name: 'Security', component: () => import('@/pages/admin/settings/Security.vue') },
           { path: 'notifications', name: 'Notifications', component: () => import('@/pages/admin/settings/Notifications.vue') },
-          { path: 'system', name: 'System', component: () => import('@/pages/admin/settings/System.vue') }
+          { path: 'system', name: 'System', component: () => import('@/pages/admin/settings/System.vue'), meta: { allowedRoles: ['ADMIN'] } }
         ]
       }
     ]
   },
-  // Patient routes
-  {
-    path: '/patient/login',
-    name: 'PatientLogin',
-    component: () => import('@/pages/patient/PatientLogin.vue'),
-    meta: { requiresGuest: true, patientOnly: true }
-  },
   {
     path: '/patient',
     component: () => import('@/layouts/PatientLayout.vue'),
-    meta: { requiresPatientAuth: true },
+    meta: { requiresAuth: true, allowedRoles: ['PATIENT'] },
     children: [
+      { path: '', redirect: '/patient/dashboard' },
       {
         path: 'dashboard',
         name: 'PatientDashboard',
@@ -78,27 +72,19 @@ const routes = [
       }
     ]
   },
-
-  // Add these to your routes array
+  // Kiosk routes (public)
   {
     path: '/kiosk',
     name: 'KioskQueuing',
     component: () => import('@/pages/kiosk/KioskQueuing.vue'),
-    meta: { 
-      layout: 'empty', // Use empty layout without sidebars
-      requiresGuest: true 
-    }
+    meta: { layout: 'empty', requiresGuest: true }
   },
   {
     path: '/kiosk/display',
     name: 'QueueDisplay',
     component: () => import('@/pages/kiosk/QueueDisplay.vue'),
-    meta: { 
-      layout: 'empty',
-      requiresGuest: true 
-    }
+    meta: { layout: 'empty', requiresGuest: true }
   },
-
   { path: '/:pathMatch(.*)*', redirect: '/login' }
 ]
 
@@ -107,7 +93,7 @@ const router = createRouter({
   routes
 })
 
-// Navigation guards - SIMPLIFIED
+// Navigation guards
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
@@ -115,17 +101,49 @@ router.beforeEach(async (to, from, next) => {
     to: to.path,
     from: from.path,
     requiresAuth: to.meta.requiresAuth,
-    requiresPatientAuth: to.meta.requiresPatientAuth,
-    requiresGuest: to.meta.requiresGuest
+    requiresGuest: to.meta.requiresGuest,
+    allowedRoles: to.meta.allowedRoles
   })
 
-  // Handle admin routes
+  // Handle guest routes (login page)
+  if (to.meta.requiresGuest) {
+    // If already authenticated, redirect based on role
+    if (authStore.isAuthenticated) {
+      console.log('🔒 Already authenticated, redirecting based on role:', authStore.userRole)
+      
+      if (authStore.userRole === 'PATIENT') {
+        next('/patient/dashboard')
+      } else {
+        next('/admin/dashboard')
+      }
+      return
+    }
+    next()
+    return
+  }
+
+  // Handle protected routes
   if (to.meta.requiresAuth) {
+    // Check if authenticated
     if (!authStore.isAuthenticated) {
-      console.log('🔒 Admin auth required but not logged in, redirecting to login')
+      console.log('🔒 Auth required but not logged in, redirecting to login')
       next('/login')
       return
     }
+
+    // Check role-based access
+    if (to.meta.allowedRoles && !to.meta.allowedRoles.includes(authStore.userRole)) {
+      console.log('🔒 Role not allowed:', authStore.userRole, 'Expected:', to.meta.allowedRoles)
+      
+      // Redirect to appropriate dashboard based on role
+      if (authStore.userRole === 'PATIENT') {
+        next('/patient/dashboard')
+      } else {
+        next('/admin/dashboard')
+      }
+      return
+    }
+
     next()
     return
   }

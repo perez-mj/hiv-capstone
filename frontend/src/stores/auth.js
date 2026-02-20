@@ -14,27 +14,31 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Getters
   const isAuthenticated = computed(() => {
-    const hasToken = !!token.value
-    const hasUser = !!user.value
-    console.log('🔍 Admin Auth check:', { hasToken, hasUser, token: token.value?.slice(0, 20) + '...' })
-    return hasToken && hasUser
+    return !!token.value && !!user.value
   })
   
-  const userRole = computed(() => user.value?.role || 'admin')
-  const userName = computed(() => user.value?.username || user.value?.fullName || 'Admin User')
+  const userRole = computed(() => user.value?.role || null)
+  
+  const userName = computed(() => {
+    return user.value?.fullName || user.value?.username || 'User'
+  })
+
+  const isAdmin = computed(() => userRole.value === 'ADMIN')
+  const isNurse = computed(() => userRole.value === 'NURSE')
+  const isPatient = computed(() => userRole.value === 'PATIENT')
+  const isStaff = computed(() => isAdmin.value || isNurse.value)
 
   // Actions
   const login = async (credentials) => {
     loading.value = true
     try {
-      console.log('🔐 Admin login attempt:', credentials.username)
+      console.log('🔐 Login attempt:', credentials.username)
 
       const response = await http.post('/auth/login', credentials)
-      console.log('✅ Admin login response:', response.data)
+      console.log('✅ Login response:', response.data)
 
       const { token: newToken, user: userData } = response.data
 
-      // Validate response
       if (!newToken) {
         throw new Error('No token received from server')
       }
@@ -47,20 +51,21 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('authToken', newToken)
       localStorage.setItem('authUser', JSON.stringify(userData))
 
-      console.log('💾 Admin auth stored in localStorage')
+      console.log('💾 Auth stored in localStorage, role:', userData.role)
 
-      // Navigate to admin dashboard
+      // Navigate based on role
       if (router) {
-        await router.push('/admin/dashboard')
-      } else {
-        window.location.href = '/admin/dashboard'
+        if (userData.role === 'PATIENT') {
+          await router.push('/patient/dashboard')
+        } else {
+          await router.push('/admin/dashboard')
+        }
       }
 
       return response.data
     } catch (error) {
-      console.error('❌ Admin login failed:', error)
+      console.error('❌ Login failed:', error)
       
-      // Provide user-friendly error message
       let errorMessage = 'Login failed'
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error
@@ -75,23 +80,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
-    console.log('🚪 Admin logging out...')
+    console.log('🚪 Logging out...')
     
     try {
-      // Call logout API
-      await http.post('/auth/logout').catch(() => {
-        // Ignore if API fails
-      })
+      await http.post('/auth/logout').catch(() => {})
     } finally {
       // Clear local state
       token.value = null
       user.value = null
       localStorage.removeItem('authToken')
       localStorage.removeItem('authUser')
-      
-      // Clear any patient data too
-      localStorage.removeItem('patientToken')
-      localStorage.removeItem('patientData')
       
       // Redirect to login
       if (router) {
@@ -104,27 +102,27 @@ export const useAuthStore = defineStore('auth', () => {
 
   const checkAuth = async () => {
     try {
-      console.log('🔄 Checking admin auth status...')
+      console.log('🔄 Checking auth status...')
       
-      // If no token stored, return false
       if (!token.value) {
-        console.log('⚠️ No admin token found')
+        console.log('⚠️ No token found')
         return false
       }
 
-      // Verify token with server
       const response = await http.get('/auth/check')
       
       if (response.data && response.data.user) {
-        console.log('✅ Admin auth check successful')
+        console.log('✅ Auth check successful, role:', response.data.user.role)
+        // Update user data in case it changed
+        user.value = response.data.user
+        localStorage.setItem('authUser', JSON.stringify(response.data.user))
         return true
       }
       
       return false
     } catch (error) {
-      console.error('❌ Admin auth check failed:', error.message)
+      console.error('❌ Auth check failed:', error.message)
       
-      // Clear invalid auth data
       if (error.response?.status === 401) {
         logout()
       }
@@ -142,7 +140,7 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         token.value = storedToken
         user.value = JSON.parse(storedUser)
-        console.log('📋 Admin auth initialized from localStorage')
+        console.log('📋 Auth initialized from localStorage, role:', user.value?.role)
       } catch (e) {
         console.error('Failed to parse stored user:', e)
         logout()
@@ -163,6 +161,10 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     userRole,
     userName,
+    isAdmin,
+    isNurse,
+    isPatient,
+    isStaff,
 
     // Actions
     login,

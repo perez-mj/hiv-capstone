@@ -7,97 +7,1047 @@ import http from './http'
 
 // Auth API
 export const authApi = {
-  // POST /auth/login - Returns { token, user: { id, username, role } }
+  /**
+   * POST /api/auth/login - Unified login for all users (Admin, Nurse, Patient)
+   * Request Body: { username, password }
+   * 
+   * Returns: {
+   *   token: "jwt_token_string",
+   *   user: {
+   *     id: 1,
+   *     username: "admin",
+   *     email: "admin@example.com",
+   *     role: "ADMIN" | "NURSE" | "PATIENT",
+   *     isActive: true,
+   *     // For ADMIN/NURSE:
+   *     fullName: "John Doe",
+   *     firstName: "John",
+   *     lastName: "Doe",
+   *     middleName: "M",
+   *     position: "System Administrator",
+   *     // For PATIENT:
+   *     patientId: "P001",
+   *     dateOfBirth: "1990-01-01",
+   *     gender: "MALE",
+   *     contactNumber: "1234567890",
+   *     address: "123 Main St",
+   *     hivStatus: "REACTIVE",
+   *     diagnosisDate: "2023-01-01",
+   *     artStartDate: "2023-01-15"
+   *   }
+   * }
+   */
   login: (credentials) => http.post('/auth/login', credentials),
-  // GET /auth/check - Returns { user: { id, username, role } } if authenticated
+
+  /**
+   * GET /api/auth/check - Verify if current token is valid and get user info
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   user: {
+   *     id: 1,
+   *     username: "admin",
+   *     email: "admin@example.com",
+   *     role: "ADMIN",
+   *     isActive: true,
+   *     fullName: "John Doe",
+   *     // If patient:
+   *     patientId: "P001"
+   *   }
+   * }
+   */
   check: () => http.get('/auth/check'),
-  // POST /auth/logout - Returns { message: 'Logged out successfully' }
-  logout: () => http.post('/auth/logout')
+
+  /**
+   * POST /api/auth/logout - Logout current user
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: { message: "Logout successful" }
+   */
+  logout: () => http.post('/auth/logout'),
+
+  /**
+   * POST /api/auth/change-password - Change user password
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { currentPassword, newPassword }
+   * 
+   * Returns: { message: "Password changed successfully" }
+   */
+  changePassword: (data) => http.post('/auth/change-password', data),
+
+  /**
+   * POST /api/auth/refresh - Refresh expired token
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: { token: "new_jwt_token_string" }
+   */
+  refreshToken: () => http.post('/auth/refresh')
 }
 
-// Patients API - UPDATED for new schema with field comments
+// Patients API
 export const patientsApi = {
-  // GET /patients/list - Returns { patients: [{ patient_id, full_name, first_name, last_name, middle_name }] }
-  // Used for dropdowns and simple lists
+  /**
+   * GET /api/patients/list - Get minimal patient list for dropdowns
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   patients: [
+   *     {
+   *       id: 1,
+   *       patient_id: "P001",
+   *       first_name: "John",
+   *       last_name: "Doe",
+   *       middle_name: "M",
+   *       full_name: "John M Doe"
+   *     }
+   *   ]
+   * }
+   */
   getAll: () => http.get('/patients/list'),
-  
-  // GET /patients/:id - Returns single patient object with all fields:
-  // id, patient_id, first_name, last_name, middle_name, full_name, date_of_birth, gender,
-  // address, contact_number, consent, hiv_status, diagnosis_date, art_start_date,
-  // latest_cd4_count, latest_viral_load, created_at, updated_at, created_by, updated_by, age
+
+  /**
+   * GET /api/patients/:id - Get complete patient details by ID
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   id: 1,
+   *   patient_id: "P001",
+   *   first_name: "John",
+   *   last_name: "Doe",
+   *   middle_name: "M",
+   *   full_name: "John M Doe",
+   *   date_of_birth: "1990-01-01",
+   *   gender: "MALE",
+   *   address: "123 Main St",
+   *   contact_number: "1234567890",
+   *   consent: 1,
+   *   hiv_status: "REACTIVE",
+   *   diagnosis_date: "2023-01-01",
+   *   art_start_date: "2023-01-15",
+   *   latest_cd4_count: 500,
+   *   latest_viral_load: 50,
+   *   created_at: "2023-01-01T00:00:00.000Z",
+   *   updated_at: "2023-01-01T00:00:00.000Z",
+   *   created_by: 1,
+   *   updated_by: 1,
+   *   age: 33 // calculated age from date_of_birth
+   * }
+   */
   getById: (id) => http.get(`/patients/${id}`),
-  
-  // POST /patients - Creates new patient, returns { message, patient: { all patient fields } }
-  // Automatically generates patient_id if not provided (format: P/PR + YY + - + Initials + 3 random letters)
+
+  /**
+   * POST /api/patients - Create new patient
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: {
+   *   patient_id: "P001", // optional, auto-generated if not provided
+   *   first_name: "John",
+   *   last_name: "Doe",
+   *   middle_name: "M", // optional
+   *   date_of_birth: "1990-01-01",
+   *   gender: "MALE",
+   *   address: "123 Main St", // optional
+   *   contact_number: "1234567890", // optional
+   *   consent: 1, // 0 or 1
+   *   hiv_status: "REACTIVE", // REACTIVE or NON_REACTIVE
+   *   diagnosis_date: "2023-01-01", // optional
+   *   art_start_date: "2023-01-15", // optional
+   *   latest_cd4_count: 500, // optional
+   *   latest_viral_load: 50, // optional
+   *   create_user_account: true, // optional: create user account for patient login
+   *   username: "john.doe", // required if create_user_account true
+   *   password: "password123" // required if create_user_account true
+   * }
+   * 
+   * Returns: {
+   *   message: "Patient created successfully",
+   *   patient: { ...full patient object as above },
+   *   user_account: { // included if create_user_account true
+   *     username: "john.doe",
+   *     role: "PATIENT"
+   *   }
+   * }
+   */
   create: (data) => http.post('/patients', data),
-  
-  // PUT /patients/:id - Updates patient, returns { message, new_patient_id (if changed) }
+
+  /**
+   * PUT /api/patients/:id - Update existing patient
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { ... any fields to update from patient schema }
+   * 
+   * Returns: {
+   *   message: "Patient updated successfully",
+   *   new_patient_id: "P001" // only if patient_id was changed
+   * }
+   */
   update: (id, data) => http.put(`/patients/${id}`, data),
-  
-  // DELETE /patients/:id - Returns { message: 'Patient deleted successfully' }
+
+  /**
+   * DELETE /api/patients/:id - Delete patient
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: { message: "Patient deleted successfully" }
+   */
   delete: (id) => http.delete(`/patients/${id}`),
-  
-  // GET /patients/stats - Returns stats object:
-  // { total, consented, reactive, non_reactive, daily_enrollments, consent_rate, 
-  //   reactive_rate, non_reactive_rate, enrollment_trends, consent_breakdown }
+
+  /**
+   * GET /api/patients/stats - Get patient statistics
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   total: 150,
+   *   consented: 145,
+   *   reactive: 120,
+   *   non_reactive: 30,
+   *   daily_enrollments: [
+   *     { date: "2024-01-01", count: 5 }
+   *   ],
+   *   consent_rate: 96.67,
+   *   reactive_rate: 80,
+   *   non_reactive_rate: 20,
+   *   enrollment_trends: {
+   *     weekly: [5, 7, 4, 8, 6],
+   *     monthly: [20, 25, 18, 22]
+   *   },
+   *   consent_breakdown: {
+   *     consented: 145,
+   *     not_consented: 5
+   *   }
+   * }
+   */
   getStats: () => http.get('/patients/stats'),
-  
-  // GET /patients - Returns paginated list: { patients: [], pagination: { page, limit, total, pages } }
-  // Accepts query params: page, limit, search, consent, hiv_status
-  getPagination: (params) => http.get('/patients', { params })
+
+  /**
+   * GET /api/patients - Get paginated patient list with filters
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   page: 1, // page number
+   *   limit: 10, // items per page
+   *   search: "john", // search in name/patient_id
+   *   consent: 1, // filter by consent (0 or 1)
+   *   hiv_status: "REACTIVE", // filter by status
+   *   gender: "MALE", // filter by gender
+   *   sort_by: "created_at", // field to sort by
+   *   sort_order: "DESC" // ASC or DESC
+   * }
+   * 
+   * Returns: {
+   *   patients: [ ...array of patient objects (minimal fields for listing) ],
+   *   pagination: {
+   *     page: 1,
+   *     limit: 10,
+   *     total: 150,
+   *     pages: 15,
+   *     hasNext: true,
+   *     hasPrev: false
+   *   }
+   * }
+   */
+  getPagination: (params) => http.get('/patients', { params }),
+
+  /**
+   * GET /api/patients/export - Export patients data
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   format: "csv" | "excel",
+   *   fields: ["patient_id", "full_name", "hiv_status"], // optional
+   *   ...filters // same as getPagination filters
+   * }
+   * 
+   * Returns: Blob (file download)
+   */
+  export: (params) => http.get('/patients/export', { 
+    params, 
+    responseType: 'blob' 
+  })
 }
 
 // Appointments API
 export const appointmentsApi = {
-  // GET /admin/appointments - Returns paginated appointments
-  getAll: (params) => http.get('/admin/appointments', { params }),
-  // GET /admin/appointments/calendar - Returns appointments for calendar view
-  getCalendar: (params) => http.get('/admin/appointments/calendar', { params }),
-  // POST /admin/appointments - Creates new appointment
-  create: (data) => http.post('/admin/appointments', data),
-  // PUT /admin/appointments/:id - Updates appointment
-  update: (id, data) => http.put(`/admin/appointments/${id}`, data),
-  // PUT /admin/appointments/:id/cancel - Cancels appointment
-  cancel: (id) => http.put(`/admin/appointments/${id}/cancel`),
-  // GET /admin/appointments/stats - Returns appointment statistics
-  getStats: () => http.get('/admin/appointments/stats')
+  /**
+   * GET /api/appointments - Get paginated appointments
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   page: 1,
+   *   limit: 10,
+   *   status: "SCHEDULED",
+   *   patient_id: "P001",
+   *   date_from: "2024-01-01",
+   *   date_to: "2024-01-31"
+   * }
+   * 
+   * Returns: {
+   *   appointments: [
+   *     {
+   *       id: 1,
+   *       appointment_number: "APP-20240101-001",
+   *       patient_id: "P001",
+   *       patient_name: "John Doe",
+   *       appointment_type_id: 1,
+   *       appointment_type: "Consultation",
+   *       scheduled_at: "2024-01-01T10:00:00.000Z",
+   *       status: "SCHEDULED",
+   *       notes: "Follow-up visit",
+   *       created_by: 1,
+   *       created_at: "2024-01-01T00:00:00.000Z",
+   *       updated_at: "2024-01-01T00:00:00.000Z"
+   *     }
+   *   ],
+   *   pagination: { page, limit, total, pages }
+   * }
+   */
+  getAll: (params) => http.get('/appointments', { params }),
+
+  /**
+   * GET /api/appointments/calendar - Get appointments for calendar view
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   start_date: "2024-01-01",
+   *   end_date: "2024-01-31",
+   *   view: "month" | "week" | "day"
+   * }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     title: "John Doe - Consultation",
+   *     start: "2024-01-01T10:00:00.000Z",
+   *     end: "2024-01-01T10:30:00.000Z",
+   *     extendedProps: {
+   *       appointment_number: "APP-20240101-001",
+   *       patient_id: "P001",
+   *       status: "SCHEDULED",
+   *       type: "Consultation"
+   *     }
+   *   }
+   * ]
+   */
+  getCalendar: (params) => http.get('/appointments/calendar', { params }),
+
+  /**
+   * GET /api/appointments/:id - Get single appointment details
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: { ...full appointment object with patient and type details }
+   */
+  getById: (id) => http.get(`/appointments/${id}`),
+
+  /**
+   * POST /api/appointments - Create new appointment
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: {
+   *   patient_id: "P001",
+   *   appointment_type_id: 1,
+   *   scheduled_at: "2024-01-01T10:00:00.000Z",
+   *   notes: "Follow-up visit"
+   * }
+   * 
+   * Returns: {
+   *   message: "Appointment created successfully",
+   *   appointment: { ...full appointment object },
+   *   appointment_number: "APP-20240101-001"
+   * }
+   */
+  create: (data) => http.post('/appointments', data),
+
+  /**
+   * PUT /api/appointments/:id - Update appointment
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { ...any appointment fields to update }
+   * 
+   * Returns: {
+   *   message: "Appointment updated successfully",
+   *   appointment: { ...updated appointment }
+   * }
+   */
+  update: (id, data) => http.put(`/appointments/${id}`, data),
+
+  /**
+   * PUT /api/appointments/:id/status - Update appointment status
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { status: "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW" }
+   * 
+   * Returns: {
+   *   message: "Appointment status updated successfully",
+   *   status: "CONFIRMED"
+   * }
+   */
+  updateStatus: (id, status) => http.put(`/appointments/${id}/status`, { status }),
+
+  /**
+   * DELETE /api/appointments/:id - Cancel/delete appointment
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: { message: "Appointment cancelled successfully" }
+   */
+  delete: (id) => http.delete(`/appointments/${id}`),
+
+  /**
+   * GET /api/appointments/stats - Get appointment statistics
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: { period: "today" | "week" | "month" | "year" }
+   * 
+   * Returns: {
+   *   total: 50,
+   *   scheduled: 20,
+   *   confirmed: 15,
+   *   completed: 10,
+   *   cancelled: 3,
+   *   no_show: 2,
+   *   by_type: [
+   *     { type: "Consultation", count: 30 },
+   *     { type: "Lab Test", count: 15 }
+   *   ],
+   *   upcoming: [ ...next 5 appointments ],
+   *   completion_rate: 85.5
+   * }
+   */
+  getStats: (params) => http.get('/appointments/stats', { params })
+}
+
+// Queue API
+export const queueApi = {
+  /**
+   * GET /api/queue/current - Get current queue status
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   now_serving: 5,
+   *   waiting_count: 8,
+   *   estimated_wait_time: 45, // minutes
+   *   queue: [
+   *     {
+   *       id: 1,
+   *       queue_number: 6,
+   *       patient_id: "P001",
+   *       patient_name: "John Doe",
+   *       appointment_type: "Consultation",
+   *       priority: 0,
+   *       status: "WAITING",
+   *       called_at: null,
+   *       estimated_start_time: "2024-01-01T10:15:00.000Z"
+   *     }
+   *   ]
+   * }
+   */
+  getCurrent: () => http.get('/queue/current'),
+
+  /**
+   * POST /api/queue - Add appointment to queue
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { appointment_id: 1, priority: 0 }
+   * 
+   * Returns: {
+   *   message: "Added to queue successfully",
+   *   queue_number: 6,
+   *   queue_id: 1
+   * }
+   */
+  addToQueue: (data) => http.post('/queue', data),
+
+  /**
+   * PUT /api/queue/:id/call - Call next patient
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   message: "Patient called",
+   *   queue_item: { ...queue item with called_at timestamp }
+   * }
+   */
+  callPatient: (id) => http.put(`/queue/${id}/call`),
+
+  /**
+   * PUT /api/queue/:id/start - Start serving patient
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   message: "Now serving patient",
+   *   queue_item: { ...queue item with served_at timestamp }
+   * }
+   */
+  startServing: (id) => http.put(`/queue/${id}/start`),
+
+  /**
+   * PUT /api/queue/:id/complete - Complete serving patient
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   message: "Service completed",
+   *   next_queue_number: 6 // next number to call
+   * }
+   */
+  completeServing: (id) => http.put(`/queue/${id}/complete`),
+
+  /**
+   * PUT /api/queue/:id/skip - Skip patient (moves to next)
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   message: "Patient skipped",
+   *   next_queue_number: 6
+   * }
+   */
+  skipPatient: (id) => http.put('/queue/${id}/skip'),
+
+  /**
+   * GET /api/queue/history - Get queue history
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: { date: "2024-01-01", page: 1, limit: 20 }
+   * 
+   * Returns: {
+   *   items: [ ...queue items with complete history ],
+   *   pagination: { page, limit, total }
+   * }
+   */
+  getHistory: (params) => http.get('/queue/history', { params })
 }
 
 // Audit API
 export const auditApi = {
-  // GET /audit/logs - Returns paginated audit logs
+  /**
+   * GET /api/audit/logs - Get paginated audit logs
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Query Parameters: {
+   *   page: 1,
+   *   limit: 20,
+   *   user_id: 1,
+   *   patient_id: "P001",
+   *   action_type: "USER_LOGIN",
+   *   date_from: "2024-01-01",
+   *   date_to: "2024-01-31"
+   * }
+   * 
+   * Returns: {
+   *   logs: [
+   *     {
+   *       id: 1,
+   *       user_id: 1,
+   *       username: "admin",
+   *       action_type: "USER_LOGIN",
+   *       table_name: "users",
+   *       record_id: "1",
+   *       patient_id: null,
+   *       old_values: null,
+   *       new_values: null,
+   *       description: "User logged in",
+   *       ip_address: "192.168.1.1",
+   *       user_agent: "Mozilla/5.0...",
+   *       timestamp: "2024-01-01T00:00:00.000Z"
+   *     }
+   *   ],
+   *   pagination: { page, limit, total, pages }
+   * }
+   */
   getLogs: (params) => http.get('/audit/logs', { params }),
-  // GET /audit/stats - Returns audit statistics
-  getStats: () => http.get('/audit/stats')
+
+  /**
+   * GET /api/audit/stats - Get audit statistics
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: {
+   *   total_logs: 1500,
+   *   by_action: [
+   *     { action: "USER_LOGIN", count: 500 },
+   *     { action: "PATIENT_CREATE", count: 150 }
+   *   ],
+   *   by_user: [
+   *     { user: "admin", count: 800 }
+   *   ],
+   *   recent_activities: [ ...last 10 logs ],
+   *   activity_trends: {
+   *     daily: [10, 15, 12, 18, 14],
+   *     labels: ["Mon", "Tue", "Wed", "Thu", "Fri"]
+   *   }
+   * }
+   */
+  getStats: () => http.get('/audit/stats'),
+
+  /**
+   * GET /api/audit/export - Export audit logs
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Query Parameters: { format: "csv", ...filters }
+   * 
+   * Returns: Blob (file download)
+   */
+  export: (params) => http.get('/audit/export', { params, responseType: 'blob' })
 }
 
-// Users API
+// Users API (Admin/Staff Management)
 export const usersApi = {
-  // GET /users - Returns array of all users with their details
+  /**
+   * GET /api/users - Get all users with their details
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     username: "admin",
+   *     email: "admin@example.com",
+   *     role: "ADMIN",
+   *     is_active: 1,
+   *     last_login: "2024-01-01T00:00:00.000Z",
+   *     created_at: "2024-01-01T00:00:00.000Z",
+   *     // Staff details (if role is ADMIN/NURSE)
+   *     staff: {
+   *       first_name: "John",
+   *       last_name: "Doe",
+   *       middle_name: "M",
+   *       position: "System Administrator",
+   *       contact_number: "1234567890"
+   *     },
+   *     // Patient details (if role is PATIENT)
+   *     patient: {
+   *       patient_id: "P001",
+   *       first_name: "John",
+   *       last_name: "Doe",
+   *       contact_number: "1234567890"
+   *     }
+   *   }
+   * ]
+   */
   getAll: () => http.get('/users'),
-  
-  // GET /users/:id - Returns single user object with staff details
+
+  /**
+   * GET /api/users/:id - Get single user by ID
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: { ...full user object with role-specific details }
+   */
   getById: (id) => http.get(`/users/${id}`),
-  
-  // POST /users - Creates new user, returns { message, user }
-  // Data should include: username, password, email, role, staff details
+
+  /**
+   * POST /api/users - Create new user (staff or patient account)
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Request Body (for ADMIN/NURSE): {
+   *   username: "jane.doe",
+   *   password: "SecurePass123",
+   *   email: "jane@example.com",
+   *   role: "NURSE",
+   *   staff: {
+   *     first_name: "Jane",
+   *     last_name: "Doe",
+   *     middle_name: "M",
+   *     position: "Head Nurse",
+   *     contact_number: "1234567890"
+   *   }
+   * }
+   * OR (for PATIENT, linking to existing patient):
+   * {
+   *   username: "john.patient",
+   *   password: "SecurePass123",
+   *   email: "john@example.com",
+   *   role: "PATIENT",
+   *   patient_id: "P001" // link to existing patient
+   * }
+   * 
+   * Returns: {
+   *   message: "User created successfully",
+   *   user: { ...created user object }
+   * }
+   */
   create: (data) => http.post('/users', data),
-  
-  // PUT /users/:id - Updates user, returns { message }
+
+  /**
+   * PUT /api/users/:id - Update user
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Request Body: {
+   *   email: "newemail@example.com",
+   *   is_active: 1,
+   *   // Staff details (if applicable)
+   *   staff: {
+   *     first_name: "Updated",
+   *     last_name: "Name",
+   *     position: "New Position"
+   *   }
+   * }
+   * 
+   * Returns: {
+   *   message: "User updated successfully",
+   *   user: { ...updated user }
+   * }
+   */
   update: (id, data) => http.put(`/users/${id}`, data),
-  
-  // DELETE /users/:id - Deletes user, returns { message }
+
+  /**
+   * DELETE /api/users/:id - Delete user
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: { message: "User deleted successfully" }
+   */
   delete: (id) => http.delete(`/users/${id}`),
-  
-  // PUT /users/:id/toggle-status - Toggles user active status, returns { message, is_active }
+
+  /**
+   * PUT /api/users/:id/toggle-status - Activate/deactivate user
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: {
+   *   message: "User status updated successfully",
+   *   is_active: 1
+   * }
+   */
   toggleStatus: (id) => http.put(`/users/${id}/toggle-status`),
-  
-  // PUT /users/:id/password - Changes user password, returns { message }
-  // Data should include: current_password, new_password
+
+  /**
+   * PUT /api/users/:id/password - Change user password (admin only)
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Request Body: { new_password: "NewSecurePass123" }
+   * 
+   * Returns: { message: "Password updated successfully" }
+   */
   changePassword: (id, data) => http.put(`/users/${id}/password`, data),
-  
-  // GET /users/stats - Returns user statistics: total, by_role, active_count
+
+  /**
+   * GET /api/users/stats - Get user statistics
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: {
+   *   total: 25,
+   *   by_role: {
+   *     ADMIN: 1,
+   *     NURSE: 8,
+   *     PATIENT: 16
+   *   },
+   *   active_count: 23,
+   *   inactive_count: 2,
+   *   recent_logins: [
+   *     { username: "admin", last_login: "2024-01-01T00:00:00.000Z" }
+   *   ]
+   * }
+   */
   getStats: () => http.get('/users/stats')
+}
+
+// Medications API
+export const medicationsApi = {
+  /**
+   * GET /api/medications - Get all medications
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     medication_name: "Tenofovir/Emtricitabine",
+   *     generic_name: "Truvada",
+   *     dosage_form: "Tablet",
+   *     strength: "300mg/200mg",
+   *     stock_quantity: 150,
+   *     reorder_level: 30,
+   *     is_active: 1,
+   *     created_at: "2024-01-01T00:00:00.000Z",
+   *     updated_at: "2024-01-01T00:00:00.000Z"
+   *   }
+   * ]
+   */
+  getAll: () => http.get('/medications'),
+
+  /**
+   * GET /api/medications/low-stock - Get medications below reorder level
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: [ ...array of medications with low stock ]
+   */
+  getLowStock: () => http.get('/medications/low-stock'),
+
+  /**
+   * POST /api/medications - Create new medication
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Request Body: {
+   *   medication_name: "New Drug",
+   *   generic_name: "Generic Name",
+   *   dosage_form: "Tablet",
+   *   strength: "100mg",
+   *   stock_quantity: 100,
+   *   reorder_level: 20
+   * }
+   * 
+   * Returns: {
+   *   message: "Medication created successfully",
+   *   medication: { ...created medication }
+   * }
+   */
+  create: (data) => http.post('/medications', data),
+
+  /**
+   * PUT /api/medications/:id - Update medication
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: {
+   *   message: "Medication updated successfully",
+   *   medication: { ...updated medication }
+   * }
+   */
+  update: (id, data) => http.put(`/medications/${id}`, data),
+
+  /**
+   * PUT /api/medications/:id/stock - Update stock quantity
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { quantity: 50, operation: "add" | "remove" }
+   * 
+   * Returns: {
+   *   message: "Stock updated successfully",
+   *   new_quantity: 200
+   * }
+   */
+  updateStock: (id, data) => http.put(`/medications/${id}/stock`, data)
+}
+
+// Prescriptions API
+export const prescriptionsApi = {
+  /**
+   * GET /api/prescriptions - Get prescriptions
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   patient_id: "P001",
+   *   status: "ACTIVE",
+   *   page: 1,
+   *   limit: 10
+   * }
+   * 
+   * Returns: {
+   *   prescriptions: [
+   *     {
+   *       id: 1,
+   *       patient_id: "P001",
+   *       patient_name: "John Doe",
+   *       appointment_id: 1,
+   *       medication_id: 1,
+   *       medication_name: "Tenofovir/Emtricitabine",
+   *       dosage_instructions: "Take one tablet daily",
+   *       quantity_prescribed: 30,
+   *       refills_remaining: 2,
+   *       prescribed_by: 1,
+   *       prescribed_by_name: "Dr. Jane Smith",
+   *       prescribed_date: "2024-01-01",
+   *       status: "ACTIVE",
+   *       created_at: "2024-01-01T00:00:00.000Z"
+   *     }
+   *   ],
+   *   pagination: { page, limit, total }
+   * }
+   */
+  getAll: (params) => http.get('/prescriptions', { params }),
+
+  /**
+   * POST /api/prescriptions - Create prescription
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: {
+   *   patient_id: "P001",
+   *   appointment_id: 1, // optional
+   *   medication_id: 1,
+   *   dosage_instructions: "Take one tablet daily",
+   *   quantity_prescribed: 30,
+   *   refills_remaining: 2,
+   *   prescribed_date: "2024-01-01"
+   * }
+   * 
+   * Returns: {
+   *   message: "Prescription created successfully",
+   *   prescription: { ...created prescription }
+   * }
+   */
+  create: (data) => http.post('/prescriptions', data),
+
+  /**
+   * PUT /api/prescriptions/:id/status - Update prescription status
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: { status: "COMPLETED" | "CANCELLED" | "EXPIRED" }
+   * 
+   * Returns: { message: "Prescription status updated" }
+   */
+  updateStatus: (id, status) => http.put(`/prescriptions/${id}/status`, { status }),
+
+  /**
+   * PUT /api/prescriptions/:id/refill - Refill prescription
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   message: "Prescription refilled",
+   *   refills_remaining: 1
+   * }
+   */
+  refill: (id) => http.put(`/prescriptions/${id}/refill`)
+}
+
+// Lab Results API
+export const labResultsApi = {
+  /**
+   * GET /api/lab-results - Get lab results
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   patient_id: "P001",
+   *   test_type: "CD4",
+   *   date_from: "2024-01-01",
+   *   date_to: "2024-01-31"
+   * }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     patient_id: "P001",
+   *     patient_name: "John Doe",
+   *     appointment_id: 1,
+   *     test_type: "CD4",
+   *     test_date: "2024-01-01",
+   *     result_value: "500",
+   *     result_unit: "cells/mm³",
+   *     reference_range: "500-1500",
+   *     interpretation: "Normal",
+   *     performed_by: 1,
+   *     performed_by_name: "Lab Tech",
+   *     file_path: "/uploads/lab/result1.pdf",
+   *     created_at: "2024-01-01T00:00:00.000Z"
+   *   }
+   * ]
+   */
+  getAll: (params) => http.get('/lab-results', { params }),
+
+  /**
+   * POST /api/lab-results - Create lab result
+   * Headers: { Authorization: "Bearer token" }
+   * Request Body: {
+   *   patient_id: "P001",
+   *   appointment_id: 1, // optional
+   *   test_type: "CD4",
+   *   test_date: "2024-01-01",
+   *   result_value: "500",
+   *   result_unit: "cells/mm³",
+   *   reference_range: "500-1500",
+   *   interpretation: "Normal"
+   * }
+   * 
+   * Returns: {
+   *   message: "Lab result created successfully",
+   *   lab_result: { ...created lab result }
+   * }
+   */
+  create: (data) => http.post('/lab-results', data),
+
+  /**
+   * POST /api/lab-results/:id/upload - Upload lab result file
+   * Headers: { Authorization: "Bearer token", Content-Type: "multipart/form-data" }
+   * Form Data: { file: File }
+   * 
+   * Returns: {
+   *   message: "File uploaded successfully",
+   *   file_path: "/uploads/lab/filename.pdf"
+   * }
+   */
+  uploadFile: (id, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return http.post(`/lab-results/${id}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  /**
+   * GET /api/lab-results/trends/:patient_id - Get lab trends
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   cd4_trend: [
+   *     { date: "2024-01-01", value: 500 },
+   *     { date: "2024-02-01", value: 520 }
+   *   ],
+   *   viral_load_trend: [
+   *     { date: "2024-01-01", value: 50 },
+   *     { date: "2024-02-01", value: 40 }
+   *   ]
+   * }
+   */
+  getTrends: (patientId) => http.get(`/lab-results/trends/${patientId}`)
+}
+
+// Appointment Types API
+export const appointmentTypesApi = {
+  /**
+   * GET /api/appointment-types - Get all appointment types
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     type_name: "Consultation",
+   *     description: "Regular medical consultation",
+   *     duration_minutes: 30,
+   *     is_active: 1,
+   *     created_at: "2024-01-01T00:00:00.000Z"
+   *   }
+   * ]
+   */
+  getAll: () => http.get('/appointment-types'),
+
+  /**
+   * POST /api/appointment-types - Create appointment type
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * Request Body: {
+   *   type_name: "New Type",
+   *   description: "Description",
+   *   duration_minutes: 45
+   * }
+   * 
+   * Returns: {
+   *   message: "Appointment type created",
+   *   type: { ...created type }
+   * }
+   */
+  create: (data) => http.post('/appointment-types', data),
+
+  /**
+   * PUT /api/appointment-types/:id - Update appointment type
+   * Headers: { Authorization: "Bearer token" } (ADMIN only)
+   * 
+   * Returns: {
+   *   message: "Appointment type updated",
+   *   type: { ...updated type }
+   * }
+   */
+  update: (id, data) => http.put(`/appointment-types/${id}`, data)
+}
+
+// Dashboard API
+export const dashboardApi = {
+  /**
+   * GET /api/dashboard/stats - Get dashboard statistics
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   patients: {
+   *     total: 150,
+   *     new_today: 3,
+   *     reactive: 120,
+   *     on_art: 115
+   *   },
+   *   appointments: {
+   *     today: 12,
+   *     upcoming: 8,
+   *     completed: 4,
+   *     cancelled: 1
+   *   },
+   *   queue: {
+   *     waiting: 5,
+   *     now_serving: 3,
+   *     average_wait_time: 15
+   *   },
+   *   medications: {
+   *     low_stock: 3,
+   *     total_items: 25
+   *   },
+   *   recent_activities: [ ...last 5 activities ]
+   * }
+   */
+  getStats: () => http.get('/dashboard/stats'),
+
+  /**
+   * GET /api/dashboard/charts - Get chart data
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   enrollment_chart: { labels: [...], data: [...] },
+   *   hiv_status_chart: { labels: [...], data: [...] },
+   *   appointments_chart: { labels: [...], data: [...] }
+   * }
+   */
+  getCharts: () => http.get('/dashboard/charts')
 }
 
 // ==========================================================================================================
@@ -108,6 +1058,12 @@ export default {
   auth: authApi,
   patients: patientsApi,
   appointments: appointmentsApi,
+  queue: queueApi,
   audit: auditApi,
-  users: usersApi
+  users: usersApi,
+  medications: medicationsApi,
+  prescriptions: prescriptionsApi,
+  labResults: labResultsApi,
+  appointmentTypes: appointmentTypesApi,
+  dashboard: dashboardApi
 }

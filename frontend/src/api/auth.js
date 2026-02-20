@@ -1,28 +1,58 @@
 // src/api/auth.js
-const API_URL = '/api/users'  // ✅ cleaner base URL now
+const API_URL = '/api/auth'  // ✅ Fixed: changed from '/api/users' to '/api/auth'
 
-export async function loginUser(email, password) {
-  const res = await fetch(`${API_URL}?email=${email}&password=${password}`)
-  const data = await res.json()
+export async function loginUser(username, password) {
+  const res = await fetch(`${API_URL}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  })
+  
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || 'Login failed')
+  }
+  
+  return res.json()
+}
 
-  if (!data.length) throw new Error('Invalid email or password')
-
-  return data[0]
+export async function patientLogin(patient_id, password) {
+  const res = await fetch(`${API_URL}/patient/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ patient_id, password })
+  })
+  
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || 'Login failed')
+  }
+  
+  return res.json()
 }
 
 export async function registerUser(user) {
-  const existing = await fetch(`${API_URL}?email=${user.email}`)
-  const found = await existing.json()
-
-  if (found.length > 0) throw new Error('Email already exists')
-
-  const res = await fetch(API_URL, {
+  // Note: Registration might be handled by admin, not public registration
+  const res = await fetch('/api/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(user),
   })
 
   if (!res.ok) throw new Error('Registration failed')
+  return res.json()
+}
 
+export async function checkAuth() {
+  const token = localStorage.getItem('authToken')
+  if (!token) return null
+  
+  const res = await fetch(`${API_URL}/check`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  
+  if (!res.ok) return null
   return res.json()
 }
