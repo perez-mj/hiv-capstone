@@ -153,13 +153,19 @@ router.get('/list', async (req, res) => {
         last_name,
         middle_name
       FROM patients
-      WHERE 1=1
     `;
-
+    
     const params = [];
-    const searchTerm = `%${search}%`;
+
     if (search) {
-      query += ` AND (first_name LIKE ${searchTerm} OR last_name LIKE ${searchTerm} OR middle_name LIKE ${searchTerm} OR patient_id LIKE ${searchTerm})`;
+      query += ` WHERE (
+        first_name LIKE ? OR 
+        last_name LIKE ? OR 
+        middle_name LIKE ? OR 
+        patient_id LIKE ?
+      )`;
+      const searchTerm = `%${search}%`;
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     query += ` ORDER BY last_name ASC, first_name ASC`;
@@ -179,87 +185,120 @@ router.get('/list', async (req, res) => {
 // GET /api/patients - Get all patients with pagination and filters
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, consent, hiv_status } = req.query;
-
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      consent, 
+      hiv_status,
+      sort_by = 'created_at',
+      sort_order = 'desc'
+    } = req.query;
+    
     // Convert to integers with defaults
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 10;
     const offset = (pageNum - 1) * limitNum;
 
-    // Build the main query
-    let query = `
-      SELECT 
-        p.id,
-        p.patient_id,
-        p.first_name,
-        p.last_name,
-        p.middle_name,
-        CONCAT(p.last_name, ', ', p.first_name, COALESCE(CONCAT(' ', p.middle_name), '')) as full_name,
-        p.date_of_birth,
-        p.gender,
-        p.address,
-        p.contact_number,
-        p.consent,
-        p.hiv_status,
-        p.diagnosis_date,
-        p.art_start_date,
-        p.latest_cd4_count,
-        p.latest_viral_load,
-        p.created_at,
-        p.updated_at,
-        CASE 
-          WHEN p.consent = 1 THEN 'YES'
-          WHEN p.consent = 0 THEN 'NO'
-          ELSE 'NO'
-        END as consent_status,
-        TIMESTAMPDIFF(YEAR, p.date_of_birth, CURDATE()) as age
-      FROM patients p
-      WHERE 1=1
-    `;
+    // Validate sort_by to prevent SQL injection
+    const allowedSortFields = [
+      'id', 'patient_id', 'first_name', 'last_name', 'date_of_birth', 
+      'gender', 'consent', 'hiv_status', 'created_at', 'updated_at'
+    ];
+    
+    let sortField = 'created_at';
+    if (sort_by && typeof sort_by === 'string') {
+      const cleanSortBy = sort_by.replace(/[^a-zA-Z0-9_]/g, '');
+      if (allowedSortFields.includes(cleanSortBy)) {
+        sortField = cleanSortBy;
+      }
+    }
+    
+    let sortOrder = 'DESC';
+    if (sort_order && typeof sort_order === 'string') {
+      const cleanSortOrder = sort_order.toUpperCase().replace(/[^A-Z]/g, '');
+      if (cleanSortOrder === 'ASC' || cleanSortOrder === 'DESC') {
+        sortOrder = cleanSortOrder;
+      }
+    }
 
-    const params = [];
+    // Build WHERE clause conditions using string concatenation
+    const whereConditions = [];
 
-    const searchTerm = `%${search}%`;
-
-    if (search) {
-      query += ` AND (
-        p.first_name LIKE ${searchTerm} OR 
-        p.last_name LIKE ${searchTerm} OR 
-        p.middle_name LIKE ${searchTerm} OR 
-        p.patient_id LIKE ${searchTerm} OR 
-        p.contact_number LIKE ${searchTerm}
-      )`;
+    if (search && search.trim() !== '') {
+      const searchTerm = search.trim();
+      // Escape single quotes in search term
+      const escapedSearch = searchTerm.replace(/'/g, "''");
+      whereConditions.push(`(
+        first_name LIKE '%${escapedSearch}%' OR 
+        last_name LIKE '%${escapedSearch}%' OR 
+        middle_name LIKE '%${escapedSearch}%' OR 
+        patient_id LIKE '%${escapedSearch}%' OR 
+        contact_number LIKE '%${escapedSearch}%'
+      )`);
     }
 
     if (consent) {
       if (consent === 'YES') {
-        query += ' AND p.consent = TRUE';
+        whereConditions.push('consent = TRUE');
       } else if (consent === 'NO') {
-        query += ' AND p.consent = FALSE';
+        whereConditions.push('consent = FALSE');
       }
     }
 
     if (hiv_status) {
-      query += ` AND p.hiv_status = ${hiv_status}`;
+      whereConditions.push(`hiv_status = '${hiv_status}'`);
     }
 
-    // Get total count first
-    let countQuery = `
-      SELECT COUNT(*) as total 
-      FROM patients p
-      WHERE 1=1
-    `;
-    const countParams = [...params];
+    // Build the WHERE clause
+    const whereClause = whereConditions.length > 0 
+      ? 'WHERE ' + whereConditions.join(' AND ')
+      : '';
 
-    // Add ORDER BY and LIMIT/OFFSET to main query
-    query += ` ORDER BY p.created_at DESC LIMIT ${limitNum} OFFSET ${offset}`;
-
-    // Execute count query
-    const [countRows] = await pool.execute(countQuery, countParams);
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as total FROM patients ${whereClause}`;
+    console.log('Count query:', countQuery);
+    
+    const [countRows] = await pool.execute(countQuery);
     const total = parseInt(countRows[0].total);
 
-    // Execute main query
-    const [rows] = await pool.execute(query, params);
+    // Main query with LIMIT and OFFSET
+    const query = `
+      SELECT 
+        id,
+        patient_id,
+        first_name,
+        last_name,
+        middle_name,
+        CONCAT(last_name, ', ', first_name, COALESCE(CONCAT(' ', middle_name), '')) as full_name,
+        date_of_birth,
+        gender,
+        address,
+        contact_number,
+        consent,
+        hiv_status,
+        diagnosis_date,
+        art_start_date,
+        latest_cd4_count,
+        latest_viral_load,
+        created_at,
+        updated_at,
+        CASE 
+          WHEN consent = 1 THEN 'YES'
+          WHEN consent = 0 THEN 'NO'
+          ELSE 'NO'
+        END as consent_status,
+        TIMESTAMPDIFF(YEAR, date_of_birth, CURDATE()) as age
+      FROM patients
+      ${whereClause}
+      ORDER BY ${sortField} ${sortOrder}
+      LIMIT ${limitNum} OFFSET ${offset}
+    `;
+
+    console.log('Main query:', query);
+    
+    // Execute main query - no parameters needed since we built the query directly
+    const [rows] = await pool.execute(query);
 
     res.json({
       patients: rows,
@@ -273,7 +312,10 @@ router.get('/', async (req, res) => {
 
   } catch (err) {
     console.error('Error fetching patients:', err);
-    res.status(500).json({ error: 'Internal server error', message: err.message });
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      message: err.message 
+    });
   }
 });
 

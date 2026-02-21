@@ -24,6 +24,7 @@ const routes = [
       { path: 'enroll', name: 'Enrollment', component: () => import('@/pages/admin/Enrollment.vue') },
       { path: 'audit-security', name: 'AuditSecurity', component: () => import('@/pages/admin/AuditSecurity.vue') },
       { path: 'users', name: 'UserManagement', component: () => import('@/pages/admin/UserManagement.vue'), meta: { allowedRoles: ['ADMIN'] } },
+      { path: '/admin/patients/:id', name: 'PatientDetails', component: () => import('@/pages/admin/PatientDetails.vue'), },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
       {
@@ -110,7 +111,7 @@ router.beforeEach(async (to, from, next) => {
     // If already authenticated, redirect based on role
     if (authStore.isAuthenticated) {
       console.log('🔒 Already authenticated, redirecting based on role:', authStore.userRole)
-      
+
       if (authStore.userRole === 'PATIENT') {
         next('/patient/dashboard')
       } else {
@@ -134,7 +135,7 @@ router.beforeEach(async (to, from, next) => {
     // Check role-based access
     if (to.meta.allowedRoles && !to.meta.allowedRoles.includes(authStore.userRole)) {
       console.log('🔒 Role not allowed:', authStore.userRole, 'Expected:', to.meta.allowedRoles)
-      
+
       // Redirect to appropriate dashboard based on role
       if (authStore.userRole === 'PATIENT') {
         next('/patient/dashboard')

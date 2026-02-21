@@ -280,165 +280,531 @@ export const patientsApi = {
     responseType: 'blob' 
   })
 }
-
-// Appointments API
+/**
+ * Appointments API
+ */
 export const appointmentsApi = {
+  // ==================== APPOINTMENT TYPES ====================
+
   /**
-   * GET /api/appointments - Get paginated appointments
+   * GET /api/appointments/types - Get all active appointment types
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     type_name: "Consultation",
+   *     description: "Regular medical consultation with doctor",
+   *     duration_minutes: 30,
+   *     is_active: true
+   *   },
+   *   {
+   *     id: 2,
+   *     type_name: "Lab Test",
+   *     description: "Blood work and laboratory tests",
+   *     duration_minutes: 20,
+   *     is_active: true
+   *   },
+   *   ...
+   * ]
+   */
+  getTypes: () => http.get('/appointments/types'),
+
+  /**
+   * GET /api/appointments/types/:id - Get appointment type by ID
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   id: 1,
+   *   type_name: "Consultation",
+   *   description: "Regular medical consultation with doctor",
+   *   duration_minutes: 30,
+   *   is_active: true
+   * }
+   */
+  getTypeById: (id) => http.get(`/appointments/types/${id}`),
+
+  /**
+   * POST /api/appointments/types - Create new appointment type (Admin only)
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Request Body: {
+   *   type_name: "Telemedicine", // required
+   *   description: "Virtual consultation via video call", // optional
+   *   duration_minutes: 45 // required
+   * }
+   * 
+   * Returns: {
+   *   message: "Appointment type created successfully",
+   *   id: 6,
+   *   type_name: "Telemedicine",
+   *   description: "Virtual consultation via video call",
+   *   duration_minutes: 45
+   * }
+   */
+  createType: (data) => http.post('/appointments/types', data),
+  /**
+   * PUT /api/appointments/types/:id - Update appointment type (Admin only)
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Request Body: {
+   *   type_name: "Telemedicine Consultation", // optional
+   *   description: "Updated description", // optional
+   *   duration_minutes: 30, // optional
+   *   is_active: true // optional
+   * }
+   * 
+   * Returns: {
+   *   message: "Appointment type updated successfully"
+   * }
+   */
+  updateType: (id, data) => http.put(`/appointments/types/${id}`, data),
+
+  /**
+   * DELETE /api/appointments/types/:id - Delete appointment type (Admin only)
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: {
+   *   message: "Appointment type deleted successfully"
+   * }
+   * 
+   * Note: Cannot delete types that are in use by appointments.
+   * Consider deactivating instead of deleting.
+   */
+  deleteType: (id) => http.delete(`/appointments/types/${id}`),
+
+  // ==================== APPOINTMENTS CRUD ====================
+
+
+  /**
+   * GET /api/appointments - Get paginated appointments with filters
    * Headers: { Authorization: "Bearer token" }
    * Query Parameters: {
-   *   page: 1,
-   *   limit: 10,
-   *   status: "SCHEDULED",
-   *   patient_id: "P001",
-   *   date_from: "2024-01-01",
-   *   date_to: "2024-01-31"
+   *   status: "SCHEDULED" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "NO_SHOW", // optional
+   *   patient_id: "P001", // optional - filter by patient
+   *   date_from: "2024-01-01", // optional - filter by date range
+   *   date_to: "2024-01-31", // optional
+   *   type_id: 1, // optional - filter by appointment type
+   *   limit: 100, // optional - default 100
+   *   offset: 0 // optional - for pagination
    * }
    * 
    * Returns: {
    *   appointments: [
    *     {
    *       id: 1,
-   *       appointment_number: "APP-20240101-001",
+   *       appointment_number: "APT2402150001",
    *       patient_id: "P001",
-   *       patient: {
-   *         first_name: "John",
-   *         last_name: "Doe",
-   *         full_name: "John Doe"
-   *       },
    *       appointment_type_id: 1,
-   *       appointment_type: {
-   *         id: 1,
-   *         type_name: "Consultation",
-   *         duration_minutes: 30
-   *       },
-   *       scheduled_at: "2024-01-01T10:00:00.000Z",
+   *       scheduled_at: "2024-02-15T10:00:00.000Z",
    *       status: "SCHEDULED",
    *       notes: "Follow-up visit",
-   *       created_by: 1,
-   *       created_at: "2024-01-01T00:00:00.000Z",
-   *       updated_at: "2024-01-01T00:00:00.000Z"
+   *       created_at: "2024-02-01T00:00:00.000Z",
+   *       updated_at: "2024-02-01T00:00:00.000Z",
+   *       type_name: "Consultation",
+   *       duration_minutes: 30,
+   *       patient_name: "John Doe",
+   *       patient_first_name: "John",
+   *       patient_last_name: "Doe",
+   *       patient_contact: "1234567890",
+   *       created_by_username: "admin"
    *     }
    *   ],
-   *   pagination: { page, limit, total, pages }
+   *   pagination: {
+   *     total: 150,
+   *     limit: 100,
+   *     offset: 0
+   *   }
    * }
    */
   getAll: (params) => http.get('/appointments', { params }),
 
   /**
+   * GET /api/appointments/today - Get today's appointments with queue information
+   * Headers: { Authorization: "Bearer token" }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     appointment_number: "APT2402150001",
+   *     patient_id: "P001",
+   *     appointment_type_id: 1,
+   *     scheduled_at: "2024-02-15T10:00:00.000Z",
+   *     status: "SCHEDULED",
+   *     notes: "Follow-up visit",
+   *     type_name: "Consultation",
+   *     duration_minutes: 30,
+   *     patient_name: "John Doe",
+   *     patient_first_name: "John",
+   *     patient_last_name: "Doe",
+   *     patient_contact: "1234567890",
+   *     patient_age: 34,
+   *     queue_id: 5,
+   *     queue_number: 12,
+   *     queue_status: "WAITING"
+   *   },
+   *   ...
+   * ]
+   */
+  getToday: () => http.get('/appointments/today'),
+
+  /**
+   * GET /api/appointments/upcoming - Get upcoming appointments
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   days: 7 // optional - number of days to look ahead (default 7)
+   * }
+   * 
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     appointment_number: "APT2402150001",
+   *     patient_id: "P001",
+   *     scheduled_at: "2024-02-15T10:00:00.000Z",
+   *     status: "SCHEDULED",
+   *     notes: "Follow-up visit",
+   *     type_name: "Consultation",
+   *     duration_minutes: 30,
+   *     patient_name: "John Doe",
+   *     patient_contact: "1234567890",
+   *     days_until: 3
+   *   },
+   *   ...
+   * ]
+   */
+  getUpcoming: (params) => http.get('/appointments/upcoming', { params }),
+
+  /**
    * GET /api/appointments/calendar - Get appointments for calendar view
    * Headers: { Authorization: "Bearer token" }
    * Query Parameters: {
-   *   start_date: "2024-01-01",
-   *   end_date: "2024-01-31",
-   *   view: "month" | "week" | "day"
+   *   start: "2024-02-01", // required - start date for calendar range
+   *   end: "2024-02-29" // required - end date for calendar range
    * }
    * 
-   * Returns: {
-   *   events: [
-   *     {
-   *       id: 1,
-   *       title: "John Doe - Consultation",
-   *       start: "2024-01-01T10:00:00.000Z",
-   *       end: "2024-01-01T10:30:00.000Z",
-   *       extendedProps: {
-   *         appointment_number: "APP-20240101-001",
-   *         patient_id: "P001",
-   *         status: "SCHEDULED",
-   *         type: "Consultation"
-   *       }
-   *     }
-   *   ]
-   * }
+   * Returns: [
+   *   {
+   *     id: 1,
+   *     title: "APT2402150001", // appointment number as title
+   *     start: "2024-02-15T10:00:00.000Z",
+   *     end: "2024-02-15T10:30:00.000Z", // start + duration_minutes
+   *     status: "SCHEDULED",
+   *     patient_id: "P001",
+   *     patient_name: "John Doe",
+   *     type_name: "Consultation",
+   *     duration_minutes: 30,
+   *     color: "#3498db" // Color based on status
+   *   },
+   *   ...
+   * ]
    */
   getCalendar: (params) => http.get('/appointments/calendar', { params }),
 
   /**
-   * GET /api/appointments/:id - Get single appointment details
+   * GET /api/appointments/patient/:patientId - Get appointments for specific patient
+   * Headers: { Authorization: "Bearer token" }
+   * Path Parameters: {
+   *   patientId: "P001" // Patient ID in P001 format
+   * }
+   * Query Parameters: {
+   *   limit: 50, // optional - default 50
+   *   offset: 0 // optional - for pagination
+   * }
+   * 
+   * Returns: {
+   *   appointments: [
+   *     {
+   *       id: 1,
+   *       appointment_number: "APT2402150001",
+   *       appointment_type_id: 1,
+   *       scheduled_at: "2024-02-15T10:00:00.000Z",
+   *       status: "SCHEDULED",
+   *       notes: "Follow-up visit",
+   *       created_at: "2024-02-01T00:00:00.000Z",
+   *       type_name: "Consultation",
+   *       duration_minutes: 30,
+   *       queue_number: 12,
+   *       queue_status: "WAITING"
+   *     }
+   *   ],
+   *   patient: {
+   *     patient_id: "P001"
+   *   },
+   *   pagination: {
+   *     total: 25,
+   *     limit: 50,
+   *     offset: 0
+   *   }
+   * }
+   */
+  getByPatientId: (patientId, params) => http.get(`/appointments/patient/${patientId}`, { params }),
+
+  /**
+   * GET /api/appointments/patient/:patientId/next - Get patient's next upcoming appointment
+   * Headers: { Authorization: "Bearer token" }
+   * Path Parameters: {
+   *   patientId: "P001" // Patient ID in P001 format
+   * }
+   * 
+   * Returns: {
+   *   id: 1,
+   *   appointment_number: "APT2402150001",
+   *   scheduled_at: "2024-02-15T10:00:00.000Z",
+   *   status: "SCHEDULED",
+   *   type_name: "Consultation",
+   *   days_until: 3
+   * }
+   * 
+   * Or if no upcoming appointments:
+   * {
+   *   message: "No upcoming appointments"
+   * }
+   */
+  getNextPatientAppointment: (patientId) => http.get(`/appointments/patient/${patientId}/next`),
+
+  /**
+   * GET /api/appointments/patient/:patientId/history - Get patient's appointment history
+   * Headers: { Authorization: "Bearer token" }
+   * Path Parameters: {
+   *   patientId: "P001" // Patient ID in P001 format
+   * }
+   * Query Parameters: {
+   *   limit: 20, // optional - default 20
+   *   offset: 0 // optional - for pagination
+   * }
+   * 
+   * Returns: {
+   *   appointments: [
+   *     {
+   *       id: 1,
+   *       appointment_number: "APT2402010001",
+   *       scheduled_at: "2024-02-01T10:00:00.000Z",
+   *       status: "COMPLETED",
+   *       notes: "Follow-up visit",
+   *       type_name: "Consultation",
+   *       queue_number: 5,
+   *       lab_count: 2, // number of lab results from this appointment
+   *       prescription_count: 1 // number of prescriptions from this appointment
+   *     }
+   *   ],
+   *   pagination: {
+   *     total: 15,
+   *     limit: 20,
+   *     offset: 0
+   *   }
+   * }
+   */
+  getPatientHistory: (patientId, params) => http.get(`/appointments/patient/${patientId}/history`, { params }),
+
+  /**
+   * GET /api/appointments/:id - Get single appointment details by ID
    * Headers: { Authorization: "Bearer token" }
    * 
    * Returns: {
-   *   appointment: { ...full appointment object with patient and type details }
+   *   id: 1,
+   *   appointment_number: "APT2402150001",
+   *   patient_id: "P001",
+   *   appointment_type_id: 1,
+   *   scheduled_at: "2024-02-15T10:00:00.000Z",
+   *   status: "SCHEDULED",
+   *   notes: "Follow-up visit",
+   *   created_at: "2024-02-01T00:00:00.000Z",
+   *   updated_at: "2024-02-01T00:00:00.000Z",
+   *   created_by: 1,
+   *   type_name: "Consultation",
+   *   type_description: "Regular medical consultation with doctor",
+   *   duration_minutes: 30,
+   *   patient_first_name: "John",
+   *   patient_last_name: "Doe",
+   *   patient_middle_name: "M",
+   *   patient_date_of_birth: "1990-01-01",
+   *   patient_gender: "MALE",
+   *   patient_contact: "1234567890",
+   *   patient_address: "123 Main St",
+   *   patient_hiv_status: "REACTIVE",
+   *   created_by_username: "admin",
+   *   queue_id: 5,
+   *   queue_number: 12,
+   *   queue_status: "WAITING",
+   *   called_at: null,
+   *   served_at: null,
+   *   completed_at: null,
+   *   lab_results: [
+   *     {
+   *       id: 1,
+   *       test_type: "CD4",
+   *       test_date: "2024-02-01",
+   *       result_value: "500",
+   *       result_unit: "cells/µL"
+   *     }
+   *   ],
+   *   prescriptions: [
+   *     {
+   *       id: 1,
+   *       medication_id: 1,
+   *       medication_name: "Tenofovir/Emtricitabine",
+   *       dosage_instructions: "Take once daily",
+   *       quantity_prescribed: 30,
+   *       refills_remaining: 2,
+   *       status: "ACTIVE"
+   *     }
+   *   ]
    * }
    */
   getById: (id) => http.get(`/appointments/${id}`),
 
   /**
-   * POST /api/appointments - Create new appointment
+   * POST /api/appointments - Create new appointment (Admin/Nurse only)
    * Headers: { Authorization: "Bearer token" }
+   * 
    * Request Body: {
-   *   patient_id: "P001",
-   *   appointment_type_id: 1,
-   *   scheduled_at: "2024-01-01T10:00:00.000Z",
-   *   notes: "Follow-up visit"
+   *   patient_id: "P001", // required - patient ID in P001 format
+   *   appointment_type_id: 1, // required
+   *   scheduled_at: "2024-02-15T10:00:00.000Z", // required - ISO datetime
+   *   notes: "Follow-up visit for lab results" // optional
    * }
    * 
    * Returns: {
    *   message: "Appointment created successfully",
-   *   appointment: { ...full appointment object },
-   *   appointment_number: "APP-20240101-001"
+   *   appointment: {
+   *     id: 1,
+   *     appointment_number: "APT2402150001",
+   *     patient_id: "P001",
+   *     appointment_type_id: 1,
+   *     scheduled_at: "2024-02-15T10:00:00.000Z",
+   *     status: "SCHEDULED",
+   *     notes: "Follow-up visit for lab results",
+   *     created_at: "2024-02-10T05:30:00.000Z",
+   *     type_name: "Consultation"
+   *   }
    * }
    */
   create: (data) => http.post('/appointments', data),
 
   /**
-   * PUT /api/appointments/:id - Update appointment
+   * PUT /api/appointments/:id - Update appointment (Admin/Nurse only)
    * Headers: { Authorization: "Bearer token" }
-   * Request Body: { ...any appointment fields to update }
+   * 
+   * Request Body: {
+   *   appointment_type_id: 2, // optional
+   *   scheduled_at: "2024-02-16T11:00:00.000Z", // optional
+   *   status: "CONFIRMED", // optional
+   *   notes: "Updated notes" // optional
+   * }
    * 
    * Returns: {
-   *   message: "Appointment updated successfully",
-   *   appointment: { ...updated appointment }
+   *   message: "Appointment updated successfully"
    * }
    */
   update: (id, data) => http.put(`/appointments/${id}`, data),
 
   /**
-   * PUT /api/appointments/:id/status - Update appointment status
+   * PATCH /api/appointments/:id/status - Update appointment status (Admin/Nurse only)
    * Headers: { Authorization: "Bearer token" }
-   * Request Body: { status: "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW" }
+   * 
+   * Request Body: {
+   *   status: "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "IN_PROGRESS"
+   * }
    * 
    * Returns: {
    *   message: "Appointment status updated successfully",
-   *   status: "CONFIRMED"
+   *   previousStatus: "SCHEDULED",
+   *   newStatus: "CONFIRMED"
    * }
    */
-  updateStatus: (id, status) => http.put(`/appointments/${id}/status`, { status }),
+  updateStatus: (id, status) => http.patch(`/appointments/${id}/status`, { status }),
 
   /**
-   * DELETE /api/appointments/:id - Cancel/delete appointment
+   * DELETE /api/appointments/:id - Cancel/delete appointment (Admin only)
    * Headers: { Authorization: "Bearer token" }
    * 
-   * Returns: { message: "Appointment cancelled successfully" }
+   * Returns: {
+   *   message: "Appointment deleted successfully"
+   * }
+   * 
+   * Note: If appointment has associated records (queue, lab results, prescriptions),
+   * it will be marked as CANCELLED instead of hard deleted.
    */
   delete: (id) => http.delete(`/appointments/${id}`),
 
+  // ==================== UTILITY ENDPOINTS ====================
+
   /**
-   * GET /api/appointments/stats - Get appointment statistics
+   * GET /api/appointments/check-availability - Check available time slots for a date
    * Headers: { Authorization: "Bearer token" }
-   * Query Parameters: { period: "today" | "week" | "month" | "year" }
+   * Query Parameters: {
+   *   date: "2024-02-15", // required - date to check
+   *   type_id: 1 // optional - appointment type ID for duration
+   * }
    * 
    * Returns: {
-   *   stats: {
-   *     total: 50,
-   *     by_status: {
-   *       scheduled: 20,
-   *       confirmed: 15,
-   *       completed: 10,
-   *       cancelled: 3,
-   *       no_show: 2
+   *   date: "2024-02-15",
+   *   slots: [
+   *     {
+   *       time: "08:00",
+   *       datetime: "2024-02-15T08:00:00.000Z",
+   *       available: true,
+   *       duration_minutes: 30
    *     },
-   *     by_type: [
-   *       { type: "Consultation", count: 30 },
-   *       { type: "Lab Test", count: 15 }
-   *     ],
-   *     completion_rate: 85.5
-   *   },
-   *   upcoming: [ ...next 5 appointments ]
+   *     {
+   *       time: "08:30",
+   *       datetime: "2024-02-15T08:30:00.000Z",
+   *       available: false,
+   *       duration_minutes: 30
+   *     },
+   *     ...
+   *   ],
+   *   appointment_count: 12 // number of existing appointments
    * }
    */
-  getStats: (params) => http.get('/appointments/stats', { params })
-}
+  checkAvailability: (params) => http.get('/appointments/check-availability', { params }),
+
+  // ==================== STATISTICS ====================
+
+  /**
+   * GET /api/appointments/stats/summary - Get appointment statistics
+   * Headers: { Authorization: "Bearer token" }
+   * Query Parameters: {
+   *   start_date: "2024-02-01", // optional - start of period
+   *   end_date: "2024-02-29" // optional - end of period
+   * }
+   * 
+   * Returns: {
+   *   by_status: [
+   *     { status: "SCHEDULED", count: 45 },
+   *     { status: "CONFIRMED", count: 30 },
+   *     { status: "COMPLETED", count: 120 },
+   *     { status: "CANCELLED", count: 15 },
+   *     { status: "NO_SHOW", count: 8 }
+   *   ],
+   *   by_type: [
+   *     { type_name: "Consultation", count: 98 },
+   *     { type_name: "Lab Test", count: 67 },
+   *     { type_name: "Medication Refill", count: 45 }
+   *   ],
+   *   daily: [
+   *     {
+   *       date: "2024-02-01",
+   *       total: 8,
+   *       completed: 6,
+   *       cancelled: 1,
+   *       no_show: 1
+   *     },
+   *     ...
+   *   ],
+   *   peak_hours: [
+   *     { hour: 10, count: 25 },
+   *     { hour: 14, count: 23 },
+   *     { hour: 9, count: 20 }
+   *   ],
+   *   period: {
+   *     start_date: "2024-02-01",
+   *     end_date: "2024-02-29"
+   *   }
+   * }
+   */
+  getStats: (params) => http.get('/appointments/stats/summary', { params })
+};
 
 // Queue API
 export const queueApi = {
@@ -1045,54 +1411,6 @@ export const labResultsApi = {
   getTrends: (patientId) => http.get(`/lab-results/trends/${patientId}`)
 }
 
-// Appointment Types API
-export const appointmentTypesApi = {
-  /**
-   * GET /api/appointment-types - Get all appointment types
-   * Headers: { Authorization: "Bearer token" }
-   * 
-   * Returns: {
-   *   appointment_types: [
-   *     {
-   *       id: 1,
-   *       type_name: "Consultation",
-   *       description: "Regular medical consultation",
-   *       duration_minutes: 30,
-   *       is_active: 1,
-   *       created_at: "2024-01-01T00:00:00.000Z"
-   *     }
-   *   ]
-   * }
-   */
-  getAll: () => http.get('/appointment-types'),
-
-  /**
-   * POST /api/appointment-types - Create appointment type
-   * Headers: { Authorization: "Bearer token" } (ADMIN only)
-   * Request Body: {
-   *   type_name: "New Type",
-   *   description: "Description",
-   *   duration_minutes: 45
-   * }
-   * 
-   * Returns: {
-   *   message: "Appointment type created",
-   *   appointment_type: { ...created type }
-   * }
-   */
-  create: (data) => http.post('/appointment-types', data),
-
-  /**
-   * PUT /api/appointment-types/:id - Update appointment type
-   * Headers: { Authorization: "Bearer token" } (ADMIN only)
-   * 
-   * Returns: {
-   *   message: "Appointment type updated",
-   *   appointment_type: { ...updated type }
-   * }
-   */
-  update: (id, data) => http.put(`/appointment-types/${id}`, data)
-}
 
 // Dashboard API
 export const dashboardApi = {
@@ -1158,6 +1476,5 @@ export default {
   medications: medicationsApi,
   prescriptions: prescriptionsApi,
   labResults: labResultsApi,
-  appointmentTypes: appointmentTypesApi,
   dashboard: dashboardApi
 }

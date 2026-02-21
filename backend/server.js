@@ -13,7 +13,9 @@ app.use(express.json());
 const patientRoutes = require('./routes/patients');
 const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
+const appointmentsRouter = require('./routes/appointments');
 
+app.use('/api/appointments', appointmentsRouter);
 app.use('/api/users', usersRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/auth', authRoutes);
