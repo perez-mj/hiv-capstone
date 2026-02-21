@@ -14,7 +14,9 @@ const patientRoutes = require('./routes/patients');
 const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const appointmentsRouter = require('./routes/appointments');
+const queueRouter = require('./routes/queue');
 
+app.use('/api/queue', queueRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/users', usersRoutes);
 app.use('/api/patients', patientRoutes);

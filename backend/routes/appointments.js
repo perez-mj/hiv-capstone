@@ -301,6 +301,10 @@ router.get('/', authenticateToken, async (req, res) => {
       offset = 0
     } = req.query;
     
+    // Convert to integers with defaults
+    const limitNum = parseInt(limit) || 100;
+    const offsetNum = parseInt(offset) || 0;
+    
     let query = `
       SELECT 
         a.id,
@@ -327,35 +331,40 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
     
     const params = [];
+    const countParams = [];
     
     if (status) {
       query += ' AND a.status = ?';
       params.push(status);
+      countParams.push(status);
     }
     
     if (patient_id) {
       query += ' AND a.patient_id = ?';
       params.push(patient_id);
+      countParams.push(patient_id);
     }
     
     if (type_id) {
       query += ' AND a.appointment_type_id = ?';
       params.push(type_id);
+      countParams.push(type_id);
     }
     
     if (date_from) {
       query += ' AND DATE(a.scheduled_at) >= ?';
       params.push(date_from);
+      countParams.push(date_from);
     }
     
     if (date_to) {
       query += ' AND DATE(a.scheduled_at) <= ?';
       params.push(date_to);
+      countParams.push(date_to);
     }
     
     // Apply role-based filtering
     if (req.user.role === 'PATIENT') {
-      // Patients can only see their own appointments
       const [patientRows] = await pool.execute(
         'SELECT patient_id FROM patients WHERE user_id = ?',
         [req.user.id]
@@ -367,12 +376,21 @@ router.get('/', authenticateToken, async (req, res) => {
       
       query += ' AND a.patient_id = ?';
       params.push(patientRows[0].patient_id);
+      countParams.push(patientRows[0].patient_id);
     }
     
-    query += ' ORDER BY a.scheduled_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    // Add ORDER BY and then add LIMIT and OFFSET as string concatenation (not parameterized)
+    query += ' ORDER BY a.scheduled_at DESC';
     
-    const [rows] = await pool.execute(query, params);
+    // Execute the main query with params for the WHERE conditions only
+    let rows;
+    if (params.length > 0) {
+      // If we have WHERE parameters, use them
+      [rows] = await pool.execute(query + ` LIMIT ${limitNum} OFFSET ${offsetNum}`, params);
+    } else {
+      // If no WHERE parameters, execute without params
+      [rows] = await pool.execute(query + ` LIMIT ${limitNum} OFFSET ${offsetNum}`);
+    }
     
     // Get total count for pagination
     let countQuery = `
@@ -381,31 +399,24 @@ router.get('/', authenticateToken, async (req, res) => {
       WHERE 1=1
     `;
     
-    const countParams = [];
-    
     if (status) {
       countQuery += ' AND a.status = ?';
-      countParams.push(status);
     }
     
     if (patient_id) {
       countQuery += ' AND a.patient_id = ?';
-      countParams.push(patient_id);
     }
     
     if (type_id) {
       countQuery += ' AND a.appointment_type_id = ?';
-      countParams.push(type_id);
     }
     
     if (date_from) {
       countQuery += ' AND DATE(a.scheduled_at) >= ?';
-      countParams.push(date_from);
     }
     
     if (date_to) {
       countQuery += ' AND DATE(a.scheduled_at) <= ?';
-      countParams.push(date_to);
     }
     
     if (req.user.role === 'PATIENT') {
@@ -416,7 +427,6 @@ router.get('/', authenticateToken, async (req, res) => {
       
       if (patientRows.length > 0) {
         countQuery += ' AND a.patient_id = ?';
-        countParams.push(patientRows[0].patient_id);
       }
     }
     
@@ -426,13 +436,13 @@ router.get('/', authenticateToken, async (req, res) => {
       appointments: rows,
       pagination: {
         total: countResult[0].total,
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        limit: limitNum,
+        offset: offsetNum
       }
     });
   } catch (err) {
     console.error('Error fetching appointments:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', message: err.message });
   }
 });
 

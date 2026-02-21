@@ -12,6 +12,7 @@
         color="primary" 
         prepend-icon="mdi-plus"
         @click="showBookingDialog = true"
+        :disabled="!appointmentTypes.length"
       >
         Book Appointment
       </v-btn>
@@ -35,9 +36,9 @@
               density="comfortable"
               variant="outlined"
               :items="statusOptions"
-              placeholder="Filter by Status"
-              hide-details
+              label="Filter by Status"
               clearable
+              hide-details
             />
           </v-col>
           <v-col cols="12" md="4">
@@ -46,7 +47,7 @@
               density="comfortable"
               variant="outlined"
               :items="sortOptions"
-              placeholder="Sort by"
+              label="Sort by"
               hide-details
             />
           </v-col>
@@ -67,42 +68,54 @@
     <v-row v-if="!loading">
       <v-col cols="12" md="8">
         <v-card elevation="2" border>
-          <v-card-title>Appointments</v-card-title>
+          <v-card-title class="d-flex justify-space-between align-center">
+            <span>Appointments</span>
+            <v-chip v-if="queueInfo.now_serving" color="primary" size="small">
+              Now Serving: #{{ queueInfo.now_serving }}
+            </v-chip>
+          </v-card-title>
           <v-card-text class="pa-0">
             <div v-if="filteredAppointments.length > 0">
               <div 
                 v-for="appointment in filteredAppointments" 
                 :key="appointment.id"
                 class="appointment-item pa-4"
-                :class="{ 'bg-grey-lighten-4': isToday(appointment.date) }"
+                :class="{ 'bg-grey-lighten-4': isToday(appointment.scheduled_at) }"
               >
                 <div class="d-flex justify-space-between align-start">
                   <div class="flex-grow-1">
-                    <div class="d-flex align-center mb-2">
+                    <div class="d-flex align-center mb-2 flex-wrap gap-2">
                       <v-icon color="primary" class="mr-2">mdi-calendar</v-icon>
-                      <div class="text-h6">{{ formatDate(appointment.date) }}</div>
+                      <div class="text-h6">{{ formatDate(appointment.scheduled_at) }}</div>
                       <v-chip 
                         size="small" 
                         :color="getStatusColor(appointment.status)"
-                        class="ml-2"
                       >
                         {{ appointment.status }}
+                      </v-chip>
+                      <v-chip 
+                        v-if="appointment.queue_number"
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                      >
+                        Queue #{{ appointment.queue_number }}
                       </v-chip>
                     </div>
                     
                     <div class="d-flex align-center mb-1">
                       <v-icon color="grey" size="small" class="mr-2">mdi-clock</v-icon>
-                      <span class="text-body-1">{{ appointment.time }}</span>
+                      <span class="text-body-1">{{ formatTime(appointment.scheduled_at) }}</span>
                     </div>
                     
                     <div class="d-flex align-center mb-1">
-                      <v-icon color="grey" size="small" class="mr-2">mdi-account</v-icon>
-                      <span class="text-body-1">{{ appointment.doctor_name }}</span>
+                      <v-icon color="grey" size="small" class="mr-2">mdi-doctor</v-icon>
+                      <span class="text-body-1">{{ appointment.type_name }}</span>
                     </div>
                     
                     <div class="d-flex align-center mb-2">
                       <v-icon color="grey" size="small" class="mr-2">mdi-map-marker</v-icon>
-                      <span class="text-body-2 text-medium-emphasis">{{ appointment.location || 'Main Clinic' }}</span>
+                      <span class="text-body-2 text-medium-emphasis">Main Clinic</span>
                     </div>
 
                     <div v-if="appointment.notes" class="mt-2">
@@ -116,12 +129,12 @@
                       size="small"
                       variant="outlined"
                       color="primary"
-                      @click="viewAppointmentDetails(appointment)"
+                      @click="viewAppointmentDetails(appointment.id)"
                     >
                       Details
                     </v-btn>
                     <v-btn
-                      v-if="appointment.status === 'scheduled'"
+                      v-if="canCancelAppointment(appointment)"
                       size="small"
                       variant="outlined"
                       color="error"
@@ -146,6 +159,22 @@
       </v-col>
 
       <v-col cols="12" md="4">
+        <v-card elevation="2" border class="mb-4">
+          <v-card-title>Queue Status</v-card-title>
+          <v-card-text>
+            <div v-if="queueInfo.waiting_count > 0" class="text-center">
+              <div class="text-h3 font-weight-bold text-primary">{{ queueInfo.waiting_count }}</div>
+              <div class="text-body-1">Patients Waiting</div>
+              <div class="text-caption text-medium-emphasis mt-2">
+                Estimated wait: {{ queueInfo.estimated_wait_time }} minutes
+              </div>
+            </div>
+            <div v-else class="text-center py-4 text-medium-emphasis">
+              No patients in queue
+            </div>
+          </v-card-text>
+        </v-card>
+
         <v-card elevation="2" border>
           <v-card-title>Upcoming Appointments</v-card-title>
           <v-card-text>
@@ -155,17 +184,26 @@
                 :key="appointment.id"
                 class="upcoming-item py-3"
               >
-                <div class="font-weight-medium">{{ formatDate(appointment.date) }}</div>
+                <div class="font-weight-medium">{{ formatDate(appointment.scheduled_at) }}</div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ appointment.time }} • {{ appointment.doctor_name }}
+                  {{ formatTime(appointment.scheduled_at) }} • {{ appointment.type_name }}
                 </div>
-                <v-chip 
-                  size="x-small" 
-                  :color="getStatusColor(appointment.status)"
-                  class="mt-1"
-                >
-                  {{ appointment.status }}
-                </v-chip>
+                <div class="d-flex align-center mt-1">
+                  <v-chip 
+                    size="x-small" 
+                    :color="getStatusColor(appointment.status)"
+                  >
+                    {{ appointment.status }}
+                  </v-chip>
+                  <v-chip 
+                    v-if="appointment.queue_number"
+                    size="x-small"
+                    variant="outlined"
+                    class="ml-1"
+                  >
+                    #{{ appointment.queue_number }}
+                  </v-chip>
+                </div>
               </div>
             </div>
             <div v-else class="text-center py-4 text-medium-emphasis">
@@ -181,41 +219,40 @@
       <v-card>
         <v-card-title>Book New Appointment</v-card-title>
         <v-card-text>
-          <v-form @submit.prevent="bookAppointment" ref="bookingForm">
+          <v-form ref="bookingForm" @submit.prevent="bookAppointment">
             <v-row>
               <v-col cols="12" md="6">
                 <v-text-field
-                  v-model="newAppointment.date"
+                  v-model="newAppointment.scheduled_date"
                   label="Date"
                   type="date"
                   variant="outlined"
                   :min="minDate"
                   :rules="[v => !!v || 'Date is required']"
+                  @change="checkAvailability"
                 />
               </v-col>
               <v-col cols="12" md="6">
-                <v-text-field
-                  v-model="newAppointment.time"
+                <v-select
+                  v-model="newAppointment.scheduled_time"
                   label="Time"
-                  type="time"
+                  :items="availableTimeSlots"
                   variant="outlined"
                   :rules="[v => !!v || 'Time is required']"
+                  :disabled="!newAppointment.scheduled_date || !newAppointment.appointment_type_id"
+                  :loading="checkingAvailability"
                 />
               </v-col>
               <v-col cols="12">
-                <v-text-field
-                  v-model="newAppointment.doctor_name"
-                  label="Doctor Name"
+                <v-select
+                  v-model="newAppointment.appointment_type_id"
+                  :items="appointmentTypes"
+                  item-title="type_name"
+                  item-value="id"
+                  label="Appointment Type"
                   variant="outlined"
-                  :rules="[v => !!v || 'Doctor name is required']"
-                />
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                  v-model="newAppointment.location"
-                  label="Location"
-                  variant="outlined"
-                  :rules="[v => !!v || 'Location is required']"
+                  :rules="[v => !!v || 'Appointment type is required']"
+                  @update:model-value="checkAvailability"
                 />
               </v-col>
               <v-col cols="12">
@@ -224,6 +261,7 @@
                   label="Notes (Optional)"
                   variant="outlined"
                   rows="3"
+                  placeholder="Any specific concerns or requests..."
                 />
               </v-col>
             </v-row>
@@ -231,14 +269,92 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="showBookingDialog = false" :disabled="bookingLoading">Cancel</v-btn>
+          <v-btn variant="text" @click="closeBookingDialog" :disabled="bookingLoading">Cancel</v-btn>
           <v-btn 
             color="primary" 
             @click="bookAppointment" 
             :loading="bookingLoading"
-            :disabled="bookingLoading"
+            :disabled="!isBookingValid"
           >
             Book Appointment
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Appointment Details Dialog -->
+    <v-dialog v-model="showDetailsDialog" max-width="500">
+      <v-card>
+        <v-card-title class="d-flex justify-space-between align-center">
+          <span>Appointment Details</span>
+          <v-btn icon @click="showDetailsDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+        <v-card-text>
+          <div v-if="selectedAppointment" class="appointment-details">
+            <!-- Queue Information -->
+            <v-card v-if="selectedAppointment.queue_number" variant="outlined" class="mb-4">
+              <v-card-text class="d-flex align-center">
+                <v-icon color="primary" size="40" class="mr-4">mdi-account-queue</v-icon>
+                <div>
+                  <div class="text-caption text-medium-emphasis">Your Queue Number</div>
+                  <div class="text-h4 font-weight-bold">{{ selectedAppointment.queue_number }}</div>
+                  <div class="text-caption">
+                    Status: 
+                    <v-chip size="x-small" :color="getQueueStatusColor(selectedAppointment.queue_status)">
+                      {{ selectedAppointment.queue_status }}
+                    </v-chip>
+                  </div>
+                  <div v-if="selectedAppointment.queue_status === 'WAITING'" class="text-caption mt-1">
+                    Estimated wait: {{ estimatedWaitTime }} minutes
+                  </div>
+                </div>
+              </v-card-text>
+            </v-card>
+
+            <v-row>
+              <v-col cols="6">
+                <div class="text-caption text-medium-emphasis">Date</div>
+                <div class="text-body-1 mb-4">{{ formatDate(selectedAppointment.scheduled_at) }}</div>
+              </v-col>
+              <v-col cols="6">
+                <div class="text-caption text-medium-emphasis">Time</div>
+                <div class="text-body-1 mb-4">{{ formatTime(selectedAppointment.scheduled_at) }}</div>
+              </v-col>
+              <v-col cols="12">
+                <div class="text-caption text-medium-emphasis">Appointment Type</div>
+                <div class="text-body-1 mb-4">{{ selectedAppointment.type_name }}</div>
+              </v-col>
+              <v-col cols="12">
+                <div class="text-caption text-medium-emphasis">Status</div>
+                <v-chip 
+                  :color="getStatusColor(selectedAppointment.status)"
+                  class="mb-4"
+                >
+                  {{ selectedAppointment.status }}
+                </v-chip>
+              </v-col>
+              <v-col cols="12" v-if="selectedAppointment.notes">
+                <div class="text-caption text-medium-emphasis">Your Notes</div>
+                <div class="text-body-1">{{ selectedAppointment.notes }}</div>
+              </v-col>
+            </v-row>
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn 
+            v-if="selectedAppointment?.status === 'SCHEDULED'"
+            color="error" 
+            variant="outlined"
+            @click="cancelFromDetails"
+            :loading="cancellingAppointment"
+          >
+            Cancel Appointment
+          </v-btn>
+          <v-btn color="primary" @click="showDetailsDialog = false">
+            Close
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -253,15 +369,35 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { appointmentsApi, queueApi } from '@/api'
 
+// State
 const loading = ref(false)
 const bookingLoading = ref(false)
+const checkingAvailability = ref(false)
 const cancellingId = ref(null)
+const cancellingAppointment = ref(false)
 const appointments = ref([])
+const appointmentTypes = ref([])
 const showBookingDialog = ref(false)
+const showDetailsDialog = ref(false)
+const selectedAppointment = ref(null)
 const statusFilter = ref('')
 const sortBy = ref('date_desc')
 const bookingForm = ref(null)
+const availableTimeSlots = ref([])
+const queueInfo = ref({
+  now_serving: null,
+  waiting_count: 0,
+  estimated_wait_time: 0
+})
+
+const newAppointment = ref({
+  appointment_type_id: null,
+  scheduled_date: '',
+  scheduled_time: '',
+  notes: ''
+})
 
 const snackbar = ref({
   show: false,
@@ -269,19 +405,14 @@ const snackbar = ref({
   color: 'success'
 })
 
-const newAppointment = ref({
-  date: '',
-  time: '',
-  doctor_name: '',
-  location: '',
-  notes: ''
-})
-
+// Constants
 const statusOptions = [
-  { title: 'Scheduled', value: 'scheduled' },
-  { title: 'Confirmed', value: 'confirmed' },
-  { title: 'Completed', value: 'completed' },
-  { title: 'Cancelled', value: 'cancelled' }
+  { title: 'Scheduled', value: 'SCHEDULED' },
+  { title: 'Confirmed', value: 'CONFIRMED' },
+  { title: 'In Progress', value: 'IN_PROGRESS' },
+  { title: 'Completed', value: 'COMPLETED' },
+  { title: 'Cancelled', value: 'CANCELLED' },
+  { title: 'No Show', value: 'NO_SHOW' }
 ]
 
 const sortOptions = [
@@ -290,8 +421,15 @@ const sortOptions = [
   { title: 'Status', value: 'status' }
 ]
 
+// Computed
 const minDate = computed(() => {
   return new Date().toISOString().split('T')[0]
+})
+
+const isBookingValid = computed(() => {
+  return newAppointment.value.appointment_type_id &&
+         newAppointment.value.scheduled_date &&
+         newAppointment.value.scheduled_time
 })
 
 const filteredAppointments = computed(() => {
@@ -307,7 +445,10 @@ const filteredAppointments = computed(() => {
 const upcomingAppointments = computed(() => {
   const today = new Date().toISOString().split('T')[0]
   return appointments.value
-    .filter(app => app.status === 'scheduled' && app.date >= today)
+    .filter(app => 
+      (app.status === 'SCHEDULED' || app.status === 'CONFIRMED') && 
+      app.scheduled_at?.split('T')[0] >= today
+    )
     .slice(0, 3)
 })
 
@@ -315,50 +456,38 @@ const hasActiveFilters = computed(() => {
   return statusFilter.value
 })
 
-onMounted(async () => {
-  await loadAppointments()
+const estimatedWaitTime = computed(() => {
+  if (!selectedAppointment.value?.queue_number || !queueInfo.value.now_serving) return 0
+  const position = selectedAppointment.value.queue_number - queueInfo.value.now_serving
+  return Math.max(0, position * 15) // Assume 15 minutes per patient
 })
 
-async function loadAppointments() {
-  loading.value = true
-  try {
-    console.log('\U0001f504 Loading appointments...')
-    const response = await patientApi.getAppointments()
-    console.log('\u2705 Appointments loaded:', response.data)
-    appointments.value = response.data.appointments || []
-  } catch (error) {
-    console.error('\u274c Error loading appointments:', error)
-    showSnackbar('Error loading appointments: ' + (error.response?.data?.error || error.message), 'error')
-  } finally {
-    loading.value = false
-  }
-}
-
-function sortAppointments(appointments, sortKey) {
-  const sorted = [...appointments]
-  switch (sortKey) {
-    case 'date_asc':
-      return sorted.sort((a, b) => new Date(a.date) - new Date(b.date))
-    case 'date_desc':
-      return sorted.sort((a, b) => new Date(b.date) - new Date(a.date))
-    case 'status':
-      return sorted.sort((a, b) => a.status.localeCompare(b.status))
-    default:
-      return sorted
-  }
-}
-
-function getStatusColor(status) {
+// Methods
+const getStatusColor = (status) => {
   const colors = {
-    'scheduled': 'primary',
-    'confirmed': 'warning',
-    'completed': 'success',
-    'cancelled': 'error'
+    'SCHEDULED': 'primary',
+    'CONFIRMED': 'success',
+    'IN_PROGRESS': 'warning',
+    'COMPLETED': 'info',
+    'CANCELLED': 'error',
+    'NO_SHOW': 'grey'
   }
   return colors[status] || 'grey'
 }
 
-function formatDate(dateString) {
+const getQueueStatusColor = (status) => {
+  const colors = {
+    'WAITING': 'grey',
+    'CALLED': 'warning',
+    'SERVING': 'success',
+    'COMPLETED': 'info',
+    'SKIPPED': 'error'
+  }
+  return colors[status] || 'grey'
+}
+
+const formatDate = (dateString) => {
+  if (!dateString) return ''
   return new Date(dateString).toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -367,20 +496,146 @@ function formatDate(dateString) {
   })
 }
 
-function isToday(dateString) {
+const formatTime = (dateString) => {
+  if (!dateString) return ''
+  return new Date(dateString).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const isToday = (dateString) => {
+  if (!dateString) return false
   const today = new Date().toISOString().split('T')[0]
-  return dateString === today
+  return dateString.split('T')[0] === today
 }
 
-function clearFilters() {
-  statusFilter.value = ''
-  sortBy.value = 'date_desc'
+const canCancelAppointment = (appointment) => {
+  const cancellableStatuses = ['SCHEDULED', 'CONFIRMED']
+  if (!cancellableStatuses.includes(appointment.status)) return false
+  
+  // Can't cancel if it's today and within 2 hours
+  if (isToday(appointment.scheduled_at)) {
+    const appointmentTime = new Date(appointment.scheduled_at).getTime()
+    const now = new Date().getTime()
+    const hoursUntil = (appointmentTime - now) / (1000 * 60 * 60)
+    return hoursUntil > 2
+  }
+  
+  return true
 }
 
-function viewAppointmentDetails(appointment) {
-  // Implement view details logic
-  console.log('View appointment details:', appointment)
-  showSnackbar('Appointment details feature coming soon', 'info')
+const sortAppointments = (appointments, sortKey) => {
+  const sorted = [...appointments]
+  switch (sortKey) {
+    case 'date_asc':
+      return sorted.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))
+    case 'date_desc':
+      return sorted.sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at))
+    case 'status':
+      return sorted.sort((a, b) => a.status.localeCompare(b.status))
+    default:
+      return sorted
+  }
+}
+
+// API Calls
+async function loadAppointments() {
+  loading.value = true
+  try {
+    const response = await appointmentsApi.getPatientHistory('me')
+    appointments.value = response.appointments || []
+  } catch (error) {
+    console.error('Error loading appointments:', error)
+    showSnackbar('Error loading appointments', 'error')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadAppointmentTypes() {
+  try {
+    const response = await appointmentsApi.getTypes()
+    appointmentTypes.value = response || []
+  } catch (error) {
+    console.error('Error loading appointment types:', error)
+  }
+}
+
+async function loadQueueInfo() {
+  try {
+    const response = await queueApi.getCurrent()
+    queueInfo.value = response || {
+      now_serving: null,
+      waiting_count: 0,
+      estimated_wait_time: 0
+    }
+  } catch (error) {
+    console.error('Error loading queue info:', error)
+  }
+}
+
+async function checkAvailability() {
+  if (!newAppointment.value.scheduled_date || !newAppointment.value.appointment_type_id) {
+    return
+  }
+
+  checkingAvailability.value = true
+  try {
+    const response = await appointmentsApi.checkAvailability({
+      date: newAppointment.value.scheduled_date,
+      type_id: newAppointment.value.appointment_type_id
+    })
+    
+    availableTimeSlots.value = response.slots
+      .filter(slot => slot.available)
+      .map(slot => slot.time)
+  } catch (error) {
+    console.error('Error checking availability:', error)
+    showSnackbar('Failed to check availability', 'error')
+  } finally {
+    checkingAvailability.value = false
+  }
+}
+
+async function bookAppointment() {
+  if (!bookingForm.value) return
+  
+  const { valid } = await bookingForm.value.validate()
+  
+  if (!valid || !isBookingValid.value) return
+
+  bookingLoading.value = true
+  try {
+    const scheduled_at = `${newAppointment.value.scheduled_date}T${newAppointment.value.scheduled_time}:00`
+    
+    const appointmentData = {
+      appointment_type_id: newAppointment.value.appointment_type_id,
+      scheduled_at,
+      notes: newAppointment.value.notes || null
+    }
+
+    await appointmentsApi.create(appointmentData)
+    closeBookingDialog()
+    await loadAppointments()
+    showSnackbar('Appointment booked successfully', 'success')
+  } catch (error) {
+    console.error('Error booking appointment:', error)
+    showSnackbar(error.response?.data?.error || 'Error booking appointment', 'error')
+  } finally {
+    bookingLoading.value = false
+  }
+}
+
+async function viewAppointmentDetails(id) {
+  try {
+    const response = await appointmentsApi.getById(id)
+    selectedAppointment.value = response
+    showDetailsDialog.value = true
+  } catch (error) {
+    console.error('Error loading appointment details:', error)
+    showSnackbar('Failed to load appointment details', 'error')
+  }
 }
 
 async function cancelAppointment(appointment) {
@@ -388,8 +643,9 @@ async function cancelAppointment(appointment) {
 
   cancellingId.value = appointment.id
   try {
-    await patientApi.cancelAppointment(appointment.id)
-    await loadAppointments() // Refresh the list
+    await appointmentsApi.updateStatus(appointment.id, 'CANCELLED')
+    await loadAppointments()
+    await loadQueueInfo()
     showSnackbar('Appointment cancelled successfully', 'success')
   } catch (error) {
     console.error('Error cancelling appointment:', error)
@@ -399,34 +655,38 @@ async function cancelAppointment(appointment) {
   }
 }
 
-async function bookAppointment() {
-  if (!bookingForm.value) return
+async function cancelFromDetails() {
+  if (!selectedAppointment.value) return
   
-  const { valid } = await bookingForm.value.validate()
-  
-  if (!valid) return
-
-  bookingLoading.value = true
+  cancellingAppointment.value = true
   try {
-    await patientApi.bookAppointment(newAppointment.value)
-    showBookingDialog.value = false
-    await loadAppointments() // Refresh the list
-    showSnackbar('Appointment booked successfully', 'success')
-    
-    // Reset form
-    newAppointment.value = {
-      date: '',
-      time: '',
-      doctor_name: '',
-      location: '',
-      notes: ''
-    }
+    await appointmentsApi.updateStatus(selectedAppointment.value.id, 'CANCELLED')
+    showDetailsDialog.value = false
+    await loadAppointments()
+    await loadQueueInfo()
+    showSnackbar('Appointment cancelled successfully', 'success')
   } catch (error) {
-    console.error('Error booking appointment:', error)
-    showSnackbar('Error booking appointment', 'error')
+    console.error('Error cancelling appointment:', error)
+    showSnackbar('Error cancelling appointment', 'error')
   } finally {
-    bookingLoading.value = false
+    cancellingAppointment.value = false
   }
+}
+
+function clearFilters() {
+  statusFilter.value = ''
+  sortBy.value = 'date_desc'
+}
+
+function closeBookingDialog() {
+  showBookingDialog.value = false
+  newAppointment.value = {
+    appointment_type_id: null,
+    scheduled_date: '',
+    scheduled_time: '',
+    notes: ''
+  }
+  availableTimeSlots.value = []
 }
 
 function showSnackbar(message, color = 'success') {
@@ -436,6 +696,15 @@ function showSnackbar(message, color = 'success') {
     color
   }
 }
+
+// Lifecycle
+onMounted(async () => {
+  await Promise.all([
+    loadAppointments(),
+    loadAppointmentTypes(),
+    loadQueueInfo()
+  ])
+})
 </script>
 
 <style scoped>
@@ -453,5 +722,9 @@ function showSnackbar(message, color = 'success') {
 
 .upcoming-item:last-child {
   border-bottom: none;
+}
+
+.gap-2 {
+  gap: 8px;
 }
 </style>

@@ -280,9 +280,8 @@ export const patientsApi = {
     responseType: 'blob' 
   })
 }
-/**
- * Appointments API
- */
+
+// Appointments API
 export const appointmentsApi = {
   // ==================== APPOINTMENT TYPES ====================
 
@@ -343,6 +342,7 @@ export const appointmentsApi = {
    * }
    */
   createType: (data) => http.post('/appointments/types', data),
+  
   /**
    * PUT /api/appointments/types/:id - Update appointment type (Admin only)
    * Headers: { Authorization: "Bearer token" }
@@ -808,113 +808,445 @@ export const appointmentsApi = {
 
 // Queue API
 export const queueApi = {
+  // ==================== QUEUE MANAGEMENT ====================
+
   /**
-   * GET /api/queue/current - Get current queue status
+   * GET /api/queue/current - Get current queue status for today
    * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
    * 
    * Returns: {
-   *   queue: {
-   *     now_serving: 5,
-   *     waiting_count: 8,
-   *     estimated_wait_time: 45, // minutes
-   *     items: [
+   *   current_queue: {
+   *     waiting: [
    *       {
    *         id: 1,
-   *         queue_number: 6,
-   *         appointment: {
-   *           id: 1,
-   *           patient: {
-   *             patient_id: "P001",
-   *             full_name: "John Doe"
-   *           },
-   *           appointment_type: {
-   *             type_name: "Consultation"
-   *           }
-   *         },
+   *         appointment_id: 5,
+   *         queue_number: 12,
    *         priority: 0,
    *         status: "WAITING",
    *         called_at: null,
-   *         estimated_start_time: "2024-01-01T10:15:00.000Z"
+   *         served_at: null,
+   *         completed_at: null,
+   *         created_at: "2024-02-15T08:00:00.000Z",
+   *         appointment_number: "APT2402150005",
+   *         scheduled_at: "2024-02-15T09:00:00.000Z",
+   *         appointment_status: "CONFIRMED",
+   *         appointment_notes: "Regular checkup",
+   *         type_name: "Consultation",
+   *         duration_minutes: 30,
+   *         patient_id: "P001",
+   *         first_name: "John",
+   *         last_name: "Doe",
+   *         middle_name: "M",
+   *         contact_number: "1234567890",
+   *         age: 34,
+   *         hiv_status: "REACTIVE",
+   *         art_status: "ON_ART",
+   *         called_by_username: null
    *       }
-   *     ]
-   *   }
+   *     ],
+   *     called: [...], // Similar structure for called patients
+   *     serving: [...], // Similar structure for serving patients
+   *     completed: [...], // Similar structure for completed patients
+   *     skipped: [...] // Similar structure for skipped patients
+   *   },
+   *   statistics: {
+   *     total_today: 25,
+   *     waiting_count: 8,
+   *     called_count: 2,
+   *     serving_count: 1,
+   *     completed_count: 12,
+   *     skipped_count: 2,
+   *     average_wait_time_minutes: 15.5,
+   *     estimated_service_time_minutes: 18.2,
+   *     last_updated: "2024-02-15T10:30:00.000Z"
+   *   },
+   *   now_serving: 8,
+   *   next_in_queue: 12
    * }
    */
   getCurrent: () => http.get('/queue/current'),
 
   /**
-   * POST /api/queue - Add appointment to queue
+   * GET /api/queue/position/:queueNumber - Get position details for a specific queue number
    * Headers: { Authorization: "Bearer token" }
-   * Request Body: { appointment_id: 1, priority: 0 }
+   * Access: ADMIN, NURSE, PATIENT (for their own)
+   * 
+   * Path Parameters: {
+   *   queueNumber: 12 // Queue number to check
+   * }
    * 
    * Returns: {
-   *   message: "Added to queue successfully",
-   *   queue: {
+   *   id: 1,
+   *   queue_number: 12,
+   *   priority: 0,
+   *   status: "WAITING",
+   *   called_at: null,
+   *   served_at: null,
+   *   completed_at: null,
+   *   created_at: "2024-02-15T08:00:00.000Z",
+   *   appointment_number: "APT2402150005",
+   *   scheduled_at: "2024-02-15T09:00:00.000Z",
+   *   type_name: "Consultation",
+   *   patient_id: "P001",
+   *   first_name: "John",
+   *   last_name: "Doe",
+   *   patients_ahead: 3,
+   *   total_active: 15,
+   *   estimated_wait_minutes: 45,
+   *   estimated_completion_time: "2024-02-15T11:15:00.000Z"
+   * }
+   */
+  getPosition: (queueNumber) => http.get(`/queue/position/${queueNumber}`),
+
+  /**
+   * GET /api/queue/patient/:patientId - Get current queue status for a specific patient
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE, PATIENT (own)
+   * 
+   * Path Parameters: {
+   *   patientId: "P001" // Patient ID in P001 format
+   * }
+   * 
+   * Returns: {
+   *   in_queue: true,
+   *   id: 1,
+   *   queue_number: 12,
+   *   priority: 0,
+   *   status: "WAITING",
+   *   called_at: null,
+   *   served_at: null,
+   *   completed_at: null,
+   *   created_at: "2024-02-15T08:00:00.000Z",
+   *   appointment_id: 5,
+   *   appointment_number: "APT2402150005",
+   *   scheduled_at: "2024-02-15T09:00:00.000Z",
+   *   type_name: "Consultation",
+   *   duration_minutes: 30,
+   *   patients_ahead: 3,
+   *   estimated_wait_minutes: 45,
+   *   estimated_completion_time: "2024-02-15T11:15:00.000Z"
+   * }
+   * 
+   * Or if not in queue:
+   * {
+   *   in_queue: false,
+   *   message: "No active queue entry for today"
+   * }
+   */
+  getPatientQueue: (patientId) => http.get(`/queue/patient/${patientId}`),
+
+  /**
+   * POST /api/queue/add - Add appointment to queue
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Request Body: {
+   *   appointment_id: 5, // required - ID of the appointment
+   *   priority: 0 // optional - priority level (higher = more priority, default 0)
+   * }
+   * 
+   * Returns: {
+   *   message: "Appointment added to queue successfully",
+   *   queue_entry: {
    *     id: 1,
-   *     queue_number: 6,
-   *     appointment_id: 1,
-   *     status: "WAITING"
+   *     queue_number: 12,
+   *     priority: 0,
+   *     status: "WAITING",
+   *     created_at: "2024-02-15T08:00:00.000Z",
+   *     appointment_number: "APT2402150005",
+   *     scheduled_at: "2024-02-15T09:00:00.000Z",
+   *     first_name: "John",
+   *     last_name: "Doe"
+   *   },
+   *   patients_ahead: 0
+   * }
+   */
+  addToQueue: (data) => http.post('/queue/add', data),
+
+  /**
+   * POST /api/queue/call/:id - Call a patient from queue
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Path Parameters: {
+   *   id: 1 // Queue entry ID
+   * }
+   * 
+   * Request Body: {
+   *   station: "General" // optional - station name or room number
+   * }
+   * 
+   * Returns: {
+   *   message: "Patient called successfully",
+   *   queue_number: 12,
+   *   patient_name: "John Doe",
+   *   station: "General",
+   *   called_at: "2024-02-15T10:15:00.000Z"
+   * }
+   */
+  callPatient: (id, data = {}) => http.post(`/queue/call/${id}`, data),
+
+  /**
+   * POST /api/queue/start-serving/:id - Start serving a patient
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Path Parameters: {
+   *   id: 1 // Queue entry ID
+   * }
+   * 
+   * Returns: {
+   *   message: "Started serving patient",
+   *   queue_number: 12,
+   *   patient_name: "John Doe",
+   *   served_at: "2024-02-15T10:16:00.000Z"
+   * }
+   */
+  startServing: (id) => http.post(`/queue/start-serving/${id}`),
+
+  /**
+   * POST /api/queue/complete/:id - Complete serving a patient
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Path Parameters: {
+   *   id: 1 // Queue entry ID
+   * }
+   * 
+   * Returns: {
+   *   message: "Service completed successfully",
+   *   queue_number: 12,
+   *   patient_name: "John Doe",
+   *   completed_at: "2024-02-15T10:45:00.000Z"
+   * }
+   */
+  completeServing: (id) => http.post(`/queue/complete/${id}`),
+
+  /**
+   * POST /api/queue/skip/:id - Skip a patient in queue
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Path Parameters: {
+   *   id: 1 // Queue entry ID
+   * }
+   * 
+   * Request Body: {
+   *   reason: "Patient not available" // optional - reason for skipping
+   * }
+   * 
+   * Returns: {
+   *   message: "Patient skipped successfully",
+   *   queue_number: 12,
+   *   patient_name: "John Doe"
+   * }
+   */
+  skipPatient: (id, data = {}) => http.post(`/queue/skip/${id}`, data),
+
+  /**
+   * POST /api/queue/reorder - Reorder queue (change priority)
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN only
+   * 
+   * Request Body: {
+   *   updates: [
+   *     { id: 1, priority: 5 },
+   *     { id: 2, priority: 3 },
+   *     { id: 3, priority: 1 }
+   *   ]
+   * }
+   * 
+   * Returns: {
+   *   message: "Queue reordered successfully",
+   *   queue: [
+   *     {
+   *       id: 1,
+   *       queue_number: 12,
+   *       priority: 5,
+   *       status: "WAITING",
+   *       first_name: "John",
+   *       last_name: "Doe"
+   *     },
+   *     ...
+   *   ]
+   * }
+   */
+  reorderQueue: (data) => http.post('/queue/reorder', data),
+
+  // ==================== QUEUE HISTORY ====================
+
+  /**
+   * GET /api/queue/history - Get queue history with filters
+   * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Query Parameters: {
+   *   start_date: "2024-02-01", // optional - filter by start date
+   *   end_date: "2024-02-15", // optional - filter by end date
+   *   status: "COMPLETED", // optional - filter by status
+   *   limit: 50, // optional - results per page (default 50)
+   *   offset: 0 // optional - for pagination
+   * }
+   * 
+   * Returns: {
+   *   history: [
+   *     {
+   *       id: 1,
+   *       queue_number: 12,
+   *       priority: 0,
+   *       status: "COMPLETED",
+   *       called_at: "2024-02-15T10:15:00.000Z",
+   *       served_at: "2024-02-15T10:16:00.000Z",
+   *       completed_at: "2024-02-15T10:45:00.000Z",
+   *       created_at: "2024-02-15T08:00:00.000Z",
+   *       appointment_number: "APT2402150005",
+   *       scheduled_at: "2024-02-15T09:00:00.000Z",
+   *       type_name: "Consultation",
+   *       patient_id: "P001",
+   *       first_name: "John",
+   *       last_name: "Doe",
+   *       age: 34,
+   *       handled_by: "nurse_jane",
+   *       waiting_time_minutes: 1,
+   *       service_time_minutes: 29
+   *     }
+   *   ],
+   *   pagination: {
+   *     total: 150,
+   *     limit: 50,
+   *     offset: 0
+   *   },
+   *   statistics: {
+   *     total_entries: 150,
+   *     completed_count: 120,
+   *     average_waiting_time_minutes: 15.5,
+   *     date_range: {
+   *       start: "2024-02-01",
+   *       end: "2024-02-15"
+   *     }
    *   }
    * }
    */
-  addToQueue: (data) => http.post('/queue', data),
+  getHistory: (params) => http.get('/queue/history', { params }),
+
+  // ==================== QUEUE STATISTICS ====================
 
   /**
-   * PUT /api/queue/:id/call - Call next patient
+   * GET /api/queue/stats/daily - Get daily queue statistics
    * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
+   * 
+   * Query Parameters: {
+   *   days: 7 // optional - number of days to look back (default 7)
+   * }
    * 
    * Returns: {
-   *   message: "Patient called",
-   *   queue: { ...queue item with called_at timestamp }
+   *   daily_stats: [
+   *     {
+   *       date: "2024-02-15",
+   *       total_patients: 25,
+   *       completed: 18,
+   *       skipped: 2,
+   *       avg_wait_time: 15.5,
+   *       avg_service_time: 18.2,
+   *       first_queue: 1,
+   *       last_queue: 25
+   *     },
+   *     ...
+   *   ],
+   *   period: "Last 7 days"
    * }
    */
-  callPatient: (id) => http.put(`/queue/${id}/call`),
+  getDailyStats: (params) => http.get('/queue/stats/daily', { params }),
 
   /**
-   * PUT /api/queue/:id/start - Start serving patient
+   * GET /api/queue/stats/peak-hours - Get peak hours analysis
    * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
    * 
    * Returns: {
-   *   message: "Now serving patient",
-   *   queue: { ...queue item with served_at timestamp }
+   *   hourly_breakdown: [
+   *     { hour: 9, total_entries: 25, avg_total_time: 45.2 },
+   *     { hour: 10, total_entries: 32, avg_total_time: 42.5 },
+   *     { hour: 11, total_entries: 28, avg_total_time: 44.1 },
+   *     ...
+   *   ],
+   *   peak_hours: [
+   *     { hour: 10, total_entries: 32, avg_total_time: 42.5 },
+   *     { hour: 9, total_entries: 25, avg_total_time: 45.2 },
+   *     { hour: 14, total_entries: 24, avg_total_time: 43.8 }
+   *   ],
+   *   quietest_hours: [
+   *     { hour: 16, total_entries: 12, avg_total_time: 38.5 },
+   *     { hour: 8, total_entries: 15, avg_total_time: 40.2 },
+   *     { hour: 15, total_entries: 18, avg_total_time: 41.7 }
+   *   ]
    * }
    */
-  startServing: (id) => http.put(`/queue/${id}/start`),
+  getPeakHoursStats: () => http.get('/queue/stats/peak-hours'),
+
+  // ==================== UTILITY ENDPOINTS ====================
 
   /**
-   * PUT /api/queue/:id/complete - Complete serving patient
+   * DELETE /api/queue/reset - Reset today's queue (Admin only, use with caution)
    * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN only
+   * 
+   * Query Parameters: {
+   *   confirm: "YES" // required - confirmation to proceed
+   * }
    * 
    * Returns: {
-   *   message: "Service completed",
-   *   next_queue_number: 6 // next number to call
+   *   message: "Queue reset successfully",
+   *   entries_removed: 25
    * }
+   * 
+   * Note: This will delete all today's queue entries and set
+   * associated appointments back to SCHEDULED status.
    */
-  completeServing: (id) => http.put(`/queue/${id}/complete`),
+  resetQueue: (params) => http.delete('/queue/reset', { params }),
 
   /**
-   * PUT /api/queue/:id/skip - Skip patient (moves to next)
+   * GET /api/queue/current/summary - Get quick queue summary
    * Headers: { Authorization: "Bearer token" }
+   * Access: ADMIN, NURSE
    * 
    * Returns: {
-   *   message: "Patient skipped",
-   *   next_queue_number: 6
+   *   waiting: 8,
+   *   in_progress: 3,
+   *   completed_today: 15,
+   *   average_wait_time: 12.5,
+   *   longest_wait: 25,
+   *   next_queue_number: 12
    * }
+   * 
+   * Note: This is a convenience endpoint that returns only summary
+   * statistics without the full queue details. Useful for dashboards.
    */
-  skipPatient: (id) => http.put(`/queue/${id}/skip`),
+  getSummary: () => http.get('/queue/current/summary'),
 
   /**
-   * GET /api/queue/history - Get queue history
+   * GET /api/queue/check-appointment/:appointmentId - Check if appointment is in queue
    * Headers: { Authorization: "Bearer token" }
-   * Query Parameters: { date: "2024-01-01", page: 1, limit: 20 }
+   * Access: ADMIN, NURSE
+   * 
+   * Path Parameters: {
+   *   appointmentId: 5 // Appointment ID
+   * }
    * 
    * Returns: {
-   *   items: [ ...queue items with complete history ],
-   *   pagination: { page, limit, total }
+   *   in_queue: true,
+   *   queue_entry: {
+   *     id: 1,
+   *     queue_number: 12,
+   *     status: "WAITING",
+   *     created_at: "2024-02-15T08:00:00.000Z"
+   *   }
    * }
    */
-  getHistory: (params) => http.get('/queue/history', { params })
-}
+  checkAppointmentInQueue: (appointmentId) => http.get(`/queue/check-appointment/${appointmentId}`)
+};
 
 // Audit API
 export const auditApi = {

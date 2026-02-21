@@ -12,7 +12,7 @@
                 <div class="d-flex align-center justify-center mb-4">
                   <h1 class="text-h2 font-weight-bold mr-3">OMPH</h1>
                   <div class="accent-pill">
-                    <span class="text-subtitle-1 font-weight-bold">HIV CARE</span>
+                    <span class="text-subtitle-1 font-weight-bold">HMS</span>
                   </div>
                 </div>
                 <p class="text-h5 font-weight-medium mb-2">Secure Patient Management System</p>
@@ -86,26 +86,6 @@
                   </div>
                 </v-card-text>
               </v-card>
-
-              <!-- Stats Banner -->
-              <div class="stats-banner mt-8">
-                <div class="d-flex justify-space-around">
-                  <div class="stat-item text-center">
-                    <div class="text-h5 font-weight-bold">99.9%</div>
-                    <div class="text-caption opacity-75">Uptime</div>
-                  </div>
-                  <v-divider vertical color="rgba(255, 255, 255, 0.2)" />
-                  <div class="stat-item text-center">
-                    <div class="text-h5 font-weight-bold">100%</div>
-                    <div class="text-caption opacity-75">Data Integrity</div>
-                  </div>
-                  <v-divider vertical color="rgba(255, 255, 255, 0.2)" />
-                  <div class="stat-item text-center">
-                    <div class="text-h5 font-weight-bold">24/7</div>
-                    <div class="text-caption opacity-75">Access</div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </v-col>
@@ -177,32 +157,13 @@
                           <v-icon color="primary" size="small">mdi-key</v-icon>
                         </template>
                         <v-list-item-title class="text-caption">
-                          <strong>Password:</strong> admin123
-                        </v-list-item-title>
-                      </v-list-item>
-                      <v-list-item class="px-0">
-                        <template v-slot:prepend>
-                          <v-icon color="info" size="small">mdi-information-outline</v-icon>
-                        </template>
-                        <v-list-item-title class="text-caption">
-                          <em>Password is "admin123" not "admin"</em>
+                          <strong>Password:</strong> admin
                         </v-list-item-title>
                       </v-list-item>
                     </v-list>
                   </v-expansion-panel-text>
                 </v-expansion-panel>
               </v-expansion-panels>
-
-              <div class="text-center mt-4">
-                <v-divider class="my-4" />
-                <p class="text-body-2 text-medium-emphasis mb-2">
-                  Are you a patient?
-                </p>
-                <v-btn variant="text" color="primary" size="small" @click="$router.push('/patient/login')">
-                  <v-icon start>mdi-account</v-icon>
-                  Access Patient Portal
-                </v-btn>
-              </div>
 
               <!-- Security Notice -->
               <v-alert type="info" variant="tonal" density="compact" class="mt-4">
