@@ -2,7 +2,7 @@
 import { format, parseISO, isValid } from 'date-fns'
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
 
-// Set your clinic's timezone
+// Clinic timezone
 export const CLINIC_TIMEZONE = 'Asia/Manila'
 
 // Display formats
@@ -16,7 +16,7 @@ export const API_TIME_FORMAT = 'HH:mm'
 export const API_DATETIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ssXXX"
 
 /**
- * Convert local date + time to UTC ISO string
+ * Convert local Manila date + time → UTC ISO
  * @param {string} dateStr - YYYY-MM-DD
  * @param {string} timeStr - HH:mm
  * @returns {string|null}
@@ -25,14 +25,21 @@ export function toUTC(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null
 
   try {
-    const dateTimeStr = `${dateStr}T${timeStr}:00`
-    const localDate = new Date(dateTimeStr)
-
-    if (!isValid(localDate)) {
+    // Split date and time
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    
+    // Create a date object in the local timezone (browser timezone)
+    // This will be interpreted in the browser's local timezone
+    const localDate = new Date(year, month - 1, day, hours, minutes, 0)
+    
+    // Check if valid
+    if (isNaN(localDate.getTime())) {
       console.error('Invalid date/time:', dateStr, timeStr)
       return null
     }
-
+    
+    // Convert from Manila timezone to UTC
     const utcDate = fromZonedTime(localDate, CLINIC_TIMEZONE)
     return utcDate.toISOString()
   } catch (err) {
@@ -42,10 +49,7 @@ export function toUTC(dateStr, timeStr) {
 }
 
 /**
- * Convert stored UTC ISO string to clinic local time
- * @param {string} utcDateStr
- * @param {string} formatStr
- * @returns {string}
+ * Convert UTC ISO → Manila formatted string
  */
 export function toLocal(utcDateStr, formatStr = DISPLAY_DATETIME_FORMAT) {
   if (!utcDateStr) return ''
@@ -53,10 +57,7 @@ export function toLocal(utcDateStr, formatStr = DISPLAY_DATETIME_FORMAT) {
   try {
     const utcDate = parseISO(utcDateStr)
 
-    if (!isValid(utcDate)) {
-      console.error('Invalid UTC date:', utcDateStr)
-      return utcDateStr
-    }
+    if (!isValid(utcDate)) return utcDateStr
 
     const zonedDate = toZonedTime(utcDate, CLINIC_TIMEZONE)
     return format(zonedDate, formatStr)
@@ -67,62 +68,7 @@ export function toLocal(utcDateStr, formatStr = DISPLAY_DATETIME_FORMAT) {
 }
 
 /**
- * Get start/end of day in clinic timezone converted to UTC
- * @param {Date|string} date
- * @param {boolean} isStart
- * @returns {string|null}
- */
-export function getDateRangeForAPI(date, isStart = true) {
-  try {
-    const baseDate = typeof date === 'string' ? new Date(date) : new Date(date)
-
-    if (!isValid(baseDate)) {
-      console.error('Invalid date:', date)
-      return null
-    }
-
-    const zonedDate = toZonedTime(baseDate, CLINIC_TIMEZONE)
-
-    if (isStart) {
-      zonedDate.setHours(0, 0, 0, 0)
-    } else {
-      zonedDate.setHours(23, 59, 59, 999)
-    }
-
-    const utcDate = fromZonedTime(zonedDate, CLINIC_TIMEZONE)
-    return utcDate.toISOString()
-  } catch (err) {
-    console.error('Error getting date range:', err)
-    return null
-  }
-}
-
-/**
- * Format date for display in clinic timezone
- * @param {string|Date} date
- * @param {string} formatStr
- * @returns {string}
- */
-export function formatDateForDisplay(date, formatStr = DISPLAY_DATE_FORMAT) {
-  if (!date) return ''
-
-  try {
-    const dateObj = typeof date === 'string' ? parseISO(date) : date
-
-    if (!isValid(dateObj)) {
-      return String(date)
-    }
-
-    const zonedDate = toZonedTime(dateObj, CLINIC_TIMEZONE)
-    return format(zonedDate, formatStr)
-  } catch (err) {
-    console.error('Error formatting date:', err)
-    return String(date)
-  }
-}
-
-/**
- * Extract time from UTC datetime for display
+ * Extract formatted time from UTC ISO string
  * @param {string} dateTimeStr
  * @returns {string}
  */
@@ -131,54 +77,104 @@ export function formatTimeForDisplay(dateTimeStr) {
 }
 
 /**
- * Validate date string
- * @param {string} dateStr
- * @returns {boolean}
+ * Get Manila start/end of day → UTC ISO for API filtering
  */
-export function isValidDate(dateStr) {
-  if (!dateStr) return false
+export function getDateRangeForAPI(date, isStart = true) {
   try {
-    return isValid(new Date(dateStr))
-  } catch {
-    return false
+    const base = typeof date === 'string' ? new Date(date) : new Date(date)
+
+    if (!isValid(base)) return null
+
+    const zoned = toZonedTime(base, CLINIC_TIMEZONE)
+
+    if (isStart) {
+      zoned.setHours(0, 0, 0, 0)
+    } else {
+      zoned.setHours(23, 59, 59, 999)
+    }
+
+    const utcDate = fromZonedTime(zoned, CLINIC_TIMEZONE)
+    return utcDate.toISOString()
+  } catch (err) {
+    console.error('Error getting date range:', err)
+    return null
   }
 }
 
 /**
- * Current clinic date
- * @param {string} formatStr
- * @returns {string}
+ * Format date for display
  */
-export function getCurrentClinicDate(formatStr = API_DATE_FORMAT) {
-  const now = new Date()
-  const zonedNow = toZonedTime(now, CLINIC_TIMEZONE)
-  return format(zonedNow, formatStr)
-}
-
-/**
- * Current clinic time
- * @param {string} formatStr
- * @returns {string}
- */
-export function getCurrentClinicTime(formatStr = API_TIME_FORMAT) {
-  const now = new Date()
-  const zonedNow = toZonedTime(now, CLINIC_TIMEZONE)
-  return format(zonedNow, formatStr)
-}
-
-/**
- * Parse local datetime string (YYYY-MM-DD HH:mm) to UTC ISO
- * @param {string} localDateTimeStr
- * @returns {string|null}
- */
-export function parseLocalToUTC(localDateTimeStr) {
-  if (!localDateTimeStr) return null
+export function formatDateForDisplay(date, formatStr = DISPLAY_DATE_FORMAT) {
+  if (!date) return ''
 
   try {
-    const [date, time] = localDateTimeStr.split(' ')
-    return toUTC(date, time)
-  } catch (err) {
-    console.error('Error parsing local to UTC:', err)
-    return null
+    const dateObj =
+      typeof date === 'string' ? parseISO(date) : date
+
+    if (!isValid(dateObj)) return String(date)
+
+    const zoned = toZonedTime(dateObj, CLINIC_TIMEZONE)
+    return format(zoned, formatStr)
+  } catch {
+    return String(date)
+  }
+}
+
+/**
+ * Get current Manila date (YYYY-MM-DD)
+ */
+export function getCurrentClinicDate() {
+  const now = new Date()
+  const zoned = toZonedTime(now, CLINIC_TIMEZONE)
+  return format(zoned, API_DATE_FORMAT)
+}
+
+/**
+ * Convert UTC ISO → Manila date string (YYYY-MM-DD)
+ */
+export function utcToLocalDateString(utcDateStr) {
+  if (!utcDateStr) return ''
+
+  try {
+    const utcDate = parseISO(utcDateStr)
+    if (!isValid(utcDate)) return ''
+
+    const zoned = toZonedTime(utcDate, CLINIC_TIMEZONE)
+    return format(zoned, API_DATE_FORMAT)
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Convert UTC ISO → Manila time string (HH:mm)
+ */
+export function utcToLocalTimeString(utcDateStr) {
+  if (!utcDateStr) return ''
+
+  try {
+    const utcDate = parseISO(utcDateStr)
+    if (!isValid(utcDate)) return ''
+
+    const zoned = toZonedTime(utcDate, CLINIC_TIMEZONE)
+    return format(zoned, API_TIME_FORMAT)
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Convert 24h → 12h
+ */
+export function convertTo12Hour(timeStr) {
+  if (!timeStr) return ''
+
+  try {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+  } catch {
+    return timeStr
   }
 }

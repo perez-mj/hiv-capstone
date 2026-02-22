@@ -1,7 +1,7 @@
 <!-- frontend/src/components/appointments/MonthView.vue -->
 <template>
   <div class="calendar-month">
-    <!-- Calendar Header (Days of Week) -->
+    <!-- Calendar Header -->
     <div class="calendar-header">
       <div v-for="day in weekDays" :key="day" class="calendar-header-day">
         {{ day }}
@@ -12,31 +12,28 @@
     <div class="calendar-body">
       <div 
         v-for="day in calendarDays" 
-        :key="day.date"
-        class="calendar-day"
+        :key="day.date" 
+        class="calendar-day" 
         :class="{
           'calendar-day-other-month': !day.isCurrentMonth,
           'calendar-day-today': day.isToday,
           'calendar-day-weekend': day.isWeekend,
           'calendar-day-past': day.isPast
         }"
-        @click="$emit('open-create', day.date)"
+        @click="handleDayClick(day)"
       >
         <!-- Day Header -->
         <div class="calendar-day-header">
-          <span 
-            class="day-number"
-            :class="{ 'text-primary font-weight-bold': day.isToday }"
-          >
+          <span class="day-number" :class="{ 'text-primary font-weight-bold': day.isToday }">
             {{ day.day }}
           </span>
-          <v-btn
-            v-if="!day.isPast"
-            icon="mdi-plus"
-            size="x-small"
-            variant="text"
+          <v-btn 
+            v-if="!day.isPast" 
+            icon="mdi-plus" 
+            size="x-small" 
+            variant="text" 
             class="add-appointment-btn"
-            @click.stop="$emit('open-create', day.date)"
+            @click.stop="handleAddClick(day)" 
           />
         </div>
 
@@ -44,17 +41,17 @@
         <div class="calendar-day-appointments">
           <template v-if="day.appointments && day.appointments.length">
             <div 
-              v-for="appointment in getLimitedAppointments(day.appointments)" 
+              v-for="appointment in day.appointments.slice(0, 3)" 
               :key="appointment.id"
-              class="appointment-badge"
-              :class="getAppointmentClass(appointment)"
-              @click.stop="$emit('view-appointment', appointment)"
+              class="appointment-badge" 
+              :class="`appointment-${getStatusClass(appointment)}`"
+              @click.stop="handleViewAppointment(appointment)"
             >
               <div class="appointment-time">{{ formatTime(appointment.scheduled_at) }}</div>
               <div class="appointment-patient">{{ getPatientName(appointment) }}</div>
               <div class="appointment-type">{{ getAppointmentType(appointment) }}</div>
             </div>
-            
+
             <!-- More indicator -->
             <div 
               v-if="day.appointments.length > 3" 
@@ -64,218 +61,279 @@
               +{{ day.appointments.length - 3 }} more
             </div>
           </template>
-          
+
           <div v-else class="text-caption text-center text-grey mt-2">
             No appointments
           </div>
         </div>
       </div>
     </div>
-
-    <!-- More Appointments Dialog -->
-    <v-dialog v-model="showMoreDialog" max-width="400">
-      <v-card v-if="selectedDay">
-        <v-card-title class="bg-primary text-white">
-          Appointments for {{ formatDate(selectedDay.date) }}
-        </v-card-title>
-        <v-card-text class="pa-0">
-          <v-list>
-            <v-list-item
-              v-for="appointment in selectedDay.appointments"
-              :key="appointment.id"
-              @click="handleViewAppointment(appointment)"
-              class="cursor-pointer"
-            >
-              <template v-slot:prepend>
-                <v-chip
-                  size="small"
-                  :color="getStatusColor(appointment.status)"
-                  class="mr-2"
-                >
-                  {{ formatTime(appointment.scheduled_at) }}
-                </v-chip>
-              </template>
-              
-              <v-list-item-title>{{ getPatientName(appointment) }}</v-list-item-title>
-              <v-list-item-subtitle>
-                {{ getAppointmentType(appointment) }}
-              </v-list-item-subtitle>
-            </v-list-item>
-          </v-list>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="primary" variant="text" @click="showMoreDialog = false">
-            Close
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { toLocal, formatDateForDisplay, CLINIC_TIMEZONE } from '@/utils/dateUtils'
+import { ref, computed, onMounted } from 'vue'
 
 const props = defineProps({
-  appointments: {
-    type: [Array, Object],
-    default: () => []
-  },
-  currentDate: {
-    type: Date,
-    required: true
-  },
-  appointmentTypes: {
-    type: [Array, Object],
-    default: () => []
-  }
+  appointments: { type: [Array, Object], default: () => [] },
+  currentDate: { type: Date, required: true },
+  appointmentTypes: { type: [Array, Object], default: () => [] }
 })
 
 const emit = defineEmits(['view-appointment', 'open-create'])
+
+
+// Log props on mount
+onMounted(() => {
+  console.log('MonthView mounted with props:', {
+    appointments: props.appointments,
+    currentDate: props.currentDate,
+    appointmentTypes: props.appointmentTypes
+  })
+})
+
+// Constants
+const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const statusColors = {
+  'SCHEDULED': 'info',
+  'CONFIRMED': 'success',
+  'IN_PROGRESS': 'warning',
+  'COMPLETED': 'success',
+  'CANCELLED': 'error',
+  'NO_SHOW': 'grey'
+}
 
 // State
 const showMoreDialog = ref(false)
 const selectedDay = ref(null)
 
-// Constants
-const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+// Helper function to convert UTC to Manila local date
+const utcToManilaDate = (utcDateTime) => {
+  if (!utcDateTime) return ''
+  
+  try {
+    // Handle different input formats
+    let cleanDateTime = utcDateTime
+    if (utcDateTime.includes('T')) {
+      // ISO format: "2026-02-27T01:30:00.000Z"
+      cleanDateTime = utcDateTime.replace('T', ' ').replace('Z', '').split('.')[0]
+    }
+    
+    // Parse the UTC datetime
+    const [datePart, timePart] = cleanDateTime.split(' ')
+    if (!datePart || !timePart) return ''
+    
+    const [year, month, day] = datePart.split('-').map(Number)
+    const [hours, minutes, seconds] = timePart.split(':').map(Number)
+    
+    // Create UTC date
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds || 0))
+    
+    // Convert to Manila time (UTC+8)
+    const manilaDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000))
+    
+    // Return Manila date in YYYY-MM-DD format
+    const manilaYear = manilaDate.getUTCFullYear()
+    const manilaMonth = String(manilaDate.getUTCMonth() + 1).padStart(2, '0')
+    const manilaDay = String(manilaDate.getUTCDate()).padStart(2, '0')
+    
+    return `${manilaYear}-${manilaMonth}-${manilaDay}`
+  } catch (err) {
+    console.error('Error converting UTC to Manila date:', err, utcDateTime)
+    return ''
+  }
+}
+
+// Helper function to extract Manila time for display
+const utcToManilaTime = (utcDateTime) => {
+  if (!utcDateTime) return ''
+  
+  try {
+    // Handle different input formats
+    let cleanDateTime = utcDateTime
+    if (utcDateTime.includes('T')) {
+      cleanDateTime = utcDateTime.replace('T', ' ').replace('Z', '').split('.')[0]
+    }
+    
+    // Parse the UTC datetime
+    const [datePart, timePart] = cleanDateTime.split(' ')
+    if (!datePart || !timePart) return ''
+    
+    const [year, month, day] = datePart.split('-').map(Number)
+    const [hours, minutes, seconds] = timePart.split(':').map(Number)
+    
+    // Create UTC date
+    const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds || 0))
+    
+    // Convert to Manila time (UTC+8)
+    const manilaDate = new Date(utcDate.getTime() + (8 * 60 * 60 * 1000))
+    
+    // Return Manila time in HH:MM format
+    const manilaHours = String(manilaDate.getUTCHours()).padStart(2, '0')
+    const manilaMinutes = String(manilaDate.getUTCMinutes()).padStart(2, '0')
+    
+    return `${manilaHours}:${manilaMinutes}`
+  } catch (err) {
+    console.error('Error converting UTC to Manila time:', err, utcDateTime)
+    return ''
+  }
+}
+
+// Format time for display (convert 24h to 12h with AM/PM)
+const formatTimeForDisplay = (timeStr) => {
+  if (!timeStr) return ''
+  try {
+    const [hours, minutes] = timeStr.split(':').map(Number)
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
+  } catch {
+    return timeStr
+  }
+}
+
+// Get appointments array from the response
+const getAppointmentsArray = () => {
+  if (!props.appointments) return []
+  
+  console.log('Appointments prop structure:', props.appointments)
+  
+  // Try different possible structures
+  if (props.appointments.data?.appointments) {
+    console.log('Using appointments.data.appointments')
+    return props.appointments.data.appointments
+  } else if (props.appointments.data && Array.isArray(props.appointments.data)) {
+    console.log('Using appointments.data as array')
+    return props.appointments.data
+  } else if (props.appointments.appointments && Array.isArray(props.appointments.appointments)) {
+    console.log('Using appointments.appointments')
+    return props.appointments.appointments
+  } else if (Array.isArray(props.appointments)) {
+    console.log('Using appointments as array')
+    return props.appointments
+  }
+  
+  console.log('No appointments found in structure')
+  return []
+}
 
 // Computed
 const calendarDays = computed(() => {
+  const appointmentsArray = getAppointmentsArray()
+  
+  console.log('Appointments array:', appointmentsArray)
+  console.log('Appointments count:', appointmentsArray.length)
+  
+  if (appointmentsArray.length > 0) {
+    console.log('First appointment:', appointmentsArray[0])
+    // Test conversion on first appointment
+    const testConversion = utcToManilaDate(appointmentsArray[0].scheduled_at)
+    console.log('Test conversion:', testConversion)
+  }
+  
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
   const year = props.currentDate.getFullYear()
   const month = props.currentDate.getMonth()
-  
-  // Get appointments list
-  const appointmentList = getAppointmentsList()
-  
+
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
   
-  // Start from the first day of the week (Sunday) of the first day of month
   const startDate = new Date(firstDay)
   startDate.setDate(startDate.getDate() - firstDay.getDay())
   
-  // End on the last day of the week of the last day of month
   const endDate = new Date(lastDay)
   endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()))
-  
+
   const days = []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  
   const current = new Date(startDate)
-  
+
   while (current <= endDate) {
-    const dateStr = current.toISOString().split('T')[0]
-    const dayOfWeek = current.getDay()
-    
-    // Filter appointments for this day by comparing UTC dates
-    const dayAppointments = appointmentList.filter(app => {
-      if (!app || !app.scheduled_at) return false
-      // Convert UTC to local and check if it's the same day
-      const localDate = toLocal(app.scheduled_at, 'yyyy-MM-dd')
-      return localDate === dateStr
-    })
-    
-    // Sort appointments by time
-    dayAppointments.sort((a, b) => {
-      return a.scheduled_at.localeCompare(b.scheduled_at)
-    })
-    
+    const localDateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
     const dayDate = new Date(current)
     dayDate.setHours(0, 0, 0, 0)
-    
+
+    // Convert each appointment's UTC time to Manila local date and filter
+    const dayAppointments = appointmentsArray.filter(app => {
+      if (!app?.scheduled_at) return false
+      const appointmentLocalDate = utcToManilaDate(app.scheduled_at)
+      return appointmentLocalDate === localDateStr
+    }).sort((a, b) => {
+      // Sort by Manila local time
+      const timeA = utcToManilaTime(a.scheduled_at)
+      const timeB = utcToManilaTime(b.scheduled_at)
+      return timeA.localeCompare(timeB)
+    })
+
     days.push({
-      date: dateStr,
+      date: localDateStr,
       day: current.getDate(),
       isCurrentMonth: current.getMonth() === month,
       isToday: dayDate.getTime() === today.getTime(),
       isPast: dayDate < today,
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+      isWeekend: current.getDay() === 0 || current.getDay() === 6,
       appointments: dayAppointments
     })
-    
+
     current.setDate(current.getDate() + 1)
   }
+
+  console.log('Generated days:', days.length)
+  console.log('Days with appointments:', days.filter(d => d.appointments.length > 0).length)
   
   return days
 })
 
-// Helper Methods
-function getAppointmentsList() {
-  if (!props.appointments) return []
-  
-  if (props.appointments.data?.appointments) {
-    return props.appointments.data.appointments
-  } else if (props.appointments.data && Array.isArray(props.appointments.data)) {
-    return props.appointments.data
-  } else if (props.appointments.appointments && Array.isArray(props.appointments.appointments)) {
-    return props.appointments.appointments
-  } else if (Array.isArray(props.appointments)) {
-    return props.appointments
-  }
-  
-  return []
-}
-
-function getLimitedAppointments(appointments) {
-  return appointments.slice(0, 3)
-}
-
+// Helper functions
 function getPatientName(appointment) {
-  if (!appointment) return 'Unknown'
-  
-  if (appointment.patient_name) return appointment.patient_name
-  if (appointment.patient?.full_name) return appointment.patient.full_name
-  if (appointment.patient?.first_name || appointment.patient?.last_name) {
-    return `${appointment.patient.last_name || ''}${appointment.patient.last_name && appointment.patient.first_name ? ', ' : ''}${appointment.patient.first_name || ''}`.trim()
-  }
-  
-  return `Patient ${appointment.patient_id || 'Unknown'}`
+  return appointment.patient_name ||
+         appointment.patient?.full_name ||
+         (appointment.patient?.first_name && appointment.patient?.last_name 
+           ? `${appointment.patient.last_name}, ${appointment.patient.first_name}`
+           : appointment.patient?.first_name || appointment.patient?.last_name) ||
+         `Patient ${appointment.patient_id}`
 }
 
 function getAppointmentType(appointment) {
-  if (!appointment) return 'Unknown'
-  
-  if (appointment.type_name) return appointment.type_name
-  if (appointment.appointment_type?.type_name) return appointment.appointment_type.type_name
-  
-  // Try to find in appointment types
-  if (props.appointmentTypes?.data) {
-    const type = props.appointmentTypes.data.find(t => t.id === appointment.appointment_type_id)
-    if (type) return type.type_name
-  }
-  
-  return 'Unknown Type'
+  return appointment.type_name ||
+         appointment.appointment_type?.type_name ||
+         findAppointmentType(appointment.appointment_type_id) ||
+         'Unknown Type'
 }
 
-function getAppointmentClass(appointment) {
-  const status = (appointment.status || 'unknown').toLowerCase()
-  return `appointment-${status}`
+function findAppointmentType(typeId) {
+  const types = props.appointmentTypes?.data || []
+  const type = types.find(t => t.id === typeId)
+  return type?.type_name
+}
+
+function getStatusClass(appointment) {
+  return (appointment.status || 'unknown').toLowerCase()
 }
 
 function getStatusColor(status) {
-  const colors = {
-    'SCHEDULED': 'info',
-    'CONFIRMED': 'success',
-    'IN_PROGRESS': 'warning',
-    'COMPLETED': 'success',
-    'CANCELLED': 'error',
-    'NO_SHOW': 'grey'
-  }
-  return colors[status] || 'grey'
+  return statusColors[status] || 'grey'
 }
 
-function formatTime(dateString) {
-  return toLocal(dateString, 'hh:mm a')
+function formatTime(dateTimeStr) {
+  if (!dateTimeStr) return ''
+  const manilaTime = utcToManilaTime(dateTimeStr)
+  return formatTimeForDisplay(manilaTime)
 }
 
-function formatDate(dateString) {
-  return formatDateForDisplay(dateString, 'EEEE, MMMM d, yyyy')
+function formatDate(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })
 }
 
+// Event handlers
 function showMoreAppointments(day) {
   selectedDay.value = day
   showMoreDialog.value = true
@@ -284,6 +342,16 @@ function showMoreAppointments(day) {
 function handleViewAppointment(appointment) {
   showMoreDialog.value = false
   emit('view-appointment', appointment)
+}
+
+function handleDayClick(day) {
+  if (!day.isPast) {
+    emit('open-create', day.date)
+  }
+}
+
+function handleAddClick(day) {
+  emit('open-create', day.date)
 }
 </script>
 
@@ -327,6 +395,7 @@ function handleViewAppointment(appointment) {
   padding: 8px;
   background: white;
   transition: background-color 0.2s;
+  cursor: pointer;
 }
 
 .calendar-day:nth-child(7n) {
@@ -353,6 +422,7 @@ function handleViewAppointment(appointment) {
 
 .calendar-day-past {
   opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .calendar-day-header {
@@ -377,19 +447,14 @@ function handleViewAppointment(appointment) {
   opacity: 1;
 }
 
+.calendar-day-past .add-appointment-btn {
+  display: none;
+}
+
 .calendar-day-appointments {
   max-height: 80px;
   overflow-y: auto;
   scrollbar-width: thin;
-}
-
-.calendar-day-appointments::-webkit-scrollbar {
-  width: 4px;
-}
-
-.calendar-day-appointments::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
 }
 
 .appointment-badge {
@@ -399,7 +464,7 @@ function handleViewAppointment(appointment) {
   cursor: pointer;
   font-size: 0.7rem;
   border-left: 3px solid transparent;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s;
 }
 
 .appointment-badge:hover {
@@ -431,12 +496,7 @@ function handleViewAppointment(appointment) {
   border-left-color: #9E9E9E;
 }
 
-.appointment-cancelled {
-  background: #FFEBEE;
-  color: #C62828;
-  border-left-color: #F44336;
-}
-
+.appointment-cancelled,
 .appointment-no_show {
   background: #FFEBEE;
   color: #C62828;
@@ -454,16 +514,12 @@ function handleViewAppointment(appointment) {
   font-size: 0.65rem;
 }
 
-.appointment-patient {
+.appointment-patient,
+.appointment-type {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.65rem;
-}
-
-.appointment-type {
-  font-size: 0.6rem;
-  opacity: 0.8;
 }
 
 .cursor-pointer {
