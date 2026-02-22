@@ -26,9 +26,9 @@ app.use('/api/auth', authRoutes);
 // Health check
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'HIV Enrollment & DLT Integrity System API', 
+    message: 'HIV Enrollment System API', 
     status: 'running',
-    version: '1.0.0'
+    version: '3.0.0'
   });
 });
 

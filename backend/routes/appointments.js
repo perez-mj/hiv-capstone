@@ -80,6 +80,114 @@ const generateAppointmentNumber = async () => {
   return `${prefix}${sequence.toString().padStart(4, '0')}`;
 };
 
+// Move these SPECIFIC routes BEFORE the /:id route
+// GET /api/appointments/check-availability - Check availability for a time slot
+router.get('/check-availability', authenticateToken, async (req, res) => {
+  try {
+    const { date, type_id } = req.query;
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+    
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    
+    // Get appointment type duration
+    let duration = 30; // default
+    if (type_id) {
+      const [typeRows] = await pool.execute(
+        'SELECT duration_minutes FROM appointment_types WHERE id = ?',
+        [type_id]
+      );
+      if (typeRows.length > 0) {
+        duration = typeRows[0].duration_minutes;
+      }
+    }
+    
+    // Get appointments for the date - using DATE() function to compare just the date part
+    const [appointments] = await pool.execute(
+      `SELECT 
+        a.scheduled_at,
+        at.duration_minutes
+      FROM appointments a
+      JOIN appointment_types at ON a.appointment_type_id = at.id
+      WHERE DATE(a.scheduled_at) = ?
+      AND a.status NOT IN ('CANCELLED', 'COMPLETED', 'NO_SHOW')
+      ORDER BY a.scheduled_at`,
+      [date]
+    );
+    
+    // Generate time slots (8 AM to 5 PM, 30-min intervals)
+    const slots = [];
+    const startHour = 8;
+    const endHour = 17;
+    
+    // Parse the date parts
+    const [year, month, day] = date.split('-').map(Number);
+    
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        
+        // Create datetime string in MySQL format
+        const slotDateTimeStr = `${date} ${timeStr}:00`;
+        
+        // Check if slot is available
+        let isAvailable = true;
+        
+        for (const apt of appointments) {
+          // Parse appointment time
+          const aptTime = new Date(apt.scheduled_at);
+          if (isNaN(aptTime.getTime())) {
+            console.warn('Invalid appointment time:', apt.scheduled_at);
+            continue;
+          }
+          
+          // Create slot datetime
+          const slotDateTime = new Date(slotDateTimeStr);
+          if (isNaN(slotDateTime.getTime())) {
+            console.warn('Invalid slot datetime:', slotDateTimeStr);
+            continue;
+          }
+          
+          const aptEnd = new Date(aptTime.getTime() + apt.duration_minutes * 60000);
+          const slotEnd = new Date(slotDateTime.getTime() + duration * 60000);
+          
+          // Check for overlap
+          if (slotDateTime < aptEnd && slotEnd > aptTime) {
+            isAvailable = false;
+            break;
+          }
+        }
+        
+        slots.push({
+          time: timeStr,
+          datetime: slotDateTimeStr,
+          available: isAvailable,
+          duration_minutes: duration
+        });
+      }
+    }
+    
+    res.json({
+      date,
+      slots,
+      appointment_count: appointments.length
+    });
+    
+  } catch (err) {
+    console.error('Error checking availability:', err);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: err.message 
+    });
+  }
+});
+
 // ==================== APPOINTMENT TYPES ENDPOINTS ====================
 
 // GET /api/appointments/types - Get all appointment types
@@ -806,17 +914,25 @@ router.post('/', authenticateToken, authorize('ADMIN', 'NURSE'), async (req, res
       return res.status(404).json({ error: 'Appointment type not found or inactive' });
     }
     
+    // FIX: Convert ISO string to MySQL datetime format
+    // Remove the 'Z' and replace with space, MySQL expects 'YYYY-MM-DD HH:MM:SS'
+    const mysqlDateTime = scheduled_at.replace('T', ' ').replace('Z', '');
+    
     // Check for scheduling conflicts (same time slot for same patient)
     const scheduledDateTime = new Date(scheduled_at);
     const conflictStart = new Date(scheduledDateTime.getTime() - 15 * 60000); // 15 minutes before
     const conflictEnd = new Date(scheduledDateTime.getTime() + typeCheck[0].duration_minutes * 60000 + 15 * 60000); // Duration + 15 mins after
+    
+    // Format conflict times for MySQL
+    const conflictStartStr = conflictStart.toISOString().slice(0, 19).replace('T', ' ');
+    const conflictEndStr = conflictEnd.toISOString().slice(0, 19).replace('T', ' ');
     
     const [conflictCheck] = await connection.execute(
       `SELECT id, scheduled_at FROM appointments 
        WHERE patient_id = ? 
        AND status NOT IN ('CANCELLED', 'COMPLETED', 'NO_SHOW')
        AND scheduled_at BETWEEN ? AND ?`,
-      [patient_id, conflictStart.toISOString().slice(0, 19).replace('T', ' '), conflictEnd.toISOString().slice(0, 19).replace('T', ' ')]
+      [patient_id, conflictStartStr, conflictEndStr]
     );
     
     if (conflictCheck.length > 0) {
@@ -829,12 +945,12 @@ router.post('/', authenticateToken, authorize('ADMIN', 'NURSE'), async (req, res
     // Generate appointment number
     const appointmentNumber = await generateAppointmentNumber();
     
-    // Insert appointment
+    // Insert appointment - use the formatted MySQL datetime
     const [result] = await connection.execute(
       `INSERT INTO appointments 
        (appointment_number, patient_id, appointment_type_id, scheduled_at, notes, created_by) 
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [appointmentNumber, patient_id, appointment_type_id, scheduled_at, notes || null, req.user.id]
+      [appointmentNumber, patient_id, appointment_type_id, mysqlDateTime, notes || null, req.user.id]
     );
     
     // Log to audit
@@ -875,7 +991,11 @@ router.post('/', authenticateToken, authorize('ADMIN', 'NURSE'), async (req, res
   } catch (err) {
     await connection.rollback();
     console.error('Error creating appointment:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      message: err.message,
+      sqlMessage: err.sqlMessage // This will help debug SQL errors
+    });
   } finally {
     connection.release();
   }
@@ -1218,88 +1338,6 @@ router.get('/stats/summary', authenticateToken, authorize('ADMIN', 'NURSE'), asy
     
   } catch (err) {
     console.error('Error fetching appointment statistics:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /api/appointments/check-availability - Check availability for a time slot
-router.get('/check-availability', authenticateToken, async (req, res) => {
-  try {
-    const { date, type_id } = req.query;
-    
-    if (!date) {
-      return res.status(400).json({ error: 'Date is required' });
-    }
-    
-    // Get appointment type duration
-    let duration = 30; // default
-    if (type_id) {
-      const [typeRows] = await pool.execute(
-        'SELECT duration_minutes FROM appointment_types WHERE id = ?',
-        [type_id]
-      );
-      if (typeRows.length > 0) {
-        duration = typeRows[0].duration_minutes;
-      }
-    }
-    
-    // Get appointments for the date
-    const [appointments] = await pool.execute(
-      `SELECT 
-        scheduled_at,
-        at.duration_minutes
-      FROM appointments a
-      JOIN appointment_types at ON a.appointment_type_id = at.id
-      WHERE DATE(a.scheduled_at) = ?
-      AND a.status NOT IN ('CANCELLED', 'COMPLETED', 'NO_SHOW')
-      ORDER BY a.scheduled_at`,
-      [date]
-    );
-    
-    // Generate time slots (8 AM to 5 PM, 30-min intervals)
-    const slots = [];
-    const startHour = 8;
-    const endHour = 17;
-    
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-        const slotDateTime = new Date(`${date}T${timeStr}:00`);
-        
-        // Check if slot is available
-        let isAvailable = true;
-        let conflictingAppointment = null;
-        
-        for (const apt of appointments) {
-          const aptTime = new Date(apt.scheduled_at);
-          const aptEnd = new Date(aptTime.getTime() + apt.duration_minutes * 60000);
-          const slotEnd = new Date(slotDateTime.getTime() + duration * 60000);
-          
-          // Check for overlap
-          if (slotDateTime < aptEnd && slotEnd > aptTime) {
-            isAvailable = false;
-            conflictingAppointment = apt;
-            break;
-          }
-        }
-        
-        slots.push({
-          time: timeStr,
-          datetime: slotDateTime.toISOString(),
-          available: isAvailable,
-          duration_minutes: duration
-        });
-      }
-    }
-    
-    res.json({
-      date,
-      slots,
-      appointment_count: appointments.length
-    });
-    
-  } catch (err) {
-    console.error('Error checking availability:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
