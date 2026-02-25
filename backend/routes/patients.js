@@ -24,6 +24,10 @@ router.get('/',
     try {
       const { page, limit, offset } = req.pagination;
       
+      // Convert to integers for LIMIT/OFFSET concatenation
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
+      
       const {
         search,
         hiv_status,
@@ -32,7 +36,8 @@ router.get('/',
         sort_order = 'DESC'
       } = req.query;
 
-      let query = `
+      // Base query
+      let baseQuery = `
         SELECT 
           p.*,
           u.username as user_username,
@@ -47,49 +52,66 @@ router.get('/',
         WHERE 1=1
       `;
       
+      // Count query
+      let countQuery = `
+        SELECT COUNT(*) as total 
+        FROM patients p
+        WHERE 1=1
+      `;
+      
+      const whereConditions = [];
       const queryParams = [];
 
       if (search) {
-        query += ` AND (
+        whereConditions.push(`(
           p.first_name LIKE ? OR 
           p.last_name LIKE ? OR 
           p.middle_name LIKE ? OR 
           p.patient_facility_code LIKE ? OR
           p.contact_number LIKE ?
-        )`;
+        )`);
         const searchPattern = `%${search}%`;
         queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
       }
 
       if (hiv_status) {
-        query += ` AND p.hiv_status = ?`;
+        whereConditions.push(`p.hiv_status = ?`);
         queryParams.push(hiv_status);
       }
 
       if (sex) {
-        query += ` AND p.sex = ?`;
+        whereConditions.push(`p.sex = ?`);
         queryParams.push(sex);
       }
 
+      // Add WHERE conditions to queries
+      if (whereConditions.length > 0) {
+        const whereClause = ' AND ' + whereConditions.join(' AND ');
+        baseQuery += whereClause;
+        countQuery += whereClause;
+      }
+
       // Get total count
-      const countQuery = query.replace(
-        /SELECT.*FROM patients p/,
-        'SELECT COUNT(*) as total FROM patients p'
-      );
-      
-      const [countResult] = await pool.execute(countQuery, queryParams);
+      const [countResult] = queryParams.length > 0 
+        ? await pool.execute(countQuery, queryParams)
+        : await pool.execute(countQuery);
+        
       const total = countResult[0].total;
 
-      // Add sorting and pagination
+      // Add sorting
       const validSortColumns = ['created_at', 'last_name', 'first_name', 'date_of_birth', 'patient_facility_code'];
       const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'created_at';
       const sortDirection = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
       
-      query += ` ORDER BY p.${sortColumn} ${sortDirection} LIMIT ? OFFSET ?`;
-      queryParams.push(limit, offset);
+      // Add ORDER BY, LIMIT, OFFSET with concatenated values (not placeholders)
+      baseQuery += ` ORDER BY p.${sortColumn} ${sortDirection} LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
-      const [patients] = await pool.execute(query, queryParams);
+      // Execute main query
+      const [patients] = queryParams.length > 0
+        ? await pool.execute(baseQuery, queryParams)
+        : await pool.execute(baseQuery);
 
+      // Rest of the code remains the same...
       // Add age and additional stats for each patient
       for (let patient of patients) {
         patient.age = calculateAge(patient.date_of_birth);
@@ -1026,9 +1048,14 @@ router.get('/:id/appointments',
     try {
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
+      
+      // Convert to integers for LIMIT/OFFSET concatenation
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
+      
       const status = req.query.status;
 
-      let query = `
+      let baseQuery = `
         SELECT 
           a.*, 
           at.type_name, 
@@ -1044,27 +1071,28 @@ router.get('/:id/appointments',
         WHERE a.patient_id = ?
       `;
       
+      let countQuery = `
+        SELECT COUNT(*) as total 
+        FROM appointments a
+        WHERE a.patient_id = ?
+      `;
+      
       const params = [patientId];
 
       if (status) {
-        query += ` AND a.status = ?`;
+        baseQuery += ` AND a.status = ?`;
+        countQuery += ` AND a.status = ?`;
         params.push(status);
       }
 
       // Get total count
-      const countQuery = query.replace(
-        /SELECT.*FROM appointments a/,
-        'SELECT COUNT(*) as total FROM appointments a'
-      );
-      
       const [countResult] = await pool.execute(countQuery, params);
       const total = countResult[0].total;
 
-      // Add pagination
-      query += ` ORDER BY a.scheduled_at DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
+      // Add ORDER BY, LIMIT, OFFSET with concatenated values
+      baseQuery += ` ORDER BY a.scheduled_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
-      const [appointments] = await pool.execute(query, params);
+      const [appointments] = await pool.execute(baseQuery, params);
 
       res.json({
         success: true,
@@ -1095,9 +1123,14 @@ router.get('/:id/lab-results',
     try {
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
+      
+      // Convert to integers for LIMIT/OFFSET concatenation
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
+      
       const testType = req.query.test_type;
 
-      let query = `
+      let baseQuery = `
         SELECT 
           lr.*, 
           u.username as performed_by_username,
@@ -1109,27 +1142,28 @@ router.get('/:id/lab-results',
         WHERE lr.patient_id = ?
       `;
       
+      let countQuery = `
+        SELECT COUNT(*) as total 
+        FROM lab_results lr
+        WHERE lr.patient_id = ?
+      `;
+      
       const params = [patientId];
 
       if (testType) {
-        query += ` AND lr.test_type = ?`;
+        baseQuery += ` AND lr.test_type = ?`;
+        countQuery += ` AND lr.test_type = ?`;
         params.push(testType);
       }
 
       // Get total count
-      const countQuery = query.replace(
-        /SELECT.*FROM lab_results lr/,
-        'SELECT COUNT(*) as total FROM lab_results lr'
-      );
-      
       const [countResult] = await pool.execute(countQuery, params);
       const total = countResult[0].total;
 
-      // Add pagination
-      query += ` ORDER BY lr.test_date DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
+      // Add ORDER BY, LIMIT, OFFSET with concatenated values
+      baseQuery += ` ORDER BY lr.test_date DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
-      const [labResults] = await pool.execute(query, params);
+      const [labResults] = await pool.execute(baseQuery, params);
 
       // Group by test type for easier consumption
       const grouped = {};
@@ -1170,9 +1204,14 @@ router.get('/:id/encounters',
     try {
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
+      
+      // Convert to integers for LIMIT/OFFSET concatenation
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
+      
       const type = req.query.type;
 
-      let query = `
+      let baseQuery = `
         SELECT 
           ce.*, 
           s.first_name as staff_first_name, 
@@ -1185,27 +1224,28 @@ router.get('/:id/encounters',
         WHERE ce.patient_id = ?
       `;
       
+      let countQuery = `
+        SELECT COUNT(*) as total 
+        FROM clinical_encounters ce
+        WHERE ce.patient_id = ?
+      `;
+      
       const params = [patientId];
 
       if (type) {
-        query += ` AND ce.type = ?`;
+        baseQuery += ` AND ce.type = ?`;
+        countQuery += ` AND ce.type = ?`;
         params.push(type);
       }
 
       // Get total count
-      const countQuery = query.replace(
-        /SELECT.*FROM clinical_encounters ce/,
-        'SELECT COUNT(*) as total FROM clinical_encounters ce'
-      );
-      
       const [countResult] = await pool.execute(countQuery, params);
       const total = countResult[0].total;
 
-      // Add pagination
-      query += ` ORDER BY ce.encounter_date DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
+      // Add ORDER BY, LIMIT, OFFSET with concatenated values
+      baseQuery += ` ORDER BY ce.encounter_date DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
-      const [encounters] = await pool.execute(query, params);
+      const [encounters] = await pool.execute(baseQuery, params);
 
       res.json({
         success: true,
@@ -1236,6 +1276,10 @@ router.get('/:id/queue-history',
     try {
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
+      
+      // Convert to integers for LIMIT/OFFSET concatenation
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
 
       const [queueHistory] = await pool.execute(
         `SELECT 
@@ -1248,8 +1292,8 @@ router.get('/:id/queue-history',
          LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
          WHERE a.patient_id = ?
          ORDER BY q.created_at DESC
-         LIMIT ? OFFSET ?`,
-        [patientId, limit, offset]
+         LIMIT ${limitNum} OFFSET ${offsetNum}`,
+        [patientId]
       );
 
       // Get total count

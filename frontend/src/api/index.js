@@ -14,24 +14,57 @@ export const authApi = {
   refreshToken: () => http.post('/auth/refresh')
 }
 
-// Patients API
+// Patients API - COMPLETELY ALIGNED WITH YOUR BACKEND ROUTES
 export const patientsApi = {
-  getAll: () => http.get('/patients/list'),
-  getById: (id) => http.get(`/patients/${id}`),
-  create: (data) => http.post('/patients', data),
-  update: (id, data) => http.put(`/patients/${id}`, data),
-  delete: (id) => http.delete(`/patients/${id}`),
-  getStats: () => http.get('/patients/stats'),
-
+  // GET all patients with pagination and filters - matches your /patients route
+  getAll: (params) => http.get('/patients', { params }),
+  
+  // Alias for getAll to maintain compatibility
   getPagination: (params) => http.get('/patients', { params }),
 
+  // GET patient statistics - matches your /patients/stats/overview route
+  getStats: () => http.get('/patients/stats/overview'),
+
+  // SEARCH patients for dropdown - matches your /patients/search/query route
+  search: (query, limit = 10) => http.get('/patients/search/query', { 
+    params: { q: query, limit } 
+  }),
+
+  // GET single patient by ID - matches your /patients/:id route
+  getById: (id) => http.get(`/patients/${id}`),
+
+  // CREATE new patient - matches your POST /patients route
+  create: (data) => http.post('/patients', data),
+
+  // UPDATE patient - matches your PUT /patients/:id route
+  update: (id, data) => http.put(`/patients/${id}`, data),
+
+  // DELETE patient (soft delete) - matches your DELETE /patients/:id route
+  delete: (id) => http.delete(`/patients/${id}`),
+
+  // GET patient summary/dashboard data - matches your /patients/:id/summary route
+  getSummary: (id) => http.get(`/patients/${id}/summary`),
+
+  // GET patient appointments - matches your /patients/:id/appointments route
+  getAppointments: (id, params) => http.get(`/patients/${id}/appointments`, { params }),
+
+  // GET patient lab results - matches your /patients/:id/lab-results route
+  getLabResults: (id, params) => http.get(`/patients/${id}/lab-results`, { params }),
+
+  // GET patient clinical encounters - matches your /patients/:id/encounters route
+  getEncounters: (id, params) => http.get(`/patients/${id}/encounters`, { params }),
+
+  // GET patient queue history - matches your /patients/:id/queue-history route
+  getQueueHistory: (id, params) => http.get(`/patients/${id}/queue-history`, { params }),
+
+  // Export functionality (if you add this route later)
   export: (params) => http.get('/patients/export', {
     params,
     responseType: 'blob'
   })
 }
 
-// Appointments API
+// Appointments API - ALIGNED WITH YOUR BACKEND ROUTES
 export const appointmentsApi = {
   // types
   getTypes: () => http.get('/appointments/types'),
@@ -39,7 +72,7 @@ export const appointmentsApi = {
   updateType: (id, data) => http.put(`/appointments/types/${id}`, data),
   deleteType: (id) => http.delete(`/appointments/types/${id}`),
 
-  // apointments
+  // appointments
   getAll: (params) => http.get('/appointments', { params }),
   getToday: () => http.get('/appointments/today'),
   getUpcoming: (params) => http.get('/appointments/upcoming', { params }),
@@ -56,13 +89,12 @@ export const appointmentsApi = {
   // utility
   checkAvailability: (params) => http.get('/appointments/check-availability', { params }),
 
-  // statistic
+  // statistics
   getStats: (params) => http.get('/appointments/stats/summary', { params })
-};
+}
 
-// Queue API
+// Queue API - ALIGNED WITH YOUR BACKEND ROUTES
 export const queueApi = {
-
   getCurrent: () => http.get('/queue/current'),
   getPosition: (queueNumber) => http.get(`/queue/position/${queueNumber}`),
   getPatientQueue: (patientId) => http.get(`/queue/patient/${patientId}`),
@@ -74,7 +106,7 @@ export const queueApi = {
   reorderQueue: (data) => http.post('/queue/reorder', data),
   getHistory: (params) => http.get('/queue/history', { params }),
 
-  // statistic
+  // statistics
   getDailyStats: (params) => http.get('/queue/stats/daily', { params }),
   getPeakHoursStats: () => http.get('/queue/stats/peak-hours'),
 
@@ -82,9 +114,9 @@ export const queueApi = {
   resetQueue: (params) => http.delete('/queue/reset', { params }),
   getSummary: () => http.get('/queue/current/summary'),
   checkAppointmentInQueue: (appointmentId) => http.get(`/queue/check-appointment/${appointmentId}`)
-};
+}
 
-// Audit API
+// Audit API - ALIGNED WITH YOUR BACKEND ROUTES
 export const auditApi = {
   getLogs: (params) => http.get('/audit/logs', { params }),
   getStats: () => http.get('/audit/stats'),
@@ -94,7 +126,6 @@ export const auditApi = {
 // Users API (Admin/Staff/Patient Account Management)
 export const usersApi = {
   getAll: () => http.get('/users'),
-
   getById: (id) => http.get(`/users/${id}`),
   create: (data) => http.post('/users', data),
   update: (id, data) => http.put(`/users/${id}`, data),
@@ -104,8 +135,7 @@ export const usersApi = {
   getStats: () => http.get('/users/stats')
 }
 
-
-// Lab Results API
+// Lab Results API - ALIGNED WITH YOUR BACKEND ROUTES
 export const labResultsApi = {
   getAll: (params) => http.get('/lab-results', { params }),
   create: (data) => http.post('/lab-results', data),
@@ -116,12 +146,10 @@ export const labResultsApi = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-
   getTrends: (patientId) => http.get(`/lab-results/trends/${patientId}`)
 }
 
-
-// Kiosk API - Public endpoints (no authentication required)
+// Kiosk API - ALIGNED WITH YOUR BACKEND ROUTES
 export const kioskApi = {
   // Public: Check device status and auto-register if needed
   checkStatus: (deviceId) => http.get(`/kiosk/status/${deviceId}`),
@@ -145,8 +173,7 @@ export const kioskApi = {
   
   // Admin: Delete/remove a device
   deleteDevice: (deviceId) => http.delete(`/kiosk/admin/devices/${deviceId}`)
-};
-
+}
 
 // Dashboard API
 export const dashboardApi = {
@@ -166,6 +193,6 @@ export default {
   audit: auditApi,
   users: usersApi,
   labResults: labResultsApi,
-   kiosk: kioskApi,
+  kiosk: kioskApi,
   dashboard: dashboardApi
 }
