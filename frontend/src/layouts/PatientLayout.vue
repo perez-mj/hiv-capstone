@@ -508,7 +508,7 @@ const unreadCount = computed(() => {
   return notifications.value.filter(n => !n.read).length
 })
 
-// Navigation items
+// UPDATED: Navigation items - changed Test Results to History, Prescriptions to My Profile
 const navItems = ref([
   {
     title: 'Dashboard',
@@ -521,14 +521,14 @@ const navItems = ref([
     icon: 'mdi-calendar'
   },
   {
-    title: 'Test Results',
-    route: '/patient/lab-results',
-    icon: 'mdi-flask'
+    title: 'History',  // CHANGED: from 'Test Results'
+    route: '/patient/history',  // CHANGED: from '/patient/lab-results'
+    icon: 'mdi-history'  // CHANGED: from 'mdi-flask'
   },
   {
-    title: 'Prescriptions',
-    route: '/patient/prescriptions',
-    icon: 'mdi-pill'
+    title: 'My Profile',  // CHANGED: from 'Prescriptions'
+    route: '/patient/profile',  // CHANGED: from '/patient/prescriptions'
+    icon: 'mdi-account'  // CHANGED: from 'mdi-pill'
   }
 ])
 

@@ -246,9 +246,9 @@
               <v-col cols="12">
                 <v-select
                   v-model="newAppointment.appointment_type_id"
-                  :items="appointmentTypes"
-                  item-title="type_name"
-                  item-value="id"
+                  :items="appointmentTypeOptions"
+                  item-title="label"
+                  item-value="value"
                   label="Appointment Type"
                   variant="outlined"
                   :rules="[v => !!v || 'Appointment type is required']"
@@ -345,7 +345,7 @@
         <v-card-actions>
           <v-spacer />
           <v-btn 
-            v-if="selectedAppointment?.status === 'SCHEDULED'"
+            v-if="selectedAppointment?.status === 'SCHEDULED' || selectedAppointment?.status === 'CONFIRMED'"
             color="error" 
             variant="outlined"
             @click="cancelFromDetails"
@@ -369,7 +369,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { appointmentsApi, queueApi } from '@/api'
+import { patientApi, appointmentsApi, queueApi } from '@/api'
 
 // State
 const loading = ref(false)
@@ -421,6 +421,14 @@ const sortOptions = [
   { title: 'Status', value: 'status' }
 ]
 
+// APPOINTMENT TYPE OPTIONS - UPDATED with Testing, Consultation, Refill, Others
+const appointmentTypeOptions = [
+  { label: 'Testing', value: 1 },
+  { label: 'Consultation', value: 2 },
+  { label: 'Refill', value: 3 },
+  { label: 'Others', value: 4 }
+]
+
 // Computed
 const minDate = computed(() => {
   return new Date().toISOString().split('T')[0]
@@ -459,7 +467,7 @@ const hasActiveFilters = computed(() => {
 const estimatedWaitTime = computed(() => {
   if (!selectedAppointment.value?.queue_number || !queueInfo.value.now_serving) return 0
   const position = selectedAppointment.value.queue_number - queueInfo.value.now_serving
-  return Math.max(0, position * 15) // Assume 15 minutes per patient
+  return Math.max(0, position * 15)
 })
 
 // Methods
@@ -514,7 +522,6 @@ const canCancelAppointment = (appointment) => {
   const cancellableStatuses = ['SCHEDULED', 'CONFIRMED']
   if (!cancellableStatuses.includes(appointment.status)) return false
   
-  // Can't cancel if it's today and within 2 hours
   if (isToday(appointment.scheduled_at)) {
     const appointmentTime = new Date(appointment.scheduled_at).getTime()
     const now = new Date().getTime()
@@ -543,11 +550,14 @@ const sortAppointments = (appointments, sortKey) => {
 async function loadAppointments() {
   loading.value = true
   try {
-    const response = await appointmentsApi.getPatientHistory('me')
-    appointments.value = response.appointments || []
+    const response = await patientApi.getAppointments()
+    console.log('Appointments loaded:', response.data)
+    
+    appointments.value = response.data?.data || response.data || []
   } catch (error) {
     console.error('Error loading appointments:', error)
     showSnackbar('Error loading appointments', 'error')
+    appointments.value = []
   } finally {
     loading.value = false
   }
@@ -556,22 +566,44 @@ async function loadAppointments() {
 async function loadAppointmentTypes() {
   try {
     const response = await appointmentsApi.getTypes()
-    appointmentTypes.value = response || []
+    console.log('Appointment types loaded:', response.data)
+    
+    // Use the predefined options instead of API response
+    // This ensures we always have Testing, Consultation, Refill, Others
+    appointmentTypes.value = appointmentTypeOptions
+    
+    // Optional: You can still map API IDs to our options if needed
+    // const apiTypes = response.data?.data || response.data || []
+    // appointmentTypes.value = appointmentTypeOptions.map(opt => {
+    //   const match = apiTypes.find(t => t.type_name === opt.label)
+    //   return { ...opt, value: match?.id || opt.value }
+    // })
+    
   } catch (error) {
     console.error('Error loading appointment types:', error)
+    // Fallback to our predefined options
+    appointmentTypes.value = appointmentTypeOptions
   }
 }
 
 async function loadQueueInfo() {
   try {
     const response = await queueApi.getCurrent()
-    queueInfo.value = response || {
+    console.log('Queue info loaded:', response.data)
+    
+    const data = response.data?.data || response.data || {}
+    queueInfo.value = {
+      now_serving: data.now_serving || null,
+      waiting_count: data.waiting_count || 0,
+      estimated_wait_time: data.estimated_wait_time || 0
+    }
+  } catch (error) {
+    console.error('Error loading queue info:', error)
+    queueInfo.value = {
       now_serving: null,
       waiting_count: 0,
       estimated_wait_time: 0
     }
-  } catch (error) {
-    console.error('Error loading queue info:', error)
   }
 }
 
@@ -587,12 +619,16 @@ async function checkAvailability() {
       type_id: newAppointment.value.appointment_type_id
     })
     
-    availableTimeSlots.value = response.slots
-      .filter(slot => slot.available)
-      .map(slot => slot.time)
+    console.log('Availability response:', response.data)
+    
+    const data = response.data?.data || response.data || {}
+    availableTimeSlots.value = data.slots
+      ?.filter(slot => slot.available)
+      .map(slot => slot.time) || []
   } catch (error) {
     console.error('Error checking availability:', error)
     showSnackbar('Failed to check availability', 'error')
+    availableTimeSlots.value = []
   } finally {
     checkingAvailability.value = false
   }
@@ -615,10 +651,16 @@ async function bookAppointment() {
       notes: newAppointment.value.notes || null
     }
 
-    await appointmentsApi.create(appointmentData)
-    closeBookingDialog()
-    await loadAppointments()
-    showSnackbar('Appointment booked successfully', 'success')
+    const response = await patientApi.bookAppointment(appointmentData)
+    console.log('Booking response:', response.data)
+    
+    if (response.data?.success) {
+      closeBookingDialog()
+      await loadAppointments()
+      showSnackbar('Appointment booked successfully', 'success')
+    } else {
+      showSnackbar(response.data?.error || 'Error booking appointment', 'error')
+    }
   } catch (error) {
     console.error('Error booking appointment:', error)
     showSnackbar(error.response?.data?.error || 'Error booking appointment', 'error')
@@ -630,7 +672,9 @@ async function bookAppointment() {
 async function viewAppointmentDetails(id) {
   try {
     const response = await appointmentsApi.getById(id)
-    selectedAppointment.value = response
+    console.log('Appointment details:', response.data)
+    
+    selectedAppointment.value = response.data?.data || response.data
     showDetailsDialog.value = true
   } catch (error) {
     console.error('Error loading appointment details:', error)
@@ -643,10 +687,16 @@ async function cancelAppointment(appointment) {
 
   cancellingId.value = appointment.id
   try {
-    await appointmentsApi.updateStatus(appointment.id, 'CANCELLED')
-    await loadAppointments()
-    await loadQueueInfo()
-    showSnackbar('Appointment cancelled successfully', 'success')
+    const response = await patientApi.cancelAppointment(appointment.id)
+    console.log('Cancel response:', response.data)
+    
+    if (response.data?.success) {
+      await loadAppointments()
+      await loadQueueInfo()
+      showSnackbar('Appointment cancelled successfully', 'success')
+    } else {
+      showSnackbar(response.data?.error || 'Error cancelling appointment', 'error')
+    }
   } catch (error) {
     console.error('Error cancelling appointment:', error)
     showSnackbar('Error cancelling appointment', 'error')
@@ -660,11 +710,17 @@ async function cancelFromDetails() {
   
   cancellingAppointment.value = true
   try {
-    await appointmentsApi.updateStatus(selectedAppointment.value.id, 'CANCELLED')
-    showDetailsDialog.value = false
-    await loadAppointments()
-    await loadQueueInfo()
-    showSnackbar('Appointment cancelled successfully', 'success')
+    const response = await patientApi.cancelAppointment(selectedAppointment.value.id)
+    console.log('Cancel from details response:', response.data)
+    
+    if (response.data?.success) {
+      showDetailsDialog.value = false
+      await loadAppointments()
+      await loadQueueInfo()
+      showSnackbar('Appointment cancelled successfully', 'success')
+    } else {
+      showSnackbar(response.data?.error || 'Error cancelling appointment', 'error')
+    }
   } catch (error) {
     console.error('Error cancelling appointment:', error)
     showSnackbar('Error cancelling appointment', 'error')
@@ -699,7 +755,7 @@ function showSnackbar(message, color = 'success') {
 
 // Lifecycle
 onMounted(async () => {
-  await Promise.all([
+  await Promise.allSettled([
     loadAppointments(),
     loadAppointmentTypes(),
     loadQueueInfo()

@@ -58,9 +58,10 @@ const generatePatientCode = async (pool) => {
 };
 
 /**
- * Generate unique appointment number
+ * Generate unique appointment number (VERSION 1 - with APT prefix)
+ * Used by: appointments.js - POST / (staff creates appointment)
  */
-const generateAppointmentNumber = async (pool) => {
+const generateAppointmentNumberWithPrefix = async (pool) => {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -76,6 +77,45 @@ const generateAppointmentNumber = async (pool) => {
   
   const sequence = (rows[0].count + 1).toString().padStart(4, '0');
   return `${prefix}${sequence}`;
+};
+
+/**
+ * Generate unique appointment number (VERSION 2 - with YYMMDD-XXXX format)
+ * Used by: appointments.js - POST /patient/me/book (patient self-booking)
+ */
+const generateAppointmentNumberWithDash = async (pool) => {
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const datePrefix = `${year}${month}${day}`;
+  
+  const [lastAppointment] = await pool.execute(
+    `SELECT appointment_number FROM appointments 
+     WHERE appointment_number LIKE ? 
+     ORDER BY id DESC LIMIT 1`,
+    [`${datePrefix}%`]
+  );
+
+  let sequence = 1;
+  if (lastAppointment.length > 0) {
+    const lastSeq = parseInt(lastAppointment[0].appointment_number.split('-')[1]);
+    sequence = lastSeq + 1;
+  }
+  
+  return `${datePrefix}-${String(sequence).padStart(4, '0')}`;
+};
+
+/**
+ * Generate appointment number (auto-detects which format to use)
+ * This is the main function to use - it will check the table structure
+ */
+const generateAppointmentNumber = async (pool, format = 'dash') => {
+  if (format === 'prefix') {
+    return await generateAppointmentNumberWithPrefix(pool);
+  } else {
+    return await generateAppointmentNumberWithDash(pool);
+  }
 };
 
 /**
@@ -121,6 +161,15 @@ const formatDate = (date, format = 'YYYY-MM-DD') => {
     default:
       return `${year}-${month}-${day}`;
   }
+};
+
+/**
+ * Format date for SQL (YYYY-MM-DD)
+ */
+const formatDateForSQL = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
 };
 
 /**
@@ -171,6 +220,21 @@ const paginate = (data, page = 1, limit = 10) => {
   results.total_pages = Math.ceil(data.length / limit);
   
   return results;
+};
+
+/**
+ * Build SQL pagination
+ */
+const buildPagination = (page = 1, limit = 10) => {
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+  
+  return {
+    page: pageNum,
+    limit: limitNum,
+    offset
+  };
 };
 
 /**
@@ -330,24 +394,96 @@ const getEnv = (key, defaultValue = null) => {
   return process.env[key] || defaultValue;
 };
 
+/**
+ * Parse date range from query
+ */
+const parseDateRange = (startDate, endDate) => {
+  const range = {};
+  
+  if (startDate) {
+    range.start_date = new Date(startDate);
+  }
+  
+  if (endDate) {
+    range.end_date = new Date(endDate);
+  }
+  
+  return range;
+};
+
+/**
+ * Check if a value is empty (null, undefined, empty string, empty array, empty object)
+ */
+const isEmpty = (value) => {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+};
+
+/**
+ * Generate random string
+ */
+const generateRandomString = (length = 10) => {
+  return crypto.randomBytes(length).toString('hex').slice(0, length);
+};
+
+/**
+ * Extract token from authorization header
+ */
+const extractToken = (authHeader) => {
+  if (!authHeader) return null;
+  
+  const parts = authHeader.split(' ');
+  if (parts.length === 2 && parts[0] === 'Bearer') {
+    return parts[1];
+  }
+  
+  return null;
+};
+
 module.exports = {
+  // Password functions
   hashPassword,
   comparePassword,
   generateRandomPassword,
+  
+  // Code generation functions
   generatePatientCode,
-  generateAppointmentNumber,
+  generateAppointmentNumber, // Main function - uses dash format by default
+  generateAppointmentNumberWithPrefix, // For APT prefix format
+  generateAppointmentNumberWithDash, // For YYMMDD-XXXX format
   generateQueueNumber,
+  generateRandomString,
+  
+  // Date functions
   formatDate,
+  formatDateForSQL,
   calculateAge,
+  parseDateRange,
+  
+  // Pagination functions
   paginate,
+  buildPagination,
+  
+  // Query functions
   buildWhereClause,
-  parseCSV,
-  maskSensitiveData,
+  
+  // Validation functions
   isValidEmail,
   isValidPhone,
+  isEmpty,
+  
+  // Data functions
+  maskSensitiveData,
+  deepClone,
+  groupBy,
+  parseCSV,
+  
+  // Utility functions
   sleep,
   retryWithBackoff,
-  groupBy,
-  deepClone,
-  getEnv
+  getEnv,
+  extractToken
 };

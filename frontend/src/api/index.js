@@ -2,6 +2,37 @@
 import http from './http'
 
 // ==========================================================================================================
+// PATIENT API - ADD THIS SECTION (for patient portal)
+// ==========================================================================================================
+export const patientApi = {
+  // Dashboard - get patient's own data
+  getDashboard: () => http.get('/patients/me/dashboard'),
+  
+  // Profile - get/update patient's own profile
+  getProfile: () => http.get('/patients/me'),
+  updateProfile: (data) => http.put('/patients/me', data),
+  
+  // Appointments - patient's own appointments
+  getAppointments: (params) => http.get('/appointments/patient/me/history', { params }),
+  getUpcomingAppointments: () => http.get('/appointments/patient/me/upcoming'),
+  getNextAppointment: () => http.get('/appointments/patient/me/next'),
+  bookAppointment: (data) => http.post('/appointments/patient/me/book', data),
+  cancelAppointment: (id) => http.delete(`/appointments/patient/me/cancel/${id}`),
+  
+  // Lab Results - patient's own lab results
+  getLabResults: (params) => http.get('/lab-results/patient/me', { params }),
+  
+  // Queue - patient's queue position
+  getQueuePosition: () => http.get('/queue/patient/me'),
+  
+  // Statistics - patient's own stats
+  getStats: () => http.get('/patients/me/stats'),
+  
+  // Clinical Encounters - patient's own encounters
+  getEncounters: (params) => http.get('/clinical-encounters/patient/me', { params })
+}
+
+// ==========================================================================================================
 // ADMIN APIs (Updated for new schema)
 // ==========================================================================================================
 
@@ -187,6 +218,7 @@ export const dashboardApi = {
 
 export default {
   auth: authApi,
+  patient: patientApi, // ADD THIS
   patients: patientsApi,
   appointments: appointmentsApi,
   queue: queueApi,

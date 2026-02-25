@@ -289,7 +289,661 @@ router.delete('/types/:id',
     }
 });
 
-// ==================== APPOINTMENTS ROUTES ====================
+// ==================== CHECK AVAILABILITY ROUTE ====================
+// ADD THIS ROUTE - for checking available time slots
+
+/**
+ * GET /api/appointments/check-availability
+ * Check available time slots for a specific date and appointment type
+ */
+router.get('/check-availability', authenticateToken, async (req, res) => {
+  try {
+    const { date, type_id } = req.query;
+    
+    console.log('Checking availability for:', { date, type_id });
+    
+    if (!date || !type_id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Date and appointment type are required' 
+      });
+    }
+
+    // Get appointment type duration
+    const [typeResult] = await pool.execute(
+      'SELECT duration_minutes FROM appointment_types WHERE id = ?',
+      [type_id]
+    );
+
+    if (typeResult.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Appointment type not found' 
+      });
+    }
+
+    const duration = typeResult[0].duration_minutes || 30;
+
+    // Generate time slots (8:00 AM to 5:00 PM)
+    const slots = [];
+    const startHour = 8; // 8 AM
+    const endHour = 17; // 5 PM
+    
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let minute of [0, 30]) { // Every 30 minutes
+        // Skip 12:30 PM - 1:00 PM (lunch break)
+        if (hour === 12 && minute === 30) continue;
+        if (hour === 13 && minute === 0) continue;
+        
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        
+        // Check if slot is already booked
+        const [booked] = await pool.execute(
+          `SELECT COUNT(*) as count FROM appointments 
+           WHERE DATE(scheduled_at) = ? 
+           AND HOUR(scheduled_at) = ? 
+           AND MINUTE(scheduled_at) = ?
+           AND status NOT IN ('CANCELLED', 'NO_SHOW')`,
+          [date, hour, minute]
+        );
+
+        // Max 3 appointments per time slot (adjust based on your clinic capacity)
+        const maxPerSlot = 3;
+        const isAvailable = booked[0].count < maxPerSlot;
+        const bookedCount = booked[0].count;
+
+        slots.push({
+          time: timeString,
+          available: isAvailable,
+          bookedCount: bookedCount,
+          maxCapacity: maxPerSlot,
+          display: `${timeString} (${isAvailable ? `${maxPerSlot - bookedCount} slots available` : 'Fully Booked'})`
+        });
+      }
+    }
+
+    // Also check for already booked slots by this patient on this day
+    let patientId = null;
+    if (req.user.role === 'PATIENT') {
+      const [patient] = await pool.execute(
+        'SELECT id FROM patients WHERE user_id = ?',
+        [req.user.id]
+      );
+      if (patient.length > 0) {
+        patientId = patient[0].id;
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      data: {
+        date,
+        type_id,
+        type_name: typeResult[0].type_name,
+        duration,
+        slots: slots,
+        patientHasBooking: patientId ? await checkPatientBooking(pool, patientId, date) : false
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking availability:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check availability',
+      details: error.message 
+    });
+  }
+});
+
+// Helper function to check if patient already has a booking on this date
+async function checkPatientBooking(pool, patientId, date) {
+  const [result] = await pool.execute(
+    `SELECT COUNT(*) as count FROM appointments 
+     WHERE patient_id = ? 
+     AND DATE(scheduled_at) = ?
+     AND status NOT IN ('CANCELLED', 'NO_SHOW')`,
+    [patientId, date]
+  );
+  return result[0].count > 0;
+}
+
+// ==================== PATIENT SPECIFIC ROUTES ====================
+
+/**
+ * GET /api/appointments/patient/me/history
+ * Get appointment history for the currently logged-in patient
+ */
+router.get('/patient/me/history', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching appointment history for patient user:', req.user.id);
+
+    // Only PATIENT role can access this
+    if (req.user.role !== 'PATIENT') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. Patient access only.' 
+      });
+    }
+
+    // Get patient_id from users table
+    const [patients] = await pool.execute(
+      'SELECT id, patient_facility_code, first_name, last_name FROM patients WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    if (patients.length === 0) {
+      console.log('No patient record found for user:', req.user.id);
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No patient record found'
+      });
+    }
+
+    const patientId = patients[0].id;
+    console.log('Patient ID found:', patientId);
+
+    // Get all appointments for this patient
+    const [appointments] = await pool.execute(
+      `SELECT 
+        a.id,
+        a.appointment_number,
+        a.scheduled_at,
+        a.status,
+        a.notes,
+        a.created_at,
+        at.id as appointment_type_id,
+        at.type_name,
+        at.duration_minutes,
+        at.description as type_description,
+        q.id as queue_id,
+        q.queue_number,
+        q.status as queue_status,
+        q.called_at,
+        q.served_at,
+        q.completed_at,
+        DATEDIFF(a.scheduled_at, CURDATE()) as days_from_now
+      FROM appointments a
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN queue q ON a.id = q.appointment_id
+      WHERE a.patient_id = ?
+      ORDER BY 
+        CASE 
+          WHEN a.status IN ('SCHEDULED', 'CONFIRMED') THEN 1
+          WHEN a.status = 'IN_PROGRESS' THEN 2
+          WHEN a.status = 'COMPLETED' THEN 3
+          ELSE 4
+        END,
+        a.scheduled_at DESC`,
+      [patientId]
+    );
+
+    console.log(`Found ${appointments.length} appointments for patient`);
+
+    // Separate into upcoming and past
+    const now = new Date();
+    const upcoming = appointments.filter(a => {
+      const scheduled = new Date(a.scheduled_at);
+      return scheduled >= now && ['SCHEDULED', 'CONFIRMED'].includes(a.status);
+    });
+
+    const past = appointments.filter(a => {
+      const scheduled = new Date(a.scheduled_at);
+      return scheduled < now || ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(a.status);
+    });
+
+    res.json({
+      success: true,
+      data: appointments,
+      summary: {
+        total: appointments.length,
+        upcoming: upcoming.length,
+        past: past.length,
+        patient_info: {
+          id: patients[0].id,
+          facility_code: patients[0].patient_facility_code,
+          name: `${patients[0].first_name} ${patients[0].last_name}`
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching patient appointment history:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch appointment history' 
+    });
+  }
+});
+
+/**
+ * GET /api/appointments/patient/me/upcoming
+ * Get upcoming appointments for the currently logged-in patient
+ */
+router.get('/patient/me/upcoming', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching upcoming appointments for patient user:', req.user.id);
+
+    if (req.user.role !== 'PATIENT') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. Patient access only.' 
+      });
+    }
+
+    const [patients] = await pool.execute(
+      'SELECT id FROM patients WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    if (patients.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    const patientId = patients[0].id;
+
+    const [appointments] = await pool.execute(
+      `SELECT 
+        a.id,
+        a.appointment_number,
+        a.scheduled_at,
+        a.status,
+        a.notes,
+        at.type_name,
+        at.duration_minutes,
+        q.queue_number,
+        q.status as queue_status,
+        TIMESTAMPDIFF(HOUR, NOW(), a.scheduled_at) as hours_until
+      FROM appointments a
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN queue q ON a.id = q.appointment_id
+      WHERE a.patient_id = ? 
+        AND a.scheduled_at >= NOW() 
+        AND a.status IN ('SCHEDULED', 'CONFIRMED')
+      ORDER BY a.scheduled_at ASC
+      LIMIT 10`,
+      [patientId]
+    );
+
+    res.json({
+      success: true,
+      data: appointments,
+      count: appointments.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching upcoming appointments:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch upcoming appointments' 
+    });
+  }
+});
+
+/**
+ * POST /api/appointments/patient/me/book
+ * Book a new appointment for the currently logged-in patient
+ */
+router.post('/patient/me/book', 
+  authenticateToken,
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+
+      console.log('Patient booking appointment:', req.body);
+
+      if (req.user.role !== 'PATIENT') {
+        await connection.rollback();
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied. Patient access only.' 
+        });
+      }
+
+      // Get patient_id
+      const [patients] = await connection.execute(
+        'SELECT id FROM patients WHERE user_id = ?',
+        [req.user.id]
+      );
+
+      if (patients.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Patient record not found' 
+        });
+      }
+
+      const patientId = patients[0].id;
+      const { appointment_type_id, scheduled_at, notes } = req.body;
+
+      // Validate required fields
+      if (!appointment_type_id || !scheduled_at) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'Appointment type and scheduled date are required'
+        });
+      }
+
+      // Check if appointment type exists
+      const [appType] = await connection.execute(
+        'SELECT * FROM appointment_types WHERE id = ? AND is_active = 1',
+        [appointment_type_id]
+      );
+
+      if (appType.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Appointment type not found' 
+        });
+      }
+
+      // Check for conflicting appointments
+      const scheduledDate = new Date(scheduled_at);
+      const startOfDay = new Date(scheduledDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(scheduledDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const [conflicts] = await connection.execute(
+        `SELECT id FROM appointments 
+         WHERE patient_id = ? 
+           AND scheduled_at BETWEEN ? AND ?
+           AND status NOT IN ('CANCELLED', 'COMPLETED', 'NO_SHOW')`,
+        [patientId, startOfDay, endOfDay]
+      );
+
+      if (conflicts.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({ 
+          success: false,
+          error: 'You already have an appointment scheduled on this day' 
+        });
+      }
+
+      // Check if the specific time slot is still available
+      const appointmentHour = scheduledDate.getHours();
+      const appointmentMinute = scheduledDate.getMinutes();
+      
+      const [slotBooked] = await connection.execute(
+        `SELECT COUNT(*) as count FROM appointments 
+         WHERE DATE(scheduled_at) = ? 
+         AND HOUR(scheduled_at) = ? 
+         AND MINUTE(scheduled_at) = ?
+         AND status NOT IN ('CANCELLED', 'NO_SHOW')`,
+        [scheduled_at.split('T')[0], appointmentHour, appointmentMinute]
+      );
+
+      const maxPerSlot = 3;
+      if (slotBooked[0].count >= maxPerSlot) {
+        await connection.rollback();
+        return res.status(400).json({ 
+          success: false,
+          error: 'This time slot is already fully booked. Please choose another time.' 
+        });
+      }
+
+      // Generate appointment number
+      const date = new Date();
+      const year = date.getFullYear().toString().slice(-2);
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const datePrefix = `${year}${month}${day}`;
+      
+      const [lastAppointment] = await connection.execute(
+        `SELECT appointment_number FROM appointments 
+         WHERE appointment_number LIKE ? 
+         ORDER BY id DESC LIMIT 1`,
+        [`${datePrefix}%`]
+      );
+
+      let sequence = 1;
+      if (lastAppointment.length > 0) {
+        const lastSeq = parseInt(lastAppointment[0].appointment_number.split('-')[1]);
+        sequence = lastSeq + 1;
+      }
+      
+      const appointmentNumber = `${datePrefix}-${String(sequence).padStart(4, '0')}`;
+
+      // Create appointment
+      const [result] = await connection.execute(
+        `INSERT INTO appointments (
+          appointment_number, patient_id, appointment_type_id, 
+          scheduled_at, notes, status, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'SCHEDULED', ?, NOW(), NOW())`,
+        [
+          appointmentNumber,
+          patientId,
+          appointment_type_id,
+          scheduled_at,
+          notes || null,
+          req.user.id
+        ]
+      );
+
+      const appointmentId = result.insertId;
+
+      // Create queue entry
+      await connection.execute(
+        `INSERT INTO queue (appointment_id, queue_number, status, created_at)
+         SELECT ?, COALESCE(MAX(queue_number), 0) + 1, 'WAITING', NOW()
+         FROM queue WHERE DATE(created_at) = CURDATE()`,
+        [appointmentId]
+      );
+
+      // Get created appointment
+      const [newAppointment] = await connection.execute(
+        `SELECT a.*, at.type_name, at.duration_minutes, q.queue_number
+         FROM appointments a
+         LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+         LEFT JOIN queue q ON a.id = q.appointment_id
+         WHERE a.id = ?`,
+        [appointmentId]
+      );
+
+      // Log audit
+      await logAudit(
+        req.user.id,
+        'INSERT',
+        'appointments',
+        appointmentId,
+        patientId,
+        null,
+        newAppointment[0],
+        `Patient booked appointment: ${appointmentNumber}`,
+        req
+      );
+
+      await connection.commit();
+
+      res.status(201).json({
+        success: true,
+        message: 'Appointment booked successfully',
+        data: newAppointment[0]
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error booking appointment:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to book appointment' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+/**
+ * GET /api/appointments/patient/me/next
+ * Get next upcoming appointment for the currently logged-in patient
+ */
+router.get('/patient/me/next', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'PATIENT') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. Patient access only.' 
+      });
+    }
+
+    const [patients] = await pool.execute(
+      'SELECT id FROM patients WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    if (patients.length === 0) {
+      return res.json({
+        success: true,
+        data: null
+      });
+    }
+
+    const patientId = patients[0].id;
+
+    const [appointments] = await pool.execute(
+      `SELECT 
+        a.id,
+        a.appointment_number,
+        a.scheduled_at,
+        a.status,
+        at.type_name,
+        at.duration_minutes,
+        q.queue_number,
+        q.status as queue_status,
+        TIMESTAMPDIFF(MINUTE, NOW(), a.scheduled_at) as minutes_until
+      FROM appointments a
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN queue q ON a.id = q.appointment_id
+      WHERE a.patient_id = ? 
+        AND a.scheduled_at >= NOW() 
+        AND a.status IN ('SCHEDULED', 'CONFIRMED')
+      ORDER BY a.scheduled_at ASC
+      LIMIT 1`,
+      [patientId]
+    );
+
+    res.json({
+      success: true,
+      data: appointments[0] || null
+    });
+
+  } catch (error) {
+    console.error('Error fetching next appointment:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch next appointment' 
+    });
+  }
+});
+
+/**
+ * DELETE /api/appointments/patient/me/cancel/:id
+ * Cancel an appointment for the currently logged-in patient
+ */
+router.delete('/patient/me/cancel/:id', 
+  authenticateToken,
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+
+      if (req.user.role !== 'PATIENT') {
+        await connection.rollback();
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied. Patient access only.' 
+        });
+      }
+
+      // Get patient_id
+      const [patients] = await connection.execute(
+        'SELECT id FROM patients WHERE user_id = ?',
+        [req.user.id]
+      );
+
+      if (patients.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Patient record not found' 
+        });
+      }
+
+      const patientId = patients[0].id;
+      const appointmentId = req.params.id;
+
+      // Check if appointment belongs to patient and can be cancelled
+      const [appointment] = await connection.execute(
+        `SELECT * FROM appointments 
+         WHERE id = ? AND patient_id = ? AND status IN ('SCHEDULED', 'CONFIRMED')`,
+        [appointmentId, patientId]
+      );
+
+      if (appointment.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Appointment not found or cannot be cancelled' 
+        });
+      }
+
+      // Update appointment status
+      await connection.execute(
+        `UPDATE appointments SET status = 'CANCELLED', updated_by = ?, updated_at = NOW() 
+         WHERE id = ?`,
+        [req.user.id, appointmentId]
+      );
+
+      // Update queue if exists
+      await connection.execute(
+        `UPDATE queue SET status = 'SKIPPED', updated_at = NOW() 
+         WHERE appointment_id = ?`,
+        [appointmentId]
+      );
+
+      // Log audit
+      await logAudit(
+        req.user.id,
+        'CANCEL',
+        'appointments',
+        appointmentId,
+        patientId,
+        { status: appointment[0].status },
+        { status: 'CANCELLED' },
+        `Patient cancelled appointment: ${appointment[0].appointment_number}`,
+        req
+      );
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'Appointment cancelled successfully'
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error cancelling appointment:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to cancel appointment' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+// ==================== REGULAR APPOINTMENTS ROUTES ====================
 
 // GET all appointments with filters
 router.get('/', 
@@ -729,7 +1383,7 @@ router.get('/:id',
     }
 });
 
-// CREATE new appointment
+// CREATE new appointment (for staff/admin)
 router.post('/', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
@@ -1216,29 +1870,15 @@ router.delete('/:id',
     }
 });
 
-// GET appointments by patient
+// GET appointments by patient (for staff/admin)
 router.get('/patient/:patientId', 
   authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
   validatePagination,
   async (req, res) => {
     try {
       const { patientId } = req.params;
       const { page, limit, offset } = req.pagination;
-
-      // Check if patient user can access
-      if (req.user.role === 'PATIENT') {
-        const [patient] = await pool.execute(
-          'SELECT id FROM patients WHERE user_id = ?',
-          [req.user.id]
-        );
-        
-        if (patient.length === 0 || patient[0].id !== parseInt(patientId)) {
-          return res.status(403).json({ 
-            success: false,
-            error: 'Access denied' 
-          });
-        }
-      }
 
       const [appointments] = await pool.execute(
         `SELECT 

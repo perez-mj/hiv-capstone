@@ -1,4 +1,4 @@
-// backend/routes/queue.js
+// backend/routes/queue.js - FIXED VERSION
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -8,7 +8,146 @@ const { validate, validatePagination } = require('../middleware/validate');
 const { logAudit } = require('../utils/audit-logger');
 const { generateQueueNumber, formatDate } = require('../utils/helpers');
 
-// GET current queue status
+// ==================== PUBLIC ROUTES (no auth) ====================
+
+// GET queue display board view (public - no auth needed for display)
+router.get('/display', async (req, res) => {
+  try {
+    const [queue] = await pool.execute(
+      `SELECT 
+        q.id,
+        q.queue_number,
+        q.status,
+        q.called_at,
+        q.served_at,
+        a.appointment_number,
+        p.first_name as patient_first_name,
+        p.last_name as patient_last_name,
+        CONCAT(LEFT(p.first_name, 1), '. ', p.last_name) as display_name,
+        at.type_name,
+        TIMESTAMPDIFF(MINUTE, q.called_at, NOW()) as minutes_since_called
+      FROM queue q
+      JOIN appointments a ON q.appointment_id = a.id
+      JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      WHERE DATE(q.created_at) = CURDATE()
+        AND q.status IN ('WAITING', 'CALLED', 'SERVING')
+      ORDER BY 
+        CASE 
+          WHEN q.status = 'CALLED' THEN 1
+          WHEN q.status = 'SERVING' THEN 2
+          ELSE 3
+        END,
+        q.queue_number ASC`
+    );
+
+    // Get currently serving and last 3 called
+    const nowServing = queue.find(q => q.status === 'SERVING');
+    const recentlyCalled = queue
+      .filter(q => q.status === 'CALLED')
+      .slice(0, 3);
+    
+    const waiting = queue.filter(q => q.status === 'WAITING');
+
+    res.json({
+      success: true,
+      data: {
+        now_serving: nowServing ? {
+          number: nowServing.queue_number,
+          name: nowServing.display_name,
+          type: nowServing.type_name,
+          since: nowServing.served_at
+        } : null,
+        recently_called: recentlyCalled.map(c => ({
+          number: c.queue_number,
+          name: c.display_name,
+          type: c.type_name,
+          called_at: c.called_at
+        })),
+        waiting_count: waiting.length,
+        next_numbers: waiting.slice(0, 5).map(w => w.queue_number)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching queue display:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch queue display' 
+    });
+  }
+});
+
+// ==================== AUTHENTICATED ROUTES ====================
+
+// GET /api/queue/current - CURRENT QUEUE STATUS (what frontend needs)
+router.get('/current', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching current queue status...');
+    
+    const [queue] = await pool.execute(
+      `SELECT 
+        q.*,
+        a.appointment_number,
+        a.scheduled_at,
+        p.id as patient_id,
+        p.patient_facility_code,
+        p.first_name as patient_first_name,
+        p.last_name as patient_last_name,
+        p.middle_name as patient_middle_name,
+        at.type_name,
+        at.duration_minutes,
+        u.username as created_by_username
+      FROM queue q
+      JOIN appointments a ON q.appointment_id = a.id
+      JOIN patients p ON a.patient_id = p.id
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN users u ON q.created_by = u.id
+      WHERE DATE(q.created_at) = CURDATE()
+        AND q.status IN ('WAITING', 'CALLED', 'SERVING')
+      ORDER BY 
+        q.priority DESC,
+        q.queue_number ASC`
+    );
+
+    // Get now serving
+    const nowServing = queue.find(q => q.status === 'SERVING');
+    
+    // Get waiting count
+    const waitingCount = queue.filter(q => q.status === 'WAITING').length;
+    
+    // Get called count
+    const calledCount = queue.filter(q => q.status === 'CALLED').length;
+
+    // Calculate estimated wait time (15 minutes per waiting patient)
+    const estimatedWaitTime = waitingCount * 15;
+
+    res.json({
+      success: true,
+      data: {
+        queue: queue,
+        now_serving: nowServing ? {
+          number: nowServing.queue_number,
+          name: `${nowServing.patient_first_name} ${nowServing.patient_last_name}`,
+          type: nowServing.type_name
+        } : null,
+        waiting_count: waitingCount,
+        called_count: calledCount,
+        estimated_wait_time: estimatedWaitTime,
+        total_in_queue: queue.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching current queue:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch current queue' 
+    });
+  }
+});
+
+// GET /api/queue - All queue (Admin/Nurse only) - KEEP ORIGINAL
 router.get('/', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
@@ -81,72 +220,136 @@ router.get('/',
     }
 });
 
-// GET queue display board view (public - no auth needed for display)
-router.get('/display', async (req, res) => {
+// GET /api/queue/patient/:patientId - Get patient's queue position
+router.get('/patient/:patientId', authenticateToken, async (req, res) => {
   try {
+    const { patientId } = req.params;
+
     const [queue] = await pool.execute(
-      `SELECT 
-        q.id,
-        q.queue_number,
-        q.status,
-        q.called_at,
-        q.served_at,
-        a.appointment_number,
-        p.first_name as patient_first_name,
-        p.last_name as patient_last_name,
-        CONCAT(LEFT(p.first_name, 1), '. ', p.last_name) as display_name,
-        at.type_name,
-        TIMESTAMPDIFF(MINUTE, q.called_at, NOW()) as minutes_since_called
-      FROM queue q
-      JOIN appointments a ON q.appointment_id = a.id
-      JOIN patients p ON a.patient_id = p.id
-      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-      WHERE DATE(q.created_at) = CURDATE()
-        AND q.status IN ('WAITING', 'CALLED', 'SERVING')
-      ORDER BY 
-        CASE 
-          WHEN q.status = 'CALLED' THEN 1
-          WHEN q.status = 'SERVING' THEN 2
-          ELSE 3
-        END,
-        q.queue_number ASC`
+      `SELECT q.*, a.scheduled_at
+       FROM queue q
+       JOIN appointments a ON q.appointment_id = a.id
+       WHERE a.patient_id = ? 
+       AND DATE(q.created_at) = CURDATE()
+       AND q.status IN ('WAITING', 'CALLED', 'SERVING')
+       ORDER BY q.created_at DESC
+       LIMIT 1`,
+      [patientId]
     );
 
-    // Get currently serving and last 3 called
-    const nowServing = queue.find(q => q.status === 'SERVING');
-    const recentlyCalled = queue
-      .filter(q => q.status === 'CALLED')
-      .slice(0, 3);
-    
-    const waiting = queue.filter(q => q.status === 'WAITING');
+    if (queue.length === 0) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'Patient not in queue'
+      });
+    }
+
+    // Get position in queue
+    const [position] = await pool.execute(
+      `SELECT COUNT(*) + 1 as position
+       FROM queue
+       WHERE DATE(created_at) = CURDATE()
+       AND status = 'WAITING'
+       AND queue_number < ?`,
+      [queue[0].queue_number]
+    );
 
     res.json({
       success: true,
       data: {
-        now_serving: nowServing ? {
-          number: nowServing.queue_number,
-          name: nowServing.display_name,
-          type: nowServing.type_name,
-          since: nowServing.served_at
-        } : null,
-        recently_called: recentlyCalled.map(c => ({
-          number: c.queue_number,
-          name: c.display_name,
-          type: c.type_name,
-          called_at: c.called_at
-        })),
-        waiting_count: waiting.length,
-        next_numbers: waiting.slice(0, 5).map(w => w.queue_number)
+        ...queue[0],
+        position: position[0].position,
+        estimated_wait_minutes: (position[0].position - 1) * 15
       }
     });
 
   } catch (error) {
-    console.error('Error fetching queue display:', error);
+    console.error('Error fetching patient queue:', error);
     res.status(500).json({ 
       success: false,
-      error: 'Failed to fetch queue display' 
+      error: 'Failed to fetch patient queue' 
     });
   }
+});
+
+// GET /api/queue/my-status - Patient's own queue status
+router.get('/my-status', 
+  authenticateToken,
+  async (req, res) => {
+    try {
+      if (req.user.role !== 'PATIENT') {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Only patients can access their queue status' 
+        });
+      }
+
+      // Get patient ID from user ID
+      const [patient] = await pool.execute(
+        'SELECT id FROM patients WHERE user_id = ?',
+        [req.user.id]
+      );
+
+      if (patient.length === 0) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Patient record not found' 
+        });
+      }
+
+      const patientId = patient[0].id;
+
+      const [queue] = await pool.execute(
+        `SELECT 
+          q.*,
+          a.appointment_number,
+          a.scheduled_at,
+          at.type_name,
+          at.duration_minutes,
+          (SELECT COUNT(*) + 1 
+           FROM queue q2 
+           WHERE DATE(q2.created_at) = CURDATE() 
+             AND q2.status IN ('WAITING', 'CALLED')
+             AND q2.queue_number < q.queue_number) as position
+        FROM queue q
+        JOIN appointments a ON q.appointment_id = a.id
+        JOIN appointment_types at ON a.appointment_type_id = at.id
+        WHERE a.patient_id = ?
+          AND DATE(q.created_at) = CURDATE()
+          AND q.status IN ('WAITING', 'CALLED', 'SERVING')
+        ORDER BY q.created_at DESC
+        LIMIT 1`,
+        [patientId]
+      );
+
+      if (queue.length === 0) {
+        return res.json({
+          success: true,
+          in_queue: false,
+          message: 'You are not currently in the queue'
+        });
+      }
+
+      const queueStatus = queue[0];
+      
+      // Calculate estimated wait time based on position
+      const avgServiceTime = 15;
+      queueStatus.estimated_wait_minutes = (queueStatus.position - 1) * avgServiceTime;
+
+      res.json({
+        success: true,
+        in_queue: true,
+        data: queueStatus
+      });
+
+    } catch (error) {
+      console.error('Error fetching patient queue status:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch queue status' 
+      });
+    }
 });
 
 // GET queue history with filters
@@ -334,85 +537,6 @@ router.get('/stats/overview',
       res.status(500).json({ 
         success: false,
         error: 'Failed to fetch queue statistics' 
-      });
-    }
-});
-
-// GET patient's queue status
-router.get('/my-status', 
-  authenticateToken,
-  async (req, res) => {
-    try {
-      if (req.user.role !== 'PATIENT') {
-        return res.status(403).json({ 
-          success: false,
-          error: 'Only patients can access their queue status' 
-        });
-      }
-
-      // Get patient ID from user ID
-      const [patient] = await pool.execute(
-        'SELECT id FROM patients WHERE user_id = ?',
-        [req.user.id]
-      );
-
-      if (patient.length === 0) {
-        return res.status(404).json({ 
-          success: false,
-          error: 'Patient record not found' 
-        });
-      }
-
-      const patientId = patient[0].id;
-
-      const [queue] = await pool.execute(
-        `SELECT 
-          q.*,
-          a.appointment_number,
-          a.scheduled_at,
-          at.type_name,
-          at.duration_minutes,
-          (SELECT COUNT(*) + 1 
-           FROM queue q2 
-           WHERE DATE(q2.created_at) = CURDATE() 
-             AND q2.status IN ('WAITING', 'CALLED')
-             AND q2.queue_number < q.queue_number) as position
-        FROM queue q
-        JOIN appointments a ON q.appointment_id = a.id
-        JOIN appointment_types at ON a.appointment_type_id = at.id
-        WHERE a.patient_id = ?
-          AND DATE(q.created_at) = CURDATE()
-          AND q.status IN ('WAITING', 'CALLED', 'SERVING')
-        ORDER BY q.created_at DESC
-        LIMIT 1`,
-        [patientId]
-      );
-
-      if (queue.length === 0) {
-        return res.json({
-          success: true,
-          in_queue: false,
-          message: 'You are not currently in the queue'
-        });
-      }
-
-      const queueStatus = queue[0];
-      
-      // Calculate estimated wait time based on position
-      const avgServiceTime = 15;
-      queueStatus.estimated_wait_minutes = (queueStatus.position - 1) * avgServiceTime;
-
-      res.json({
-        success: true,
-        in_queue: true,
-        data: queueStatus
-      });
-
-    } catch (error) {
-      console.error('Error fetching patient queue status:', error);
-      res.status(500).json({ 
-        success: false,
-        error: 'Failed to fetch queue status' 
       });
     }
 });
