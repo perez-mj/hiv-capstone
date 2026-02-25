@@ -1,4 +1,4 @@
-<!-- frontend/src/pages/admin/Patients.vue - WITH TOAST NOTIFICATIONS AND IMPORT -->
+<!-- frontend/src/pages/admin/Patients.vue -->
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- Header Section -->
@@ -51,13 +51,37 @@
           size="small" 
           prepend-icon="mdi-download" 
           @click="exportPatientData"
-          :disabled="patients.length === 0" 
+          :disabled="filteredPatients.length === 0" 
           :style="{ borderColor: 'var(--color-border)' }"
         >
           Export
         </v-btn>
       </div>
     </div>
+
+    <!-- Tabs for HIV Status -->
+    <v-tabs
+      v-model="activeTab"
+      color="primary"
+      align-tabs="start"
+      class="mb-4"
+      show-arrows
+    >
+      <v-tab value="all">
+        <v-icon start>mdi-account-multiple</v-icon>
+        All
+      </v-tab>
+      <v-tab value="reactive">
+        <v-icon start color="warning">mdi-alert-circle</v-icon>
+        Treatment
+        <v-chip size="x-small" class="ml-2" color="warning">{{ reactiveCount }}</v-chip>
+      </v-tab>
+      <v-tab value="non-reactive">
+        <v-icon start color="success">mdi-check-circle</v-icon>
+        Testing
+        <v-chip size="x-small" class="ml-2" color="success">{{ nonReactiveCount }}</v-chip>
+      </v-tab>
+    </v-tabs>
 
     <!-- Compact Stats Cards -->
     <v-row class="mb-4">
@@ -97,87 +121,72 @@
       {{ error }}
     </v-alert>
 
-    <!-- Search and Filters - Horizontal Layout -->
+    <!-- Search and Filters - Compact Horizontal Layout -->
     <v-card 
       elevation="0" 
       border 
       class="mb-4"
       :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
     >
-      <v-card-text class="pa-2">
-        <div class="d-flex flex-wrap align-center ga-2">
-          <!-- Search -->
-          <v-text-field 
-            v-model="search" 
-            density="compact" 
-            variant="outlined"
-            placeholder="Search patients..." 
-            prepend-inner-icon="mdi-magnify" 
-            hide-details 
-            clearable
-            @update:model-value="debouncedFetchPatients" 
-            class="compact-field"
-            style="flex: 2; min-width: 200px;"
-          />
-
-          <!-- HIV Status Filter - Horizontal Chips -->
-          <div class="d-flex align-center ga-1" style="flex-wrap: wrap;">
-            <span class="text-caption text-medium-emphasis mr-1">HIV:</span>
-            <v-chip
-              v-for="option in hivStatusOptions"
-              :key="option.value"
-              size="small"
-              :color="filters.hiv_status === option.value ? 'primary' : 'default'"
-              variant="flat"
-              :class="{ 'v-chip--selected': filters.hiv_status === option.value }"
-              @click="toggleFilter('hiv_status', option.value)"
-              class="filter-chip"
-            >
-              {{ option.title }}
-            </v-chip>
+      <v-card-text class="pa-3">
+        <div class="d-flex flex-wrap align-center ga-3">
+          <!-- Search - Compact -->
+          <div style="min-width: 200px; flex: 1;">
+            <v-text-field 
+              v-model="search" 
+              density="compact" 
+              variant="outlined"
+              placeholder="Search patients..." 
+              prepend-inner-icon="mdi-magnify" 
+              hide-details 
+              clearable
+              @update:model-value="handleSearch"
+              class="compact-field"
+            />
           </div>
 
-          <!-- Sex Filter - Horizontal Chips -->
-          <div class="d-flex align-center ga-1" style="flex-wrap: wrap;">
-            <span class="text-caption text-medium-emphasis mr-1">Sex:</span>
-            <v-chip
-              v-for="option in sexOptions"
-              :key="option.value"
-              size="small"
-              :color="filters.sex === option.value ? 'primary' : 'default'"
-              variant="flat"
-              :class="{ 'v-chip--selected': filters.sex === option.value }"
-              @click="toggleFilter('sex', option.value)"
-              class="filter-chip"
+          <!-- Sex Filter - Compact -->
+          <div class="d-flex align-center ga-1" style="flex-wrap: nowrap;">
+            <span class="text-caption text-medium-emphasis mr-1" style="white-space: nowrap;">Sex:</span>
+            <v-btn-toggle
+              v-model="filters.sex"
+              mandatory="false"
+              density="compact"
+              color="primary"
+              variant="outlined"
+              @update:model-value="handleFilterChange"
             >
-              {{ option.title }}
-            </v-chip>
+              <v-btn value="MALE" size="small">M</v-btn>
+              <v-btn value="FEMALE" size="small">F</v-btn>
+              <v-btn value="OTHER" size="small">O</v-btn>
+            </v-btn-toggle>
           </div>
 
-          <!-- Sort By -->
-          <v-select 
-            v-model="sortBy" 
-            density="compact" 
-            variant="outlined" 
-            :items="sortFields" 
-            placeholder="Sort"
-            hide-details 
-            @update:model-value="loadPatients" 
-            class="compact-field"
-            style="min-width: 130px;"
-          />
+          <!-- Sort - Compact -->
+          <div style="min-width: 120px;">
+            <v-select 
+              v-model="sortBy" 
+              density="compact" 
+              variant="outlined" 
+              :items="sortFields" 
+              placeholder="Sort"
+              hide-details 
+              @update:model-value="handleSortChange" 
+              class="compact-field"
+            />
+          </div>
 
-          <!-- Sort Order Toggle -->
+          <!-- Sort Order Toggle - Compact -->
           <v-btn 
             variant="outlined" 
-            density="comfortable" 
+            density="compact"
             size="small"
             :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" 
             @click="toggleSortOrder"
             :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" 
           />
 
-          <!-- Clear Filters -->
+          <!-- Clear Filters - Compact -->
           <v-btn 
             variant="text" 
             color="primary" 
@@ -186,7 +195,6 @@
             @click="clearFilters"
             :disabled="!hasActiveFilters" 
             :style="{ color: 'var(--color-primary)' }" 
-            class="px-2"
           >
             Clear
           </v-btn>
@@ -201,9 +209,9 @@
       :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
     >
       <v-card-title class="d-flex justify-space-between align-center py-3 px-4">
-        <span class="text-subtitle-1 font-weight-medium">Patient Records</span>
+        <span class="text-subtitle-1 font-weight-medium">{{ activeTabTitle }}</span>
         <span class="text-caption text-medium-emphasis">
-          Showing {{ paginationStart }} to {{ paginationEnd }} of {{ totalPatients }}
+          Showing {{ paginationStart }} to {{ paginationEnd }} of {{ totalFilteredPatients }}
         </span>
       </v-card-title>
 
@@ -213,9 +221,9 @@
         <v-data-table-server 
           v-model:items-per-page="perPage" 
           v-model:page="page" 
-          :headers="headers" 
-          :items="patients"
-          :items-length="totalPatients" 
+          :headers="tableHeaders" 
+          :items="filteredPatients"
+          :items-length="totalFilteredPatients" 
           :loading="loading" 
           @update:options="handleTableSort"
           class="elevation-0 patients-table" 
@@ -285,6 +293,39 @@
             >
               {{ formatHivStatus(item.hiv_status) }}
             </v-chip>
+          </template>
+
+          <!-- On Treatment Column (replaces ART Status) -->
+          <template v-slot:item.on_treatment="{ item }">
+            <div v-if="item.hiv_status === 'REACTIVE'">
+              <v-chip 
+                v-if="item.art_start_date"
+                size="x-small" 
+                color="success" 
+                variant="flat"
+                prepend-icon="mdi-check"
+              >
+                YES
+              </v-chip>
+              <v-chip 
+                v-else
+                size="x-small" 
+                color="error" 
+                variant="flat"
+                prepend-icon="mdi-close"
+              >
+                NO
+              </v-chip>
+            </div>
+            <span v-else class="text-caption text-disabled">—</span>
+          </template>
+
+          <!-- Diagnosis Date Column (for reactive patients) -->
+          <template v-slot:item.diagnosis_date="{ item }">
+            <span v-if="item.diagnosis_date" class="text-caption">
+              {{ formatDate(item.diagnosis_date) }}
+            </span>
+            <span v-else class="text-caption text-disabled">—</span>
           </template>
 
           <!-- Enrollment Date Column -->
@@ -366,10 +407,11 @@
           >
             <strong>Import Instructions:</strong>
             <ul class="mt-2">
-              <li>Upload a JSON file with an array of patient objects</li>
-              <li>Required fields: first_name, last_name, date_of_birth, sex, hiv_status</li>
-              <li>Optional fields: middle_name, address, contact_number, diagnosis_date, art_start_date, latest_cd4_count, latest_viral_load</li>
+              <li>Upload a CSV file with patient data</li>
+              <li>Required columns: first_name, last_name, date_of_birth, sex, hiv_status</li>
+              <li>Optional columns: middle_name, address, contact_number, diagnosis_date, art_start_date, latest_cd4_count, latest_viral_load</li>
               <li>Download a sample template using the button below</li>
+              <li>For reactive patients, diagnosis date will be auto-set if not provided</li>
             </ul>
           </v-alert>
 
@@ -386,12 +428,12 @@
 
           <v-file-input
             v-model="importFile"
-            label="Choose JSON file"
-            accept="application/json"
+            label="Choose CSV file"
+            accept=".csv"
             variant="outlined"
             density="comfortable"
             :rules="[v => !!v || 'Please select a file']"
-            prepend-icon="mdi-upload"
+            prepend-icon="mdi-file"
             show-size
             @update:model-value="validateImportFile"
           />
@@ -455,7 +497,7 @@
       </v-card>
     </v-dialog>
 
-    <!-- Toast Notifications - REPLACED SNACKBAR -->
+    <!-- Toast Notifications -->
     <div class="toast-container">
       <transition-group name="toast">
         <div
@@ -482,13 +524,14 @@ import { useRouter } from 'vue-router'
 import { patientsApi } from '@/api'
 import PatientDialog from '@/components/PatientDialog.vue'
 import debounce from 'lodash/debounce'
+import Papa from 'papaparse' // Add this dependency
 
 const router = useRouter()
 
 // Reactive state
+const activeTab = ref('all')
 const search = ref('')
 const filters = ref({
-  hiv_status: null,
   sex: null
 })
 const sortBy = ref('created_at_desc')
@@ -526,6 +569,74 @@ const showPatientDialog = ref(false)
 const selectedPatient = ref(null)
 const dialogMode = ref('create')
 
+// Debounced search function to prevent multiple requests
+const debouncedSearch = debounce(() => {
+  page.value = 1
+  loadPatients()
+}, 500)
+
+// Computed table headers based on active tab
+const tableHeaders = computed(() => {
+  const baseHeaders = [
+    { title: 'Facility ID', key: 'patient_facility_code', sortable: true, width: '120' },
+    { title: 'Name', key: 'full_name', sortable: false },
+    { title: 'Age', key: 'age', sortable: true, width: '60' },
+    { title: 'Sex', key: 'sex', sortable: true, width: '70' },
+    { title: 'Contact', key: 'contact_number', sortable: false, width: '120' },
+    { title: 'HIV Status', key: 'hiv_status', sortable: true, width: '100' }
+  ]
+
+  // Add diagnosis date for reactive tab
+  if (activeTab.value === 'reactive') {
+    baseHeaders.push(
+      { title: 'Diagnosis Date', key: 'diagnosis_date', sortable: true, width: '100' },
+      { title: 'On Treatment', key: 'on_treatment', sortable: false, width: '90' }
+    )
+  } else if (activeTab.value === 'all') {
+    baseHeaders.push(
+      { title: 'On Treatment', key: 'on_treatment', sortable: false, width: '90' }
+    )
+  }
+
+  // Add enrollment date and actions for all tabs
+  baseHeaders.push(
+    { title: 'Enrolled', key: 'created_at', sortable: true, width: '90' },
+    { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '80' }
+  )
+
+  return baseHeaders
+})
+
+// Filtered patients based on active tab
+const filteredPatients = computed(() => {
+  if (activeTab.value === 'all') {
+    return patients.value
+  } else if (activeTab.value === 'reactive') {
+    return patients.value.filter(p => p.hiv_status === 'REACTIVE')
+  } else {
+    return patients.value.filter(p => p.hiv_status === 'NON_REACTIVE' || p.hiv_status === 'INDETERMINATE')
+  }
+})
+
+const totalFilteredPatients = computed(() => filteredPatients.value.length)
+
+const activeTabTitle = computed(() => {
+  switch (activeTab.value) {
+    case 'all': return 'All Patients'
+    case 'reactive': return 'Reactive Patients'
+    case 'non-reactive': return 'Non-Reactive/Indeterminate Patients'
+    default: return 'Patients'
+  }
+})
+
+const reactiveCount = computed(() => {
+  return patients.value.filter(p => p.hiv_status === 'REACTIVE').length
+})
+
+const nonReactiveCount = computed(() => {
+  return patients.value.filter(p => p.hiv_status === 'NON_REACTIVE' || p.hiv_status === 'INDETERMINATE').length
+})
+
 // Toast functions
 function showToast(message, type = 'success', duration = 3000) {
   const id = toastId++
@@ -544,7 +655,6 @@ function showToast(message, type = 'success', duration = 3000) {
     duration
   })
   
-  // Auto remove after duration
   setTimeout(() => {
     removeToast(id)
   }, duration)
@@ -563,6 +673,11 @@ const compactStats = computed(() => {
     ? stats.value.by_hiv_status.find(s => s.hiv_status === 'REACTIVE') 
     : { count: 0 }
   
+  const nonReactiveStat = Array.isArray(stats.value.by_hiv_status)
+    ? stats.value.by_hiv_status.filter(s => s.hiv_status === 'NON_REACTIVE' || s.hiv_status === 'INDETERMINATE')
+        .reduce((sum, s) => sum + s.count, 0)
+    : 0
+  
   const onArtStat = stats.value.on_art || 0
   
   return [
@@ -573,7 +688,7 @@ const compactStats = computed(() => {
       color: 'primary'
     },
     {
-      label: 'On ART',
+      label: 'On Treatment',
       value: onArtStat,
       icon: 'mdi-pill',
       color: 'success'
@@ -585,33 +700,15 @@ const compactStats = computed(() => {
       color: 'warning'
     },
     {
-      label: 'Recent (30d)',
-      value: stats.value.recent_registrations || 0,
-      icon: 'mdi-calendar-plus',
+      label: 'Non-Reactive',
+      value: nonReactiveStat,
+      icon: 'mdi-check-circle',
       color: 'info'
     }
   ]
 })
 
-// Table headers
-const headers = ref([
-  { title: 'Facility ID', key: 'patient_facility_code', sortable: true, width: '120' },
-  { title: 'Name', key: 'full_name', sortable: false },
-  { title: 'Age', key: 'age', sortable: true, width: '60' },
-  { title: 'Sex', key: 'sex', sortable: true, width: '70' },
-  { title: 'Contact', key: 'contact_number', sortable: false, width: '120' },
-  { title: 'HIV Status', key: 'hiv_status', sortable: true, width: '100' },
-  { title: 'Enrolled', key: 'created_at', sortable: true, width: '90' },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '80' }
-])
-
 // Filter options
-const hivStatusOptions = [
-  { title: 'Reactive', value: 'REACTIVE' },
-  { title: 'Non-Reactive', value: 'NON_REACTIVE' },
-  { title: 'Indeterminate', value: 'INDETERMINATE' }
-]
-
 const sexOptions = [
   { title: 'Male', value: 'MALE' },
   { title: 'Female', value: 'FEMALE' },
@@ -632,18 +729,40 @@ const sortFields = [
 
 // Computed properties
 const paginationStart = computed(() => (page.value - 1) * perPage.value + 1)
-const paginationEnd = computed(() => Math.min(page.value * perPage.value, totalPatients.value))
+const paginationEnd = computed(() => Math.min(page.value * perPage.value, totalFilteredPatients.value))
 
 const hasActiveFilters = computed(() => {
-  return search.value || filters.value.hiv_status || filters.value.sex
+  return search.value || filters.value.sex
 })
 
-// Toggle filter function
-function toggleFilter(filterType, value) {
-  if (filters.value[filterType] === value) {
-    filters.value[filterType] = null
-  } else {
-    filters.value[filterType] = value
+// Watch for tab changes
+watch(activeTab, () => {
+  page.value = 1
+  loadPatients()
+})
+
+// Watch for filter changes - use debounced search
+watch(() => filters.value.sex, () => {
+  page.value = 1
+  debouncedSearch()
+})
+
+// Handle search input
+function handleSearch() {
+  debouncedSearch()
+}
+
+// Handle filter change
+function handleFilterChange() {
+  page.value = 1
+  loadPatients()
+}
+
+// Handle sort change
+function handleSortChange() {
+  const parts = sortBy.value.split('_')
+  if (parts.length > 1 && ['asc', 'desc'].includes(parts[parts.length - 1])) {
+    sortOrder.value = parts[parts.length - 1]
   }
   page.value = 1
   loadPatients()
@@ -669,17 +788,6 @@ function maskContact(contact) {
   return masked + contact.substring(contact.length - 4)
 }
 
-// Debounced fetch
-const debouncedFetchPatients = debounce(() => {
-  page.value = 1
-  loadPatients()
-}, 500)
-
-// Watch for filter changes
-watch([() => filters.value.hiv_status, () => filters.value.sex], () => {
-  debouncedFetchPatients()
-})
-
 // Lifecycle
 onMounted(async () => {
   await loadPatients()
@@ -688,6 +796,9 @@ onMounted(async () => {
 
 // Methods
 async function loadPatients() {
+  // Prevent multiple simultaneous requests
+  if (loading.value) return
+  
   loading.value = true
   error.value = ''
 
@@ -712,9 +823,6 @@ async function loadPatients() {
 
     if (search.value?.trim()) {
       params.search = search.value.trim()
-    }
-    if (filters.value.hiv_status) {
-      params.hiv_status = filters.value.hiv_status
     }
     if (filters.value.sex) {
       params.sex = filters.value.sex
@@ -777,8 +885,8 @@ function handleTableSort(options) {
     const order = sortDesc[0] ? 'desc' : 'asc'
     sortBy.value = `${key}_${order}`
     sortOrder.value = order
+    loadPatients()
   }
-  loadPatients()
 }
 
 function toggleSortOrder() {
@@ -862,7 +970,7 @@ function getHivStatusIcon(status) {
 // Event handlers
 function clearFilters() {
   search.value = ''
-  filters.value = { hiv_status: null, sex: null }
+  filters.value.sex = null
   sortBy.value = 'created_at_desc'
   sortOrder.value = 'desc'
   page.value = 1
@@ -925,39 +1033,41 @@ async function deletePatient(patient) {
   }
 }
 
-function exportPatientData() {
+async function exportPatientData() {
   try {
-    const exportData = patients.value.map(patient => ({
-      facility_code: patient.patient_facility_code,
-      first_name: patient.first_name,
-      last_name: patient.last_name,
-      middle_name: patient.middle_name || '',
-      date_of_birth: patient.date_of_birth,
-      age: calculateAge(patient.date_of_birth),
-      sex: patient.sex,
-      contact_number: patient.contact_number || '',
-      hiv_status: patient.hiv_status,
-      diagnosis_date: patient.diagnosis_date || '',
-      art_start_date: patient.art_start_date || '',
-      latest_cd4_count: patient.latest_cd4_count || '',
-      latest_viral_load: patient.latest_viral_load || '',
-      enrollment_date: patient.created_at
-    }))
+    loading.value = true
+    
+    // Build export params based on current filters
+    const params = {}
+    if (search.value?.trim()) {
+      params.search = search.value.trim()
+    }
+    if (filters.value.sex) {
+      params.sex = filters.value.sex
+    }
+    if (activeTab.value !== 'all') {
+      params.hiv_status = activeTab.value === 'reactive' ? 'REACTIVE' : 'NON_REACTIVE,INDETERMINATE'
+    }
 
-    const dataStr = JSON.stringify(exportData, null, 2)
-    const dataBlob = new Blob([dataStr], { type: 'application/json' })
-    const url = URL.createObjectURL(dataBlob)
+    // Use the export endpoint
+    const response = await patientsApi.exportCSV(params)
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url
-    link.download = `patients-${new Date().toISOString().split('T')[0]}.json`
+    link.setAttribute('download', `patients-export-${new Date().toISOString().split('T')[0]}.csv`)
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    
     showToast('Patient data exported successfully', 'success')
   } catch (err) {
     console.error('Export error:', err)
     showToast('Failed to export patient data', 'error')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -994,12 +1104,13 @@ function downloadTemplate() {
     }
   ]
   
-  const dataStr = JSON.stringify(template, null, 2)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
+  // Convert to CSV
+  const csv = Papa.unparse(template)
+  const dataBlob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(dataBlob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'patient-import-template.json'
+  link.download = 'patient-import-template.csv'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -1013,61 +1124,65 @@ function validateImportFile() {
     return
   }
 
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const data = JSON.parse(e.target.result)
-      
-      // Validate it's an array
-      if (!Array.isArray(data)) {
-        throw new Error('File must contain an array of patients')
-      }
-      
-      // Validate each patient has required fields
-      const requiredFields = ['first_name', 'last_name', 'date_of_birth', 'sex', 'hiv_status']
-      const errors = []
-      
-      data.forEach((patient, index) => {
-        requiredFields.forEach(field => {
-          if (!patient[field]) {
-            errors.push(`Row ${index + 1}: Missing required field '${field}'`)
+  Papa.parse(importFile.value, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      try {
+        const data = results.data
+        
+        if (data.length === 0) {
+          throw new Error('File contains no data')
+        }
+        
+        const requiredFields = ['first_name', 'last_name', 'date_of_birth', 'sex', 'hiv_status']
+        const errors = []
+        
+        data.forEach((patient, index) => {
+          requiredFields.forEach(field => {
+            if (!patient[field]) {
+              errors.push(`Row ${index + 1}: Missing required field '${field}'`)
+            }
+          })
+          
+          if (patient.sex && !['MALE', 'FEMALE', 'OTHER'].includes(patient.sex)) {
+            errors.push(`Row ${index + 1}: Invalid sex '${patient.sex}'. Must be MALE, FEMALE, or OTHER`)
+          }
+          
+          if (patient.hiv_status && !['REACTIVE', 'NON_REACTIVE', 'INDETERMINATE'].includes(patient.hiv_status)) {
+            errors.push(`Row ${index + 1}: Invalid HIV status '${patient.hiv_status}'. Must be REACTIVE, NON_REACTIVE, or INDETERMINATE`)
           }
         })
         
-        // Validate sex
-        if (patient.sex && !['MALE', 'FEMALE', 'OTHER'].includes(patient.sex)) {
-          errors.push(`Row ${index + 1}: Invalid sex '${patient.sex}'. Must be MALE, FEMALE, or OTHER`)
+        if (errors.length > 0) {
+          importValidation.value = {
+            valid: false,
+            error: errors.join('. ')
+          }
+          importPreview.value = []
+        } else {
+          importValidation.value = {
+            valid: true,
+            count: data.length
+          }
+          importPreview.value = data.slice(0, 3)
         }
-        
-        // Validate HIV status
-        if (patient.hiv_status && !['REACTIVE', 'NON_REACTIVE', 'INDETERMINATE'].includes(patient.hiv_status)) {
-          errors.push(`Row ${index + 1}: Invalid HIV status '${patient.hiv_status}'. Must be REACTIVE, NON_REACTIVE, or INDETERMINATE`)
-        }
-      })
-      
-      if (errors.length > 0) {
+      } catch (err) {
         importValidation.value = {
           valid: false,
-          error: errors.join('. ')
+          error: 'Invalid CSV file: ' + err.message
         }
         importPreview.value = []
-      } else {
-        importValidation.value = {
-          valid: true,
-          count: data.length
-        }
-        importPreview.value = data.slice(0, 3) // Show first 3 for preview
       }
-    } catch (err) {
+    },
+    error: (err) => {
       importValidation.value = {
         valid: false,
-        error: 'Invalid JSON file: ' + err.message
+        error: 'Error parsing CSV: ' + err.message
       }
       importPreview.value = []
     }
-  }
-  
-  reader.readAsText(importFile.value)
+  })
 }
 
 async function importPatients() {
@@ -1075,44 +1190,36 @@ async function importPatients() {
   
   importLoading.value = true
   
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    try {
-      const patients = JSON.parse(e.target.result)
-      
-      // Import patients one by one
-      let successCount = 0
-      let failCount = 0
-      const errors = []
-      
-      for (const patient of patients) {
-        try {
-          await patientsApi.create(patient)
-          successCount++
-        } catch (err) {
-          failCount++
-          errors.push(`${patient.first_name} ${patient.last_name}: ${err.response?.data?.error || err.message}`)
+  Papa.parse(importFile.value, {
+    header: true,
+    skipEmptyLines: true,
+    complete: async (results) => {
+      try {
+        const patients = results.data
+        
+        const response = await patientsApi.import({ patients })
+        
+        showImportDialog.value = false
+        await loadPatients()
+        await fetchStats()
+        
+        if (response.data.success) {
+          showToast(response.data.message || 'Patients imported successfully', 'success')
+        } else {
+          showToast('Import completed with errors', 'warning')
+          console.error('Import errors:', response.data.results?.errors)
         }
+      } catch (err) {
+        showToast('Failed to import patients: ' + err.message, 'error')
+      } finally {
+        importLoading.value = false
       }
-      
-      showImportDialog.value = false
-      await loadPatients()
-      await fetchStats()
-      
-      if (failCount === 0) {
-        showToast(`Successfully imported ${successCount} patients`, 'success')
-      } else {
-        showToast(`Imported ${successCount} patients, ${failCount} failed. Check console for details.`, 'warning')
-        console.error('Import errors:', errors)
-      }
-    } catch (err) {
-      showToast('Failed to import patients: ' + err.message, 'error')
-    } finally {
+    },
+    error: (err) => {
+      showToast('Error parsing CSV: ' + err.message, 'error')
       importLoading.value = false
     }
-  }
-  
-  reader.readAsText(importFile.value)
+  })
 }
 </script>
 
@@ -1127,12 +1234,8 @@ async function importPatients() {
   gap: var(--spacing-xs);
 }
 
-.ga-1 {
-  gap: 4px;
-}
-
-.ga-2 {
-  gap: 8px;
+.ga-3 {
+  gap: 16px;
 }
 
 /* Stat card styling */
@@ -1162,10 +1265,6 @@ async function importPatients() {
 }
 
 /* Compact field styling */
-.compact-field {
-  width: 100%;
-}
-
 .compact-field :deep(.v-field) {
   font-size: var(--font-size-sm);
 }
@@ -1178,17 +1277,6 @@ async function importPatients() {
 
 .compact-field :deep(.v-label) {
   font-size: var(--font-size-sm);
-}
-
-/* Filter chip styling */
-.filter-chip {
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.filter-chip.v-chip--selected {
-  background-color: var(--color-primary) !important;
-  color: white !important;
 }
 
 /* Table styling */

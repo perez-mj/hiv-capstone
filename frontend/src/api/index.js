@@ -45,53 +45,23 @@ export const authApi = {
   refreshToken: () => http.post('/auth/refresh')
 }
 
-// Patients API - COMPLETELY ALIGNED WITH YOUR BACKEND ROUTES
 export const patientsApi = {
-  // GET all patients with pagination and filters - matches your /patients route
   getAll: (params) => http.get('/patients', { params }),
-  
-  // Alias for getAll to maintain compatibility
-  getPagination: (params) => http.get('/patients', { params }),
-
-  // GET patient statistics - matches your /patients/stats/overview route
   getStats: () => http.get('/patients/stats/overview'),
-
-  // SEARCH patients for dropdown - matches your /patients/search/query route
-  search: (query, limit = 10) => http.get('/patients/search/query', { 
-    params: { q: query, limit } 
-  }),
-
-  // GET single patient by ID - matches your /patients/:id route
+  search: (query, limit = 10) => http.get('/patients/search/query', { params: { q: query, limit } }),
   getById: (id) => http.get(`/patients/${id}`),
-
-  // CREATE new patient - matches your POST /patients route
   create: (data) => http.post('/patients', data),
-
-  // UPDATE patient - matches your PUT /patients/:id route
   update: (id, data) => http.put(`/patients/${id}`, data),
-
-  // DELETE patient (soft delete) - matches your DELETE /patients/:id route
   delete: (id) => http.delete(`/patients/${id}`),
-
-  // GET patient summary/dashboard data - matches your /patients/:id/summary route
   getSummary: (id) => http.get(`/patients/${id}/summary`),
-
-  // GET patient appointments - matches your /patients/:id/appointments route
   getAppointments: (id, params) => http.get(`/patients/${id}/appointments`, { params }),
-
-  // GET patient lab results - matches your /patients/:id/lab-results route
   getLabResults: (id, params) => http.get(`/patients/${id}/lab-results`, { params }),
-
-  // GET patient clinical encounters - matches your /patients/:id/encounters route
   getEncounters: (id, params) => http.get(`/patients/${id}/encounters`, { params }),
-
-  // GET patient queue history - matches your /patients/:id/queue-history route
   getQueueHistory: (id, params) => http.get(`/patients/${id}/queue-history`, { params }),
-
-  // Export functionality (if you add this route later)
-  export: (params) => http.get('/patients/export', {
-    params,
-    responseType: 'blob'
+  import: (data) => http.post('/patients/import', data),
+  exportCSV: (params) => http.get('/patients/export/csv', { 
+    params, 
+    responseType: 'blob' 
   })
 }
 
@@ -156,14 +126,15 @@ export const auditApi = {
 
 // Users API (Admin/Staff/Patient Account Management)
 export const usersApi = {
-  getAll: () => http.get('/users'),
+  getAll: (params) => http.get('/users', { params }),
+  getStats: () => http.get('/users/stats'),
   getById: (id) => http.get(`/users/${id}`),
+  getActivity: (id, params) => http.get(`/users/${id}/activity`, { params }),
   create: (data) => http.post('/users', data),
   update: (id, data) => http.put(`/users/${id}`, data),
-  delete: (id) => http.delete(`/users/${id}`),
   toggleStatus: (id) => http.put(`/users/${id}/toggle-status`),
   changePassword: (id, data) => http.put(`/users/${id}/password`, data),
-  getStats: () => http.get('/users/stats')
+  delete: (id) => http.delete(`/users/${id}`)
 }
 
 // Lab Results API - ALIGNED WITH YOUR BACKEND ROUTES
@@ -218,7 +189,7 @@ export const dashboardApi = {
 
 export default {
   auth: authApi,
-  patient: patientApi, // ADD THIS
+  patient: patientApi, 
   patients: patientsApi,
   appointments: appointmentsApi,
   queue: queueApi,

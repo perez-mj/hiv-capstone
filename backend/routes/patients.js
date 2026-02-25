@@ -14,6 +14,8 @@ const {
   buildWhereClause,
   formatDate
 } = require('../utils/helpers');
+const csv = require('csv-stringify'); // Add this dependency
+const { Parser } = require('json2csv'); // Add this for CSV export
 
 // GET all patients with pagination and filters
 router.get('/', 
@@ -111,7 +113,6 @@ router.get('/',
         ? await pool.execute(baseQuery, queryParams)
         : await pool.execute(baseQuery);
 
-      // Rest of the code remains the same...
       // Add age and additional stats for each patient
       for (let patient of patients) {
         patient.age = calculateAge(patient.date_of_birth);
@@ -192,14 +193,6 @@ router.get('/stats/overview',
          GROUP BY sex`
       );
 
-      // Patients with consent
-      const [consent] = await pool.execute(
-        `SELECT 
-          SUM(CASE WHEN consent = 1 THEN 1 ELSE 0 END) as with_consent,
-          SUM(CASE WHEN consent = 0 THEN 1 ELSE 0 END) as without_consent
-         FROM patients`
-      );
-
       // Patients on ART (have ART start date)
       const [onART] = await pool.execute(
         `SELECT COUNT(*) as count 
@@ -246,10 +239,6 @@ router.get('/stats/overview',
           total_patients: totalPatients[0].total,
           by_hiv_status: byStatus,
           by_sex: bySex,
-          consent: {
-            with_consent: parseInt(consent[0].with_consent || 0),
-            without_consent: parseInt(consent[0].without_consent || 0)
-          },
           on_art: onART[0].count,
           recent_registrations: recentRegistrations[0].count,
           age_distribution: ageDistribution,
@@ -452,7 +441,6 @@ router.post('/',
         sex,
         address,
         contact_number,
-        consent,
         hiv_status,
         diagnosis_date,
         art_start_date,
@@ -464,8 +452,14 @@ router.post('/',
         password_hash
       } = req.body;
 
+      // Auto-set diagnosis date if patient is reactive and no diagnosis date provided
+      let finalDiagnosisDate = diagnosis_date;
+      if (hiv_status === 'REACTIVE' && !diagnosis_date) {
+        finalDiagnosisDate = new Date().toISOString().split('T')[0];
+      }
+
       // Validate ART start date relative to diagnosis date
-      if (art_start_date && diagnosis_date && new Date(art_start_date) < new Date(diagnosis_date)) {
+      if (art_start_date && finalDiagnosisDate && new Date(art_start_date) < new Date(finalDiagnosisDate)) {
         await connection.rollback();
         return res.status(400).json({ 
           success: false,
@@ -473,8 +467,16 @@ router.post('/',
         });
       }
 
-      // Generate patient facility code
-      const patient_facility_code = await generatePatientCode(connection);
+      // Generate patient facility code with patient details
+      const registrationYear = new Date().getFullYear();
+      const patient_facility_code = await generatePatientCode(
+        connection, 
+        first_name, 
+        middle_name, 
+        last_name, 
+        hiv_status,
+        registrationYear
+      );
 
       let user_id = null;
 
@@ -530,10 +532,10 @@ router.post('/',
       const [result] = await connection.execute(
         `INSERT INTO patients (
           patient_facility_code, user_id, first_name, last_name, middle_name,
-          date_of_birth, sex, address, contact_number, consent,
+          date_of_birth, sex, address, contact_number,
           hiv_status, diagnosis_date, art_start_date, latest_cd4_count,
           latest_viral_load, created_by, updated_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           patient_facility_code,
           user_id,
@@ -544,9 +546,8 @@ router.post('/',
           sex,
           address || null,
           contact_number || null,
-          consent ? 1 : 0,
           hiv_status,
-          diagnosis_date || null,
+          finalDiagnosisDate,
           art_start_date || null,
           latest_cd4_count || null,
           latest_viral_load || null,
@@ -575,7 +576,7 @@ router.post('/',
         patient_id,
         null,
         newPatient[0],
-        `Created patient record for ${first_name} ${last_name}`,
+        `Created patient record for ${first_name} ${last_name} with code ${patient_facility_code}`,
         req
       );
 
@@ -635,7 +636,6 @@ router.put('/:id',
         sex,
         address,
         contact_number,
-        consent,
         hiv_status,
         diagnosis_date,
         art_start_date,
@@ -643,9 +643,15 @@ router.put('/:id',
         latest_viral_load
       } = req.body;
 
+      // Auto-set diagnosis date if status changed to reactive and no diagnosis date provided
+      let finalDiagnosisDate = diagnosis_date;
+      if (hiv_status === 'REACTIVE' && !diagnosis_date && oldValues.hiv_status !== 'REACTIVE') {
+        finalDiagnosisDate = new Date().toISOString().split('T')[0];
+      }
+
       // Validate ART start date relative to diagnosis date
-      if (art_start_date && (diagnosis_date || oldValues.diagnosis_date)) {
-        const diagDate = diagnosis_date || oldValues.diagnosis_date;
+      if (art_start_date && (finalDiagnosisDate || oldValues.diagnosis_date)) {
+        const diagDate = finalDiagnosisDate || oldValues.diagnosis_date;
         if (diagDate && new Date(art_start_date) < new Date(diagDate)) {
           await connection.rollback();
           return res.status(400).json({ 
@@ -687,17 +693,17 @@ router.put('/:id',
         updateFields.push('contact_number = ?');
         updateValues.push(contact_number || null);
       }
-      if (consent !== undefined) {
-        updateFields.push('consent = ?');
-        updateValues.push(consent ? 1 : 0);
-      }
       if (hiv_status !== undefined) {
         updateFields.push('hiv_status = ?');
         updateValues.push(hiv_status);
       }
       if (diagnosis_date !== undefined) {
         updateFields.push('diagnosis_date = ?');
-        updateValues.push(diagnosis_date || null);
+        updateValues.push(finalDiagnosisDate);
+      } else if (hiv_status === 'REACTIVE' && !oldValues.diagnosis_date) {
+        // If status changed to reactive and no diagnosis date exists, set it
+        updateFields.push('diagnosis_date = ?');
+        updateValues.push(finalDiagnosisDate);
       }
       if (art_start_date !== undefined) {
         updateFields.push('art_start_date = ?');
@@ -1321,6 +1327,182 @@ router.get('/:id/queue-history',
       res.status(500).json({ 
         success: false,
         error: 'Failed to fetch queue history' 
+      });
+    }
+});
+
+// IMPORT patients from CSV
+router.post('/import', 
+  authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+      
+      const { patients } = req.body;
+      
+      if (!Array.isArray(patients) || patients.length === 0) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Invalid or empty patient data' 
+        });
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: []
+      };
+
+      for (const patientData of patients) {
+        try {
+          // Auto-set diagnosis date if patient is reactive
+          if (patientData.hiv_status === 'REACTIVE' && !patientData.diagnosis_date) {
+            patientData.diagnosis_date = new Date().toISOString().split('T')[0];
+          }
+
+          // Generate patient facility code
+          const registrationYear = new Date().getFullYear();
+          const patient_facility_code = await generatePatientCode(
+            connection, 
+            patientData.first_name, 
+            patientData.middle_name, 
+            patientData.last_name, 
+            patientData.hiv_status,
+            registrationYear
+          );
+
+          // Insert patient
+          const [result] = await connection.execute(
+            `INSERT INTO patients (
+              patient_facility_code, first_name, last_name, middle_name,
+              date_of_birth, sex, address, contact_number,
+              hiv_status, diagnosis_date, art_start_date, latest_cd4_count,
+              latest_viral_load, created_by, updated_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              patient_facility_code,
+              patientData.first_name,
+              patientData.last_name,
+              patientData.middle_name || null,
+              patientData.date_of_birth,
+              patientData.sex,
+              patientData.address || null,
+              patientData.contact_number || null,
+              patientData.hiv_status,
+              patientData.diagnosis_date || null,
+              patientData.art_start_date || null,
+              patientData.latest_cd4_count || null,
+              patientData.latest_viral_load || null,
+              req.user.id,
+              req.user.id
+            ]
+          );
+
+          results.success++;
+        } catch (err) {
+          results.failed++;
+          results.errors.push({
+            patient: `${patientData.first_name} ${patientData.last_name}`,
+            error: err.message
+          });
+        }
+      }
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: `Imported ${results.success} patients, ${results.failed} failed`,
+        results
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error importing patients:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to import patients' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+// EXPORT patients to CSV
+router.get('/export/csv', 
+  authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
+  async (req, res) => {
+    try {
+      const {
+        search,
+        hiv_status,
+        sex
+      } = req.query;
+
+      let query = `
+        SELECT 
+          patient_facility_code as facility_code,
+          first_name,
+          last_name,
+          middle_name,
+          date_of_birth,
+          sex,
+          address,
+          contact_number,
+          hiv_status,
+          diagnosis_date,
+          art_start_date,
+          latest_cd4_count as cd4_count,
+          latest_viral_load as viral_load,
+          created_at as enrollment_date
+        FROM patients
+        WHERE 1=1
+      `;
+      
+      const params = [];
+
+      if (search) {
+        query += ` AND (
+          first_name LIKE ? OR 
+          last_name LIKE ? OR 
+          patient_facility_code LIKE ? OR
+          contact_number LIKE ?
+        )`;
+        const searchPattern = `%${search}%`;
+        params.push(searchPattern, searchPattern, searchPattern, searchPattern);
+      }
+
+      if (hiv_status) {
+        query += ` AND hiv_status = ?`;
+        params.push(hiv_status);
+      }
+
+      if (sex) {
+        query += ` AND sex = ?`;
+        params.push(sex);
+      }
+
+      query += ` ORDER BY last_name, first_name`;
+
+      const [patients] = await pool.execute(query, params);
+
+      // Convert to CSV
+      const json2csvParser = new Parser();
+      const csv = json2csvParser.parse(patients);
+
+      res.header('Content-Type', 'text/csv');
+      res.attachment(`patients-export-${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csv);
+
+    } catch (error) {
+      console.error('Error exporting patients:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to export patients' 
       });
     }
 });

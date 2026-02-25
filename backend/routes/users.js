@@ -280,7 +280,17 @@ router.post('/',
     try {
       await connection.beginTransaction();
 
-      const { username, password, email, role, is_active } = req.body;
+      // Use the validated data from req.body
+      const { username, password, email, role, is_active, patient_id } = req.body;
+
+      console.log('Creating user with data:', { 
+        username, 
+        email, 
+        role, 
+        is_active, 
+        patient_id,
+        patient_id_type: typeof patient_id 
+      });
 
       // Check if username already exists
       const [existingUser] = await connection.execute(
@@ -315,6 +325,12 @@ router.post('/',
       // Hash password
       const password_hash = await hashPassword(password);
       
+      // Convert boolean is_active to number (1 for true, 0 for false)
+      // The validation ensures is_active is a boolean
+      const isActiveValue = is_active === true ? 1 : 0;
+      
+      console.log('Inserting user with is_active:', isActiveValue);
+      
       // Create user
       const [result] = await connection.execute(
         `INSERT INTO users 
@@ -325,14 +341,34 @@ router.post('/',
           password_hash, 
           email || null, 
           role || 'PATIENT', 
-          is_active !== undefined ? is_active : 1
+          isActiveValue
         ]
       );
+      
+      console.log("User created with ID:", result.insertId);
 
-      // If creating a PATIENT user, create corresponding patient record
-      if (role === 'PATIENT') {
-        // You might want to create a basic patient record here
-        // Or handle this separately through patient creation endpoint
+      // If patient_id is provided, update the patient record with the user_id
+      if (patient_id) {
+        // The validation ensures patient_id is a number
+        const patientIdNum = parseInt(patient_id);
+        
+        const [updateResult] = await connection.execute(
+          `UPDATE patients SET user_id = ?, updated_at = NOW() WHERE id = ?`,
+          [result.insertId, patientIdNum]
+        );
+        
+        console.log("Patient update result:", {
+          affectedRows: updateResult.affectedRows,
+          patientId: patientIdNum
+        });
+        
+        if (updateResult.affectedRows === 0) {
+          console.warn(`No patient found with ID: ${patientIdNum}`);
+        } else {
+          console.log(`Successfully linked user to patient ${patientIdNum}`);
+        }
+      } else {
+        console.log("No patient_id provided, skipping patient update");
       }
 
       // Get created user

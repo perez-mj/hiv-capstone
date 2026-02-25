@@ -1,4 +1,4 @@
-<!-- frontend/src/components/PatientDialog.vue - FIXED WITH PROPER DATE HANDLING -->
+<!-- frontend/src/components/PatientDialog.vue - WITH CONSENT FIELD REMOVED -->
 <template>
   <v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="800">
     <v-card>
@@ -64,7 +64,7 @@
               />
             </v-col>
             
-            <!-- Date of Birth - FIXED date handling -->
+            <!-- Date of Birth -->
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="formData.date_of_birth"
@@ -288,7 +288,7 @@ const emit = defineEmits(['update:modelValue', 'saved'])
 const form = ref(null)
 const loading = ref(false)
 
-// Form data structure
+// Form data structure - removed consent field
 const formData = ref({
   first_name: '',
   last_name: '',
@@ -371,6 +371,7 @@ watch(() => props.modelValue, (newVal) => {
         latest_cd4_count: props.patient.latest_cd4_count || null,
         latest_viral_load: props.patient.latest_viral_load || null,
         
+        // Reset user account fields
         create_user_account: false,
         username: '',
         email: '',
@@ -378,6 +379,7 @@ watch(() => props.modelValue, (newVal) => {
         confirm_password: ''
       }
     } else {
+      // Reset to empty for create mode
       formData.value = {
         first_name: '',
         last_name: '',
@@ -429,6 +431,7 @@ const savePatient = async () => {
       latest_viral_load: formData.value.latest_viral_load ? parseInt(formData.value.latest_viral_load) : null
     }
     
+    // Add user account data if creating account
     if (props.mode === 'create' && formData.value.create_user_account) {
       patientData.create_user_account = true
       patientData.username = formData.value.username
@@ -459,7 +462,7 @@ const savePatient = async () => {
   }
 }
 
-// Watch for HIV status changes
+// Watch for HIV status changes to clear reactive-specific fields when switching to non-reactive
 watch(() => formData.value.hiv_status, (newVal) => {
   if (newVal !== 'REACTIVE') {
     formData.value.diagnosis_date = ''

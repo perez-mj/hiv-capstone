@@ -34,34 +34,84 @@ const generateRandomPassword = (length = 12) => {
 
 /**
  * Generate unique patient facility code
+ * Format:
+ * - Prefix: P (Non-Reactive/Indeterminate) or PR (Reactive)
+ * - Year: Last 2 digits of registration year
+ * - Initials: 
+ *   - First letter of first name + First letter of last name (if no middle name)
+ *   - First letter of first name + First letter of middle name + First letter of last name (if with middle name)
+ * - Suffix: Number (2,3,4...) if duplicate initials exist
  */
-const generatePatientCode = async (pool) => {
-  const prefix = 'OMPH';
-  const year = new Date().getFullYear().toString().slice(-2);
+const generatePatientCode = async (pool, firstName, middleName, lastName, hivStatus, registrationYear = new Date().getFullYear()) => {
+  // Determine prefix based on HIV status
+  const prefix = (hivStatus === 'REACTIVE') ? 'PR' : 'P';
   
-  // Get the latest patient code for this year
+  // Get last 2 digits of year
+  const year = registrationYear.toString().slice(-2);
+  
+  // Generate initials
+  let initials = '';
+  
+  // First letter of first name (always include)
+  const firstInitial = firstName.charAt(0).toUpperCase();
+  
+  // Check if middle name exists and is not empty
+  if (middleName && middleName.trim() !== '') {
+    // Format: First + Middle + Last initials
+    const middleInitial = middleName.charAt(0).toUpperCase();
+    const lastInitial = lastName.charAt(0).toUpperCase();
+    initials = `${firstInitial}${middleInitial}${lastInitial}`;
+  } else {
+    // Format: First + Last initials
+    const lastInitial = lastName.charAt(0).toUpperCase();
+    initials = `${firstInitial}${lastInitial}`;
+  }
+  
+  // Base code without suffix
+  const baseCode = `${prefix}${year}-${initials}`;
+  
+  // Check for existing patients with the same code pattern
   const [rows] = await pool.execute(
     `SELECT patient_facility_code FROM patients 
      WHERE patient_facility_code LIKE ? 
-     ORDER BY id DESC LIMIT 1`,
-    [`${prefix}${year}%`]
+     ORDER BY patient_facility_code DESC`,
+    [`${baseCode}%`]
   );
   
-  let sequence = 1;
-  if (rows.length > 0) {
-    const lastCode = rows[0].patient_facility_code;
-    const lastSequence = parseInt(lastCode.slice(-6));
-    sequence = lastSequence + 1;
+  // If no existing codes with this pattern, return base code
+  if (rows.length === 0) {
+    return baseCode;
   }
   
-  return `${prefix}${year}${sequence.toString().padStart(6, '0')}`;
+  // Check if exact base code exists
+  const exactMatch = rows.find(row => row.patient_facility_code === baseCode);
+  
+  if (!exactMatch) {
+    return baseCode;
+  }
+  
+  // Find the highest suffix number
+  let maxSuffix = 1;
+  const suffixPattern = new RegExp(`^${baseCode}(\\d+)$`);
+  
+  rows.forEach(row => {
+    const match = row.patient_facility_code.match(suffixPattern);
+    if (match) {
+      const suffix = parseInt(match[1], 10);
+      if (suffix > maxSuffix) {
+        maxSuffix = suffix;
+      }
+    }
+  });
+  
+  // Return with next suffix number
+  return `${baseCode}${maxSuffix + 1}`;
 };
 
 /**
- * Generate unique appointment number (VERSION 1 - with APT prefix)
- * Used by: appointments.js - POST / (staff creates appointment)
+ * Generate unique appointment number
  */
-const generateAppointmentNumberWithPrefix = async (pool) => {
+const generateAppointmentNumber = async (pool) => {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -77,45 +127,6 @@ const generateAppointmentNumberWithPrefix = async (pool) => {
   
   const sequence = (rows[0].count + 1).toString().padStart(4, '0');
   return `${prefix}${sequence}`;
-};
-
-/**
- * Generate unique appointment number (VERSION 2 - with YYMMDD-XXXX format)
- * Used by: appointments.js - POST /patient/me/book (patient self-booking)
- */
-const generateAppointmentNumberWithDash = async (pool) => {
-  const date = new Date();
-  const year = date.getFullYear().toString().slice(-2);
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  const datePrefix = `${year}${month}${day}`;
-  
-  const [lastAppointment] = await pool.execute(
-    `SELECT appointment_number FROM appointments 
-     WHERE appointment_number LIKE ? 
-     ORDER BY id DESC LIMIT 1`,
-    [`${datePrefix}%`]
-  );
-
-  let sequence = 1;
-  if (lastAppointment.length > 0) {
-    const lastSeq = parseInt(lastAppointment[0].appointment_number.split('-')[1]);
-    sequence = lastSeq + 1;
-  }
-  
-  return `${datePrefix}-${String(sequence).padStart(4, '0')}`;
-};
-
-/**
- * Generate appointment number (auto-detects which format to use)
- * This is the main function to use - it will check the table structure
- */
-const generateAppointmentNumber = async (pool, format = 'dash') => {
-  if (format === 'prefix') {
-    return await generateAppointmentNumberWithPrefix(pool);
-  } else {
-    return await generateAppointmentNumberWithDash(pool);
-  }
 };
 
 /**
@@ -161,15 +172,6 @@ const formatDate = (date, format = 'YYYY-MM-DD') => {
     default:
       return `${year}-${month}-${day}`;
   }
-};
-
-/**
- * Format date for SQL (YYYY-MM-DD)
- */
-const formatDateForSQL = (date) => {
-  if (!date) return null;
-  const d = new Date(date);
-  return d.toISOString().split('T')[0];
 };
 
 /**
@@ -220,21 +222,6 @@ const paginate = (data, page = 1, limit = 10) => {
   results.total_pages = Math.ceil(data.length / limit);
   
   return results;
-};
-
-/**
- * Build SQL pagination
- */
-const buildPagination = (page = 1, limit = 10) => {
-  const pageNum = parseInt(page) || 1;
-  const limitNum = parseInt(limit) || 10;
-  const offset = (pageNum - 1) * limitNum;
-  
-  return {
-    page: pageNum,
-    limit: limitNum,
-    offset
-  };
 };
 
 /**
@@ -394,96 +381,24 @@ const getEnv = (key, defaultValue = null) => {
   return process.env[key] || defaultValue;
 };
 
-/**
- * Parse date range from query
- */
-const parseDateRange = (startDate, endDate) => {
-  const range = {};
-  
-  if (startDate) {
-    range.start_date = new Date(startDate);
-  }
-  
-  if (endDate) {
-    range.end_date = new Date(endDate);
-  }
-  
-  return range;
-};
-
-/**
- * Check if a value is empty (null, undefined, empty string, empty array, empty object)
- */
-const isEmpty = (value) => {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') return value.trim() === '';
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === 'object') return Object.keys(value).length === 0;
-  return false;
-};
-
-/**
- * Generate random string
- */
-const generateRandomString = (length = 10) => {
-  return crypto.randomBytes(length).toString('hex').slice(0, length);
-};
-
-/**
- * Extract token from authorization header
- */
-const extractToken = (authHeader) => {
-  if (!authHeader) return null;
-  
-  const parts = authHeader.split(' ');
-  if (parts.length === 2 && parts[0] === 'Bearer') {
-    return parts[1];
-  }
-  
-  return null;
-};
-
 module.exports = {
-  // Password functions
   hashPassword,
   comparePassword,
   generateRandomPassword,
-  
-  // Code generation functions
   generatePatientCode,
-  generateAppointmentNumber, // Main function - uses dash format by default
-  generateAppointmentNumberWithPrefix, // For APT prefix format
-  generateAppointmentNumberWithDash, // For YYMMDD-XXXX format
+  generateAppointmentNumber,
   generateQueueNumber,
-  generateRandomString,
-  
-  // Date functions
   formatDate,
-  formatDateForSQL,
   calculateAge,
-  parseDateRange,
-  
-  // Pagination functions
   paginate,
-  buildPagination,
-  
-  // Query functions
   buildWhereClause,
-  
-  // Validation functions
+  parseCSV,
+  maskSensitiveData,
   isValidEmail,
   isValidPhone,
-  isEmpty,
-  
-  // Data functions
-  maskSensitiveData,
-  deepClone,
-  groupBy,
-  parseCSV,
-  
-  // Utility functions
   sleep,
   retryWithBackoff,
-  getEnv,
-  extractToken
+  groupBy,
+  deepClone,
+  getEnv
 };

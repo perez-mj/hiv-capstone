@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Feb 24, 2026 at 04:33 PM
+-- Generation Time: Feb 25, 2026 at 01:16 PM
 -- Server version: 8.0.45-0ubuntu0.24.04.1
 -- PHP Version: 8.3.6
 
@@ -156,7 +156,6 @@ CREATE TABLE `patients` (
   `sex` enum('MALE','FEMALE','OTHER') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `contact_number` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
-  `consent` tinyint(1) NOT NULL DEFAULT '0',
   `hiv_status` enum('REACTIVE','NON_REACTIVE','INDETERMINATE') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `diagnosis_date` date DEFAULT NULL,
   `art_start_date` date DEFAULT NULL,
@@ -235,7 +234,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `email`, `role`, `is_active`, `last_login`, `created_at`, `updated_at`) VALUES
-(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-02-15 05:01:05', '2025-11-26 02:59:49', '2026-02-15 05:01:05');
+(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-02-25 11:14:20', '2025-11-26 02:59:49', '2026-02-25 11:14:20');
 
 --
 -- Indexes for dumped tables
@@ -404,7 +403,7 @@ ALTER TABLE `staff`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- Constraints for dumped tables

@@ -16,7 +16,13 @@ const validationSchemas = {
     password: Joi.string().min(6).max(100).required(),
     email: Joi.string().email().max(255).optional().allow(null, ''),
     role: Joi.string().valid('ADMIN', 'NURSE', 'PATIENT').default('PATIENT'),
-    is_active: Joi.boolean().default(true)
+    is_active: Joi.boolean().default(true),
+    patient_id: Joi.number().integer().positive().optional().allow(null)
+      .messages({
+        'number.base': 'Patient ID must be a number',
+        'number.integer': 'Patient ID must be an integer',
+        'number.positive': 'Patient ID must be positive'
+      })
   }),
 
   userUpdate: Joi.object({
