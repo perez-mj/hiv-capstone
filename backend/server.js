@@ -15,7 +15,13 @@ const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const appointmentsRouter = require('./routes/appointments');
 const queueRouter = require('./routes/queue');
+const encountersRouter = require('./routes/encounters');
+const labResultsRouter = require('./routes/lab-results');
+const kioskRoutes = require('./routes/kiosk');
 
+app.use('/api/kiosk', kioskRoutes);
+app.use('/api/encounters', encountersRouter);
+app.use('/api/lab-results', labResultsRouter);
 app.use('/api/queue', queueRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/users', usersRoutes);

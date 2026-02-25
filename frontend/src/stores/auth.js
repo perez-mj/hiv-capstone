@@ -1,4 +1,4 @@
-// src/stores/auth.js
+// frontend/src/stores/auth.js
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import http from '@/api/http'
@@ -27,6 +27,15 @@ export const useAuthStore = defineStore('auth', () => {
   const isNurse = computed(() => userRole.value === 'NURSE')
   const isPatient = computed(() => userRole.value === 'PATIENT')
   const isStaff = computed(() => isAdmin.value || isNurse.value)
+
+  // Patient-specific getters
+  const patientId = computed(() => user.value?.patient_facility_code || null)
+  const patientName = computed(() => {
+    if (user.value?.first_name && user.value?.last_name) {
+      return `${user.value.first_name} ${user.value.last_name}`
+    }
+    return userName.value
+  })
 
   // Actions
   const login = async (credentials) => {
@@ -165,6 +174,8 @@ export const useAuthStore = defineStore('auth', () => {
     isNurse,
     isPatient,
     isStaff,
+    patientId,
+    patientName,
 
     // Actions
     login,

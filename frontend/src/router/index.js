@@ -27,17 +27,6 @@ const routes = [
       { path: '/admin/patients/:id', name: 'PatientDetails', component: () => import('@/pages/admin/PatientDetails.vue'), },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
-      {
-        path: 'settings',
-        component: () => import('@/pages/admin/settings/SettingsLayout.vue'),
-        children: [
-          { path: '', redirect: 'profile' },
-          { path: 'profile', name: 'Profile', component: () => import('@/pages/admin/settings/Profile.vue') },
-          { path: 'security', name: 'Security', component: () => import('@/pages/admin/settings/Security.vue') },
-          { path: 'notifications', name: 'Notifications', component: () => import('@/pages/admin/settings/Notifications.vue') },
-          { path: 'system', name: 'System', component: () => import('@/pages/admin/settings/System.vue'), meta: { allowedRoles: ['ADMIN'] } }
-        ]
-      }
     ]
   },
   {
@@ -75,16 +64,16 @@ const routes = [
   },
   // Kiosk routes (public)
   {
-    path: '/kiosk',
-    name: 'KioskQueuing',
-    component: () => import('@/pages/kiosk/KioskQueuing.vue'),
-    meta: { layout: 'empty', requiresGuest: true }
-  },
-  {
     path: '/kiosk/display',
     name: 'QueueDisplay',
     component: () => import('@/pages/kiosk/QueueDisplay.vue'),
     meta: { layout: 'empty', requiresGuest: true }
+  },
+  {
+    path: '/admin/kiosks',
+    name: 'KioskDevices',
+    component: () => import('@/pages/admin/KioskDevices.vue'),
+    meta: { requiresAuth: true, allowedRoles: ['ADMIN'] }
   },
   { path: '/:pathMatch(.*)*', redirect: '/login' }
 ]

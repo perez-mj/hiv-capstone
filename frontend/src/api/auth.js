@@ -1,5 +1,5 @@
-// src/api/auth.js
-const API_URL = '/api/auth'  // ✅ Fixed: changed from '/api/users' to '/api/auth'
+// frontend/src/api/auth.js
+const API_URL = '/api/auth'
 
 export async function loginUser(username, password) {
   const res = await fetch(`${API_URL}/login`, {
@@ -16,11 +16,16 @@ export async function loginUser(username, password) {
   return res.json()
 }
 
-export async function patientLogin(patient_id, password) {
-  const res = await fetch(`${API_URL}/patient/login`, {
+// For patient login, we need to use patient_facility_code as username
+export async function patientLogin(patientId, password) {
+  // Use the same login endpoint but with patient_facility_code as username
+  const res = await fetch(`${API_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ patient_id, password })
+    body: JSON.stringify({ 
+      username: patientId,  // patient_facility_code as username
+      password 
+    })
   })
   
   if (!res.ok) {
@@ -32,7 +37,6 @@ export async function patientLogin(patient_id, password) {
 }
 
 export async function registerUser(user) {
-  // Note: Registration might be handled by admin, not public registration
   const res = await fetch('/api/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
