@@ -955,12 +955,22 @@ router.get('/',
       const { page, limit, offset } = req.pagination;
       const { dateRange } = req;
       
+      // Convert to integers for safe concatenation
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
+      
       const {
         status,
         patient_id,
         type_id,
         search
       } = req.query;
+
+      console.log('Fetching appointments with params:', { 
+        page, limit, offset, 
+        status, patient_id, type_id, search,
+        dateRange 
+      });
 
       let query = `
         SELECT 
@@ -1004,12 +1014,12 @@ router.get('/',
 
       if (dateRange?.start_date) {
         query += ` AND DATE(a.scheduled_at) >= ?`;
-        queryParams.push(formatDate(dateRange.start_date));
+        queryParams.push(dateRange.start_date);
       }
 
       if (dateRange?.end_date) {
         query += ` AND DATE(a.scheduled_at) <= ?`;
-        queryParams.push(formatDate(dateRange.end_date));
+        queryParams.push(dateRange.end_date);
       }
 
       if (search) {
@@ -1048,22 +1058,68 @@ router.get('/',
         'SELECT COUNT(*) as total FROM appointments a'
       );
       
-      const [countResult] = await pool.execute(countQuery, queryParams);
-      const total = countResult[0].total;
+      console.log('Count query:', countQuery);
+      console.log('Count params:', queryParams);
+
+      let countResult;
+      try {
+        if (queryParams.length > 0) {
+          [countResult] = await pool.execute(countQuery, queryParams);
+        } else {
+          [countResult] = await pool.query(countQuery);
+        }
+        
+        console.log('Count result:', countResult);
+      } catch (countError) {
+        console.error('Error executing count query:', countError);
+        // Fallback to a simple count without filters if complex query fails
+        const [simpleCount] = await pool.execute(
+          'SELECT COUNT(*) as total FROM appointments'
+        );
+        countResult = simpleCount;
+      }
+
+      // Ensure countResult exists and has the expected structure
+      if (!countResult || !Array.isArray(countResult) || countResult.length === 0) {
+        console.error('Invalid count result:', countResult);
+        countResult = [{ total: 0 }];
+      }
+
+      const total = countResult[0]?.total || 0;
 
       // Add sorting and pagination
-      query += ` ORDER BY a.scheduled_at DESC LIMIT ? OFFSET ?`;
-      queryParams.push(limit, offset);
+      query += ` ORDER BY a.scheduled_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
-      const [appointments] = await pool.execute(query, queryParams);
+      console.log('Main query:', query);
+      console.log('Main params:', queryParams);
+
+      // Execute the main query
+      let appointments = [];
+      try {
+        if (queryParams.length > 0) {
+          [appointments] = await pool.execute(query, queryParams);
+        } else {
+          [appointments] = await pool.query(query);
+        }
+        console.log(`Found ${appointments.length} appointments`);
+      } catch (mainError) {
+        console.error('Error executing main query:', mainError);
+        appointments = [];
+      }
 
       // Add status counts for filters
-      const [statusCounts] = await pool.execute(
-        `SELECT status, COUNT(*) as count 
-         FROM appointments 
-         WHERE DATE(scheduled_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-         GROUP BY status`
-      );
+      let statusCounts = [];
+      try {
+        const [statusResult] = await pool.execute(
+          `SELECT status, COUNT(*) as count 
+           FROM appointments 
+           WHERE DATE(scheduled_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+           GROUP BY status`
+        );
+        statusCounts = statusResult || [];
+      } catch (statusError) {
+        console.error('Error fetching status counts:', statusError);
+      }
 
       res.json({
         success: true,
@@ -1075,15 +1131,17 @@ router.get('/',
           page,
           limit,
           total,
-          total_pages: Math.ceil(total / limit)
+          total_pages: Math.ceil(total / limitNum)
         }
       });
 
     } catch (error) {
       console.error('Error fetching appointments:', error);
+      console.error('Error stack:', error.stack);
       res.status(500).json({ 
         success: false,
-        error: 'Failed to fetch appointments' 
+        error: 'Failed to fetch appointments',
+        details: error.message 
       });
     }
 });
@@ -1657,7 +1715,7 @@ router.put('/:id',
 });
 
 // UPDATE appointment status
-router.put('/:id/status', 
+router.patch('/:id/status', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
   async (req, res) => {

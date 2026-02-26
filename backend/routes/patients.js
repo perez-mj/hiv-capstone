@@ -261,11 +261,18 @@ router.get('/search/query',
   async (req, res) => {
     try {
       const searchTerm = req.query.q || '';
-      const limit = parseInt(req.query.limit) || 10;
+      const limit = Math.min(parseInt(req.query.limit) || 10, 50);
 
       if (!searchTerm || searchTerm.length < 2) {
         return res.json([]);
       }
+
+      const like = `%${searchTerm}%`;
+      
+      // For the ORDER BY CASE, we need exact matches for better relevance scoring
+      // Let's use different patterns for the CASE statement
+      const exactStartPattern = `${searchTerm}%`;
+      const exactEndPattern = `%${searchTerm}`;
 
       const [patients] = await pool.execute(
         `SELECT 
@@ -295,19 +302,14 @@ router.get('/search/query',
              WHEN p.patient_facility_code LIKE ? THEN 1
              WHEN p.last_name LIKE ? THEN 2
              WHEN p.first_name LIKE ? THEN 3
-             ELSE 4
+             WHEN CONCAT(p.first_name, ' ', p.last_name) LIKE ? THEN 4
+             ELSE 5
            END,
            p.last_name ASC
-         LIMIT ?`,
+         LIMIT ${limit}`,
         [
-          `%${searchTerm}%`, 
-          `%${searchTerm}%`, 
-          `%${searchTerm}%`, 
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          limit
+          like, like, like, like,
+          like, like, like, like,
         ]
       );
 
@@ -315,9 +317,12 @@ router.get('/search/query',
 
     } catch (error) {
       console.error('Error searching patients:', error);
+      console.error('SQL:', error.sql); // Log the SQL that caused the error
+      console.error('SQL Message:', error.sqlMessage);
       res.status(500).json({ 
         success: false,
-        error: 'Failed to search patients' 
+        error: 'Failed to search patients',
+        details: error.message 
       });
     }
 });
