@@ -1,116 +1,186 @@
+<!-- frontend/src/components/layout/Sidebar.vue -->
 <template>
   <v-navigation-drawer 
     v-model="drawerSync" 
     app 
-    color="white" 
+    :color="'surface'"
     :clipped="$vuetify.display.mdAndUp"
     :temporary="!$vuetify.display.mdAndUp" 
+    :rail="railMode"
+    :rail-width="72"
     class="custom-sidebar"
-    width="280"
+    :width="260"
+    @update:rail="handleRailToggle"
   >
-    <!-- Header with Logo -->
-    <div class="sidebar-header">
+    <!-- Header with Logo - Click to toggle rail mode -->
+    <div class="sidebar-header" :class="{ 'rail-mode': railMode }" @click="toggleRail">
       <div class="logo-container">
-        <v-icon size="32" color="primary" class="logo-icon">mdi-heart-pulse</v-icon>
-        <div class="logo-text">
+        <img src="@/assets/images/logo.png" alt="OMPH HIV Care Logo" class="logo" />
+        <div class="logo-text" v-if="!railMode">
           <div class="logo-title">HIV Care</div>
           <div class="logo-subtitle">Enrollment System</div>
         </div>
       </div>
+      <v-icon 
+        v-if="!railMode" 
+        size="small" 
+        color="grey" 
+        class="rail-toggle-icon"
+      >mdi-chevron-left</v-icon>
     </div>
 
-    <v-divider class="my-2" />
+    <v-divider class="my-1" />
 
-    <!-- User Info Section -->
-    <div class="user-info">
-      <v-avatar size="48" color="primary" class="user-avatar">
-        {{ userInitials }}
-      </v-avatar>
-      <div class="user-details">
-        <div class="name">{{ userName }}</div>
-        <div class="role">{{ userRole }}</div>
-        <v-chip small color="green" text-color="white" class="status-chip">
-          <v-icon small left>mdi-check-circle</v-icon>
-          Online
-        </v-chip>
-      </div>
-    </div>
-
-    <v-divider class="my-3" />
-
-    <!-- Menu Items -->
-    <v-list nav dense class="menu-list">
-      <v-list-item
-        v-for="item in menu"
-        :key="item.title"
-        :to="item.to"
-        link
-        :class="{ 'active-menu-item': $route.path === item.to }"
-        class="menu-item"
-      >
-        <template #prepend>
-          <v-icon :icon="item.icon" :color="$route.path === item.to ? 'primary' : 'grey-darken-1'" />
-        </template>
+    <!-- Main Navigation -->
+    <div class="navigation-container">
+      <!-- Primary Menu -->
+      <v-list nav density="compact" class="menu-list pa-0">
+        <v-list-subheader v-if="!railMode" title="MAIN" class="menu-subheader" />
         
-        <v-list-item-title class="menu-item-title">
-          {{ item.title }}
-        </v-list-item-title>
+        <v-list-item
+          v-for="item in mainMenu"
+          :key="item.title"
+          :to="item.to"
+          :active="$route.path === item.to"
+          :prepend-icon="item.icon"
+          :title="!railMode ? item.title : undefined"
+          class="menu-item"
+          rounded="lg"
+          active-color="primary"
+          :density="railMode ? 'comfortable' : 'compact'"
+        >
+          <template v-if="item.badge && !railMode" #append>
+            <v-badge :content="item.badge" color="error" inline />
+          </template>
+          
+          <!-- Tooltip for rail mode -->
+          <v-tooltip v-if="railMode" activator="parent" location="right">
+            <span>{{ item.title }}</span>
+            <span v-if="item.badge" class="ml-1">({{ item.badge }})</span>
+          </v-tooltip>
+        </v-list-item>
+      </v-list>
 
-        <template v-if="item.badge" #append>
-          <v-badge :content="item.badge" color="red" inline />
-        </template>
-      </v-list-item>
-    </v-list>
+      <!-- Management Menu -->
+      <v-list nav density="compact" class="menu-list pa-0">
+        <v-list-subheader v-if="!railMode" title="MANAGEMENT" class="menu-subheader" />
+        
+        <v-list-item
+          v-for="item in managementMenu"
+          :key="item.title"
+          :to="item.to"
+          :active="$route.path === item.to"
+          :prepend-icon="item.icon"
+          :title="!railMode ? item.title : undefined"
+          class="menu-item"
+          rounded="lg"
+          active-color="primary"
+          :density="railMode ? 'comfortable' : 'compact'"
+        >
+          <v-tooltip v-if="railMode" activator="parent" location="right">
+            <span>{{ item.title }}</span>
+          </v-tooltip>
+        </v-list-item>
+      </v-list>
 
-    <!-- Quick Actions -->
-    <div class="quick-actions">
-      <v-divider class="my-3" />
-      <div class="actions-title">Quick Actions</div>
-      <v-btn 
-        block 
-        color="primary" 
-        class="mt-2 mb-1"
-        prepend-icon="mdi-account-plus"
-        variant="flat"
-        @click="navigateToEnrollment"
-      >
-        New Enrollment
-      </v-btn>
-      <v-btn 
-        block 
-        color="green" 
-        class="mb-2"
-        prepend-icon="mdi-shield-check"
-        variant="outlined"
-        @click="navigateToVerification"
-      >
-        Verify Record
-      </v-btn>
+      <!-- System Menu -->
+      <v-list nav density="compact" class="menu-list pa-0">
+        <v-list-subheader v-if="!railMode" title="SYSTEM" class="menu-subheader" />
+        
+        <v-list-item
+          v-for="item in systemMenu"
+          :key="item.title"
+          :to="item.to"
+          :active="$route.path === item.to"
+          :prepend-icon="item.icon"
+          :title="!railMode ? item.title : undefined"
+          class="menu-item"
+          rounded="lg"
+          active-color="primary"
+          :density="railMode ? 'comfortable' : 'compact'"
+        >
+          <v-tooltip v-if="railMode" activator="parent" location="right">
+            <span>{{ item.title }}</span>
+          </v-tooltip>
+        </v-list-item>
+      </v-list>
     </div>
 
-    <!-- Footer -->
+    <!-- Footer with User Info and Logout -->
     <template #append>
       <div class="sidebar-footer">
-        <v-divider />
-        <v-list-item 
-          class="logout-item"
-          @click="logout"
-        >
-          <template #prepend>
-            <v-icon icon="mdi-logout" color="red" />
-          </template>
-          <v-list-item-title class="logout-text">Logout</v-list-item-title>
-        </v-list-item>
-        <div class="version-text">v1.0.0</div>
+        <v-divider class="my-1" />
+        
+        <!-- User Info Section - Click to logout -->
+        <div class="user-info" :class="{ 'rail-mode': railMode }" @click="confirmLogout = true">
+          <v-avatar size="40" color="primary" class="user-avatar">
+            <span class="text-body-1">{{ userInitials }}</span>
+          </v-avatar>
+          <div class="user-details" v-if="!railMode">
+            <div class="name">{{ userName }}</div>
+            <div class="role">{{ userRole }}</div>
+          </div>
+          <v-icon 
+            v-if="!railMode" 
+            size="small" 
+            color="grey" 
+            class="logout-icon"
+          >mdi-logout</v-icon>
+          
+          <!-- Tooltip for rail mode -->
+          <v-tooltip v-if="railMode" activator="parent" location="right">
+            <span>{{ userName }} ({{ userRole }}) - Click to logout</span>
+          </v-tooltip>
+        </div>
+        
+        <div class="version-text" v-if="!railMode">v3.0</div>
       </div>
     </template>
+
+    <!-- Logout Confirmation Dialog -->
+    <v-dialog v-model="confirmLogout" max-width="360" persistent>
+      <v-card class="logout-dialog">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-3 bg-error-lighten-5">
+          <v-icon color="error" size="small" class="mr-2">mdi-logout</v-icon>
+          Confirm Logout
+        </v-card-title>
+        
+        <v-card-text class="pa-3">
+          <p class="text-body-2 mb-0">Are you sure you want to logout?</p>
+        </v-card-text>
+        
+        <v-card-actions class="pa-3 pt-0">
+          <v-spacer />
+          <v-btn 
+            variant="text" 
+            color="grey-darken-1" 
+            @click="confirmLogout = false"
+            :disabled="isLoggingOut"
+            size="small"
+          >
+            Cancel
+          </v-btn>
+          <v-btn 
+            color="error" 
+            variant="elevated" 
+            @click="logout"
+            :loading="isLoggingOut"
+            prepend-icon="mdi-logout"
+            size="small"
+          >
+            Logout
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-navigation-drawer>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.js'
+import { useDisplay } from 'vuetify'
 
 const props = defineProps({
   modelValue: Boolean
@@ -120,55 +190,75 @@ const emit = defineEmits(['update:modelValue'])
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const display = useDisplay()
+
+const confirmLogout = ref(false)
+const isLoggingOut = ref(false)
+const railMode = ref(false)
 
 const drawerSync = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
 
-// Enhanced menu with icons and badges
-const menu = ref([
+// Handle rail toggle on mobile
+const handleRailToggle = (value) => {
+  if (display.mobile.value) {
+    railMode.value = false
+  }
+}
+
+// Toggle rail mode when logo is clicked
+const toggleRail = () => {
+  railMode.value = !railMode.value
+}
+
+// Auto-expand when drawer is opened on mobile
+watch(drawerSync, (newVal) => {
+  if (display.mobile.value && newVal) {
+    railMode.value = false
+  }
+})
+
+// Menu organization
+const mainMenu = ref([
   { 
     title: 'Dashboard', 
     to: '/admin/dashboard', 
     icon: 'mdi-view-dashboard',
-    badge: null,
-    description: 'System overview and analytics'
+    badge: null
   },
   { 
-    title: 'Patient Management', 
-    to: '/admin/patients', 
-    icon: 'mdi-account-group',
-    badge: null,
-    description: 'Manage patient records and data'
-  },
-  { 
-    title: 'Audit & Security', 
-    to: '/admin/audit-security', 
-    icon: 'mdi-shield-account',
-    badge: null,
-    description: 'System logs and security monitoring'
-  },
-  { 
-    title: 'User Management', 
-    to: '/admin/users', 
-    icon: 'mdi-account-cog',
-    badge: null,
-    description: 'Manage users'
-  },
-  { 
-    title: 'Messaging Center', 
-    to: '/admin/messaging-center', 
-    icon: 'mdi-message-text',
-    badge: null,
-    description: 'Centralized messaging and communication'
-  },
-  { 
-    title: 'Appointments Calendar', 
+    title: 'Appointments', 
     to: '/admin/appointments-calendar', 
     icon: 'mdi-calendar',
-    badge: null,
-    description: 'Appointment scheduling and management'
+    badge: null
+  },
+])
+
+const managementMenu = ref([
+  { 
+    title: 'Patients', 
+    to: '/admin/patients', 
+    icon: 'mdi-account-group',
+  },
+  { 
+    title: 'Kiosk Devices', 
+    to: '/admin/kiosks', 
+    icon: 'mdi-monitor',
+  },
+  { 
+    title: 'Users', 
+    to: '/admin/users', 
+    icon: 'mdi-account-cog',
+  },
+])
+
+const systemMenu = ref([
+  { 
+    title: 'Settings', 
+    to: '/admin/settings', 
+    icon: 'mdi-cog',
   },
 ])
 
@@ -176,7 +266,6 @@ const menu = ref([
 const userName = computed(() => authStore.user?.name || 'System Administrator')
 const userRole = computed(() => authStore.user?.role || 'Admin')
 
-// Generate initials from name
 const userInitials = computed(() => {
   const name = authStore.user?.name || 'SA'
   return name
@@ -186,41 +275,74 @@ const userInitials = computed(() => {
     .join('')
 })
 
-// Navigation methods
-function navigateToEnrollment() {
-  router.push('/admin/enrollment')
-}
-
-function navigateToVerification() {
-  router.push('/admin/verification')
-}
-
-function logout() {
-  authStore.logout()
-  router.push('/login')
+async function logout() {
+  isLoggingOut.value = true
+  
+  try {
+    await authStore.logout()
+    router.push('/login')
+  } catch (error) {
+    console.error('Logout failed:', error)
+  } finally {
+    isLoggingOut.value = false
+    confirmLogout.value = false
+  }
 }
 </script>
 
 <style scoped>
 .custom-sidebar {
-  border-right: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  border-right: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  transition: width var(--transition-normal);
 }
 
-/* Header Styles */
+/* Header Styles - Clickable */
 .sidebar-header {
-  padding: 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: var(--spacing-md) var(--spacing-md);
+  background: linear-gradient(135deg, var(--color-surface-light) 0%, var(--color-surface-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-header:hover {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-dark) 100%);
+}
+
+.sidebar-header:hover .rail-toggle-icon {
+  opacity: 1;
+  transform: translateX(-2px);
+}
+
+.sidebar-header.rail-mode {
+  padding: var(--spacing-md) 0;
+  justify-content: center;
 }
 
 .logo-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
-.logo-icon {
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+.rail-mode .logo-container {
+  gap: 0;
+}
+
+.logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  transition: transform var(--transition-fast);
+}
+
+.sidebar-header:hover .logo {
+  transform: scale(1.05);
 }
 
 .logo-text {
@@ -230,158 +352,202 @@ function logout() {
 
 .logo-title {
   font-weight: 700;
-  font-size: 18px;
-  color: #1976d2;
+  font-size: var(--font-size-lg); /* Increased from base */
+  color: var(--color-primary);
   line-height: 1.2;
 }
 
 .logo-subtitle {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-xs); /* Increased from 9px */
+  color: var(--color-text-secondary);
   line-height: 1.2;
 }
 
-/* User Info Styles */
+.rail-toggle-icon {
+  opacity: 0.5;
+  transition: all var(--transition-fast);
+}
+
+/* Navigation Container */
+.navigation-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 var(--spacing-xs);
+}
+
+/* Menu Styles - Larger Text */
+.menu-subheader {
+  font-size: var(--font-size-sm); /* Increased from 10px */
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--color-text-secondary);
+  padding-left: var(--spacing-sm);
+  height: 28px; /* Increased from 24px */
+}
+
+:deep(.menu-item) {
+  margin: 2px 0; /* Slightly increased */
+  min-height: 36px !important; /* Increased from 32px */
+  padding: 0 var(--spacing-md) !important;
+  transition: all var(--transition-fast);
+  border-radius: var(--radius-md);
+}
+
+.rail-mode :deep(.menu-item) {
+  min-height: 48px !important;
+  justify-content: center;
+  padding: 0 !important;
+  margin: 4px auto;
+  width: 48px;
+}
+
+:deep(.menu-item .v-list-item__prepend) {
+  padding-inline-end: var(--spacing-md) !important;
+  margin-inline-end: 0 !important;
+}
+
+.rail-mode :deep(.menu-item .v-list-item__prepend) {
+  padding-inline-end: 0 !important;
+  margin-inline-end: 0 !important;
+}
+
+:deep(.menu-item .v-icon) {
+  font-size: 20px !important; /* Increased from 18px */
+}
+
+.rail-mode :deep(.menu-item .v-icon) {
+  font-size: 24px !important;
+}
+
+:deep(.menu-item .v-list-item-title) {
+  font-size: var(--font-size-sm); /* Increased from xs */
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+:deep(.menu-item.v-list-item--active) {
+  background: rgba(var(--color-primary-rgb), 0.12);
+}
+
+:deep(.menu-item.v-list-item--active .v-list-item-title) {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Footer Styles - Larger Text */
+.sidebar-footer {
+  padding-bottom: var(--spacing-sm);
+}
+
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: rgba(25, 118, 210, 0.04);
-  margin: 8px;
-  border-radius: 12px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-md);
+  margin: 2px var(--spacing-sm);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: rgba(var(--color-primary-rgb), 0.02);
+}
+
+.user-info.rail-mode {
+  padding: var(--spacing-md) 0;
+  justify-content: center;
+  margin: 2px auto;
+  width: 56px;
+}
+
+.user-info:hover {
+  background: rgba(var(--color-error-rgb), 0.08);
+}
+
+.user-info:hover .logout-icon {
+  color: var(--color-error) !important;
+  transform: translateX(2px);
 }
 
 .user-avatar {
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-md) !important; /* Larger initials */
+}
+
+.rail-mode .user-avatar {
+  width: 44px !important;
+  height: 44px !important;
 }
 
 .user-details {
   flex: 1;
-  min-width: 0; /* Prevent text overflow */
+  min-width: 0;
 }
 
 .name {
   font-weight: 600;
-  font-size: 14px;
-  color: #1a1a1a;
+  font-size: var(--font-size-sm); /* Increased from xs */
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 .role {
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.6);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: var(--font-size-xs); /* Increased from 10px */
+  color: var(--color-text-secondary);
+  line-height: 1.3;
 }
 
-.status-chip {
-  margin-top: 4px;
-  height: 20px;
-  font-size: 10px;
-}
-
-/* Menu Styles */
-.menu-list {
-  padding: 0 8px;
-}
-
-.menu-item {
-  border-radius: 8px;
-  margin: 2px 0;
-  transition: all 0.3s ease;
-}
-
-.menu-item:hover {
-  background: rgba(25, 118, 210, 0.08);
-}
-
-.menu-item.active-menu-item {
-  background: rgba(25, 118, 210, 0.12);
-  border-left: 3px solid #1976d2;
-}
-
-.menu-item-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(0, 0, 0, 0.8);
-}
-
-.menu-item.active-menu-item .menu-item-title {
-  color: #1976d2;
-  font-weight: 600;
-}
-
-/* Quick Actions */
-.quick-actions {
-  padding: 0 16px;
-}
-
-.actions-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(0, 0, 0, 0.6);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-}
-
-/* Footer Styles */
-.sidebar-footer {
-  padding-bottom: 8px;
-}
-
-.logout-item {
-  border-radius: 8px;
-  margin: 4px 8px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.logout-item:hover {
-  background: rgba(244, 67, 54, 0.08);
-}
-
-.logout-text {
-  color: #f44336;
-  font-weight: 500;
+.logout-icon {
+  transition: all var(--transition-fast);
+  opacity: 0.7;
 }
 
 .version-text {
   text-align: center;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.4);
-  margin-top: 8px;
+  font-size: var(--font-size-xs); /* Increased from 9px */
+  color: var(--color-text-disabled);
+  margin-top: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
 }
 
-/* Responsive adjustments */
-@media (max-width: 1264px) {
-  .custom-sidebar {
-    width: 260px !important;
-  }
+/* Logout Dialog */
+.logout-dialog {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.bg-error-lighten-5 {
+  background-color: rgba(var(--color-error-rgb), 0.05);
 }
 
 /* Scrollbar styling */
-.custom-sidebar ::v-deep(.v-navigation-drawer__content) {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-}
-
-.custom-sidebar ::v-deep(.v-navigation-drawer__content)::-webkit-scrollbar {
+.navigation-container::-webkit-scrollbar {
   width: 4px;
 }
 
-.custom-sidebar ::v-deep(.v-navigation-drawer__content)::-webkit-scrollbar-track {
+.navigation-container::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.custom-sidebar ::v-deep(.v-navigation-drawer__content)::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
+.navigation-container::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+/* Remove extra spacing */
+:deep(.v-list) {
+  padding: 0 !important;
+}
+
+:deep(.v-list-item__append) {
+  padding-inline-start: var(--spacing-sm) !important;
+}
+
+:deep(.v-divider) {
+  margin-top: 4px !important;
+  margin-bottom: 4px !important;
 }
 </style>
