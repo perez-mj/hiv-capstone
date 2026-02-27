@@ -8,6 +8,13 @@ const { validate } = require('../middleware/validate');
 const { logAudit } = require('../utils/audit-logger');
 const { comparePassword } = require('../utils/helpers');
 
+// Validation schema for change password
+const changePasswordValidation = {
+  current_password: { required: true, minLength: 6 },
+  new_password: { required: true, minLength: 6 },
+  confirm_password: { required: true, custom: (val, body) => val === body.new_password }
+};
+
 // POST /api/auth/login - User login
 router.post('/login', validate('userLogin'), async (req, res) => {
   try {
@@ -140,9 +147,6 @@ router.post('/logout', authenticateToken, async (req, res) => {
       req
     );
 
-    // In a real implementation, you might want to blacklist the token
-    // For now, just return success (client should remove token)
-
     res.json({
       success: true,
       message: 'Logout successful'
@@ -157,18 +161,46 @@ router.post('/logout', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== FIXED: CHANGE PASSWORD ROUTE ====================
 // POST /api/auth/change-password - Change password (authenticated)
-router.post('/change-password', authenticateToken, validate('changePassword'), async (req, res) => {
+router.post('/change-password', authenticateToken, async (req, res) => {
   const connection = await pool.getConnection();
   
   try {
     await connection.beginTransaction();
 
-    const { current_password, new_password } = req.body;
+    const { current_password, new_password, confirm_password } = req.body;
+
+    // Validate input
+    if (!current_password || !new_password || !confirm_password) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        error: 'All fields are required' 
+      });
+    }
+
+    if (new_password.length < 6) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        error: 'New password must be at least 6 characters long' 
+      });
+    }
+
+    if (new_password !== confirm_password) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        error: 'New password and confirm password do not match' 
+      });
+    }
+
+    console.log('Changing password for user:', req.user.id);
 
     // Get user with current password
     const [users] = await connection.execute(
-      'SELECT id, password_hash FROM users WHERE id = ?',
+      'SELECT id, username, password_hash, role FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -180,13 +212,25 @@ router.post('/change-password', authenticateToken, validate('changePassword'), a
       });
     }
 
+    const user = users[0];
+
     // Verify current password
-    const isValidPassword = await comparePassword(current_password, users[0].password_hash);
+    const isValidPassword = await comparePassword(current_password, user.password_hash);
     if (!isValidPassword) {
       await connection.rollback();
       return res.status(401).json({ 
         success: false,
         error: 'Current password is incorrect' 
+      });
+    }
+
+    // Check if new password is same as old
+    const isSamePassword = await comparePassword(new_password, user.password_hash);
+    if (isSamePassword) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        error: 'New password must be different from current password' 
       });
     }
 
@@ -209,7 +253,7 @@ router.post('/change-password', authenticateToken, validate('changePassword'), a
       null,
       null,
       null,
-      `User ${req.user.username} changed their password`,
+      `User ${user.username} changed their password`,
       req
     );
 
@@ -301,9 +345,22 @@ router.post('/forgot-password', async (req, res) => {
 
     const user = users[0];
 
-    // Generate reset token (in production, use crypto and store in database)
+    // Generate reset token
     const resetToken = Math.random().toString(36).substring(2, 15) + 
                       Math.random().toString(36).substring(2, 15);
+
+    // Create password_resets table if not exists
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        token VARCHAR(255) NOT NULL,
+        expires_at DATETIME NOT NULL,
+        used TINYINT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
 
     // Store reset token in database with expiry
     await pool.execute(
@@ -313,7 +370,6 @@ router.post('/forgot-password', async (req, res) => {
     );
 
     // In production, send email with reset link
-    // For now, just log it
     console.log(`Password reset token for ${user.username}: ${resetToken}`);
 
     // Log password reset request
@@ -350,13 +406,13 @@ router.post('/reset-password', async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    const { token, new_password } = req.body;
+    const { token, new_password, confirm_password } = req.body;
 
-    if (!token || !new_password) {
+    if (!token || !new_password || !confirm_password) {
       await connection.rollback();
       return res.status(400).json({ 
         success: false,
-        error: 'Token and new password are required' 
+        error: 'Token, new password, and confirm password are required' 
       });
     }
 
@@ -366,6 +422,14 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ 
         success: false,
         error: 'Password must be at least 6 characters long' 
+      });
+    }
+
+    if (new_password !== confirm_password) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        error: 'Passwords do not match' 
       });
     }
 
@@ -385,6 +449,21 @@ router.post('/reset-password', async (req, res) => {
     }
 
     const userId = resets[0].user_id;
+
+    // Check if new password is same as old
+    const [users] = await connection.execute(
+      'SELECT password_hash FROM users WHERE id = ?',
+      [userId]
+    );
+
+    const isSamePassword = await comparePassword(new_password, users[0].password_hash);
+    if (isSamePassword) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        success: false,
+        error: 'New password must be different from current password' 
+      });
+    }
 
     // Hash new password
     const saltRounds = 10;

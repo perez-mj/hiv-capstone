@@ -24,7 +24,7 @@ const routes = [
       { path: 'enroll', name: 'Enrollment', component: () => import('@/pages/admin/Enrollment.vue') },
       { path: 'audit-security', name: 'AuditSecurity', component: () => import('@/pages/admin/AuditSecurity.vue') },
       { path: 'users', name: 'UserManagement', component: () => import('@/pages/admin/UserManagement.vue'), meta: { allowedRoles: ['ADMIN'] } },
-      { path: 'patients/:id', name: 'PatientDetails', component: () => import('@/pages/admin/PatientDetails.vue'), },
+      { path: 'patients/:id', name: 'PatientDetails', component: () => import('@/pages/admin/PatientDetails.vue') },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
       { path: 'kiosks', name: 'KioskDevices', component: () => import('@/pages/admin/KioskDevices.vue'), meta: { requiresAuth: true, allowedRoles: ['ADMIN'] } },
@@ -36,31 +36,54 @@ const routes = [
     meta: { requiresAuth: true, allowedRoles: ['PATIENT'] },
     children: [
       { path: '', redirect: '/patient/dashboard' },
+      
+      // Dashboard
       {
         path: 'dashboard',
         name: 'PatientDashboard',
-        component: () => import('@/pages/patient/PatientDashboard.vue')
+        component: () => import('@/pages/patient/PatientDashboard.vue'),
+        meta: { title: 'Dashboard' }
       },
-      {
-        path: 'profile',
-        name: 'PatientProfile',
-        component: () => import('@/pages/patient/PatientProfile.vue')
-      },
-      {
-        path: 'test-history',
-        name: 'PatientTestHistory',
-        component: () => import('@/pages/patient/HIVTestHistory.vue')
-      },
+      
+      // Appointments
       {
         path: 'appointments',
         name: 'PatientAppointments',
-        component: () => import('@/pages/patient/PatientAppointments.vue')
+        component: () => import('@/pages/patient/PatientAppointments.vue'),
+        meta: { title: 'Appointments' }
       },
+      
+      // HISTORY
+      {
+        path: 'history',
+        name: 'PatientHistory',
+        component: () => import('@/pages/patient/PatientHistory.vue'),
+        meta: { title: 'History' }
+      },
+      
+      // PROFILE
+      {
+        path: 'profile',
+        name: 'PatientProfile',
+        component: () => import('@/pages/patient/PatientProfile.vue'),
+        meta: { title: 'My Profile' }
+      },
+      
+      // Messages
       {
         path: 'messages',
         name: 'PatientMessages',
-        component: () => import('@/pages/patient/PatientMessages.vue')
+        component: () => import('@/pages/patient/PatientMessages.vue'),
+        meta: { title: 'Messages' }
       }
+      
+      // REMOVED: ChangePassword route - comment out or delete
+      // {
+      //   path: 'change-password',
+      //   name: 'PatientChangePassword',
+      //   component: () => import('@/pages/patient/ChangePassword.vue'),
+      //   meta: { title: 'Change Password' }
+      // }
     ]
   },
   // Kiosk routes (public)
@@ -89,6 +112,11 @@ router.beforeEach(async (to, from, next) => {
     requiresGuest: to.meta.requiresGuest,
     allowedRoles: to.meta.allowedRoles
   })
+
+  // Set page title
+  if (to.meta.title) {
+    document.title = `${to.meta.title} - HIV Patient Management System`
+  }
 
   // Handle guest routes (login page)
   if (to.meta.requiresGuest) {

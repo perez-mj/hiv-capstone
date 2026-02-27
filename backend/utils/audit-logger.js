@@ -3,6 +3,7 @@ const pool = require('../db');
 
 /**
  * Log audit trail for database operations
+ * FIXED: Use separate connection to avoid lock conflicts
  */
 const logAudit = async (
   userId,
@@ -15,6 +16,9 @@ const logAudit = async (
   description = '',
   req = null
 ) => {
+  // Create a new connection for audit log to avoid transaction conflicts
+  let connection;
+  
   try {
     // Skip audit logging for certain tables if needed
     const skipTables = ['audit_logs', 'sessions'];
@@ -41,7 +45,13 @@ const logAudit = async (
       userAgent = req.headers['user-agent'] || null;
     }
 
-    await pool.execute(
+    // Get a dedicated connection for audit log
+    connection = await pool.getConnection();
+    
+    // Set shorter timeout for audit log to avoid blocking
+    await connection.query('SET innodb_lock_wait_timeout = 2');
+    
+    await connection.execute(
       `INSERT INTO audit_logs 
        (user_id, action_type, table_name, record_id, patient_id, 
         old_values, new_values, description, ip_address, user_agent, timestamp) 
@@ -59,9 +69,28 @@ const logAudit = async (
         userAgent
       ]
     );
+    
+    console.log(`✅ Audit log created: ${actionType} on ${tableName}`);
+    
   } catch (error) {
-    console.error('Audit log error:', error);
-    // Don't throw error to prevent disrupting main operation
+    // Just log the error but don't throw - audit logging should not break main operation
+    console.error('⚠️ Audit log error (non-critical):', error.message);
+    
+    // Log more details for debugging
+    if (error.code === 'ER_LOCK_WAIT_TIMEOUT') {
+      console.error('   Lock wait timeout - audit log skipped');
+    }
+    
+    // You can also log to a file here if needed
+  } finally {
+    // Always release the connection
+    if (connection) {
+      try {
+        connection.release();
+      } catch (releaseError) {
+        console.error('Error releasing audit log connection:', releaseError.message);
+      }
+    }
   }
 };
 
@@ -177,8 +206,15 @@ const getAuditLogs = async (filters = {}) => {
  * Clean up old audit logs
  */
 const cleanupOldLogs = async (daysToKeep = 365) => {
+  let connection;
+  
   try {
-    const [result] = await pool.execute(
+    connection = await pool.getConnection();
+    
+    // Set timeout for delete operation
+    await connection.query('SET innodb_lock_wait_timeout = 10');
+    
+    const [result] = await connection.execute(
       `DELETE FROM audit_logs 
        WHERE timestamp < DATE_SUB(NOW(), INTERVAL ? DAY)`,
       [daysToKeep]
@@ -191,6 +227,10 @@ const cleanupOldLogs = async (daysToKeep = 365) => {
   } catch (error) {
     console.error('Error cleaning up audit logs:', error);
     throw error;
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 };
 

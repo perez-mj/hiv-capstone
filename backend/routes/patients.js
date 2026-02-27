@@ -14,8 +14,289 @@ const {
   buildWhereClause,
   formatDate
 } = require('../utils/helpers');
-const csv = require('csv-stringify'); // Add this dependency
-const { Parser } = require('json2csv'); // Add this for CSV export
+const csv = require('csv-stringify');
+const { Parser } = require('json2csv');
+
+// ==================== PATIENT PROFILE ROUTES ====================
+
+// GET /api/patients/me - Get current patient's own profile
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 Fetching patient profile for user:', req.user.id);
+    console.log('User role:', req.user.role);
+
+    // Only PATIENT role can access this
+    if (req.user.role !== 'PATIENT') {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. Patient access only.' 
+      });
+    }
+
+    // Get patient data from database
+    const [patients] = await pool.execute(
+      `SELECT 
+        p.*,
+        u.username,
+        u.email,
+        u.role,
+        u.last_login,
+        u.is_active,
+        CONCAT(
+          p.first_name, 
+          ' ', 
+          p.middle_name, 
+          ' ', 
+          p.last_name
+        ) as full_name
+      FROM patients p
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE p.user_id = ?`,
+      [req.user.id]
+    );
+
+    console.log('Found patients:', patients.length);
+
+    if (patients.length === 0) {
+      console.log('No patient record found for user:', req.user.id);
+      return res.status(404).json({ 
+        success: false,
+        error: 'Patient profile not found' 
+      });
+    }
+
+    const patient = patients[0];
+    
+    // Add calculated fields
+    patient.age = calculateAge(patient.date_of_birth);
+    
+    // Get latest lab results
+    const [labResults] = await pool.execute(
+      `SELECT * FROM lab_results 
+       WHERE patient_id = ? 
+       ORDER BY test_date DESC 
+       LIMIT 5`,
+      [patient.id]
+    );
+    patient.recent_lab_results = labResults;
+
+    // Get upcoming appointments
+    const [appointments] = await pool.execute(
+      `SELECT a.*, at.type_name 
+       FROM appointments a
+       LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+       WHERE a.patient_id = ? 
+         AND a.scheduled_at >= NOW() 
+         AND a.status IN ('SCHEDULED', 'CONFIRMED')
+       ORDER BY a.scheduled_at ASC 
+       LIMIT 3`,
+      [patient.id]
+    );
+    patient.upcoming_appointments = appointments;
+
+    // Get queue status if any
+    const [queue] = await pool.execute(
+      `SELECT q.* 
+       FROM queue q
+       JOIN appointments a ON q.appointment_id = a.id
+       WHERE a.patient_id = ? 
+         AND DATE(q.created_at) = CURDATE()
+         AND q.status IN ('WAITING', 'CALLED', 'SERVING')
+       LIMIT 1`,
+      [patient.id]
+    );
+    patient.current_queue = queue[0] || null;
+
+    // Get summary statistics
+    const [stats] = await pool.execute(
+      `SELECT
+        (SELECT COUNT(*) FROM appointments WHERE patient_id = ?) as total_appointments,
+        (SELECT COUNT(*) FROM appointments WHERE patient_id = ? AND status = 'COMPLETED') as completed_appointments,
+        (SELECT COUNT(*) FROM lab_results WHERE patient_id = ?) as total_lab_results,
+        (SELECT COUNT(*) FROM clinical_encounters WHERE patient_id = ?) as total_encounters,
+        (SELECT COUNT(*) FROM queue q 
+         JOIN appointments a ON q.appointment_id = a.id 
+         WHERE a.patient_id = ? AND DATE(q.created_at) = CURDATE()) as in_queue_today
+      `,
+      [patient.id, patient.id, patient.id, patient.id, patient.id]
+    );
+    patient.statistics = stats[0];
+
+    res.json({
+      success: true,
+      data: patient
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching patient profile:', error);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Error sql:', error.sql);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch patient profile',
+      details: error.message 
+    });
+  }
+});
+
+// ==================== ADD THIS ROUTE ====================
+// PUT /api/patients/me - Update current patient's own profile
+router.put('/me', authenticateToken, async (req, res) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    console.log('🔍 Updating patient profile for user:', req.user.id);
+    console.log('📦 Request body:', req.body);
+    console.log('User role:', req.user.role);
+
+    // Only PATIENT role can access this
+    if (req.user.role !== 'PATIENT') {
+      connection.release();
+      return res.status(403).json({ 
+        success: false,
+        error: 'Access denied. Patient access only.' 
+      });
+    }
+
+    await connection.beginTransaction();
+
+    // Get patient ID from user ID
+    const [patients] = await connection.execute(
+      'SELECT id, user_id FROM patients WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    console.log('Found patients:', patients);
+
+    if (patients.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ 
+        success: false,
+        error: 'Patient profile not found' 
+      });
+    }
+
+    const patientId = patients[0].id;
+    
+    const {
+      first_name,
+      middle_name,
+      last_name,
+      date_of_birth,
+      sex,
+      contact_number,
+      address,
+    } = req.body;
+
+    console.log('Updating patient ID:', patientId);
+    console.log('Update data:', { 
+      first_name, 
+      last_name, 
+      date_of_birth, 
+      sex, 
+      contact_number,
+      address 
+    });
+
+    // Validate required fields
+    if (!first_name || !last_name || !date_of_birth || !sex) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({ 
+        success: false,
+        error: 'First name, last name, date of birth, and sex are required' 
+      });
+    }
+
+    // Update patient information
+    const [updateResult] = await connection.execute(
+      `UPDATE patients 
+       SET first_name = ?, 
+           middle_name = ?, 
+           last_name = ?,
+           date_of_birth = ?, 
+           sex = ?, 
+           contact_number = ?,
+           address = ?, 
+           updated_at = NOW()
+       WHERE id = ?`,
+      [
+        first_name,
+        middle_name || null,
+        last_name,
+        date_of_birth,
+        sex,
+        contact_number || null,
+        address || null,
+        patientId
+      ]
+    );
+
+    console.log('Update result:', updateResult);
+
+    // Get updated patient data
+    const [updatedPatient] = await connection.execute(
+      `SELECT 
+        p.*,
+        u.username,
+        u.email,
+        u.role
+      FROM patients p
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE p.id = ?`,
+      [patientId]
+    );
+
+    console.log('Updated patient:', updatedPatient[0]);
+
+    await connection.commit();
+    connection.release();
+
+    // Log audit
+    try {
+      await logAudit(
+        req.user.id,
+        'UPDATE',
+        'patients',
+        patientId,
+        patientId,
+        null,
+        updatedPatient[0],
+        `Patient updated their own profile`,
+        req
+      );
+    } catch (auditError) {
+      console.error('Audit log error (non-critical):', auditError.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedPatient[0]
+    });
+
+  } catch (error) {
+    if (connection) {
+      await connection.rollback();
+      connection.release();
+    }
+    console.error('❌ ERROR UPDATING PATIENT PROFILE:', error);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Error sql:', error.sql);
+    console.error('❌ Error stack:', error.stack);
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to update profile',
+      details: error.message 
+    });
+  }
+});
+
+// ==================== REGULAR PATIENT ROUTES ====================
 
 // GET all patients with pagination and filters
 router.get('/', 
@@ -269,11 +550,6 @@ router.get('/search/query',
 
       const like = `%${searchTerm}%`;
       
-      // For the ORDER BY CASE, we need exact matches for better relevance scoring
-      // Let's use different patterns for the CASE statement
-      const exactStartPattern = `${searchTerm}%`;
-      const exactEndPattern = `%${searchTerm}`;
-
       const [patients] = await pool.execute(
         `SELECT 
           p.id, 
@@ -317,7 +593,7 @@ router.get('/search/query',
 
     } catch (error) {
       console.error('Error searching patients:', error);
-      console.error('SQL:', error.sql); // Log the SQL that caused the error
+      console.error('SQL:', error.sql);
       console.error('SQL Message:', error.sqlMessage);
       res.status(500).json({ 
         success: false,
@@ -360,7 +636,7 @@ router.get('/:id',
       const patient = patients[0];
       patient.age = calculateAge(patient.date_of_birth);
 
-      // Get full medical history with counts
+      // Get full medical history
       const [labResults] = await pool.execute(
         `SELECT lr.*, u.username as performed_by_username,
                 a.appointment_number
@@ -472,7 +748,7 @@ router.post('/',
         });
       }
 
-      // Generate patient facility code with patient details
+      // Generate patient facility code
       const registrationYear = new Date().getFullYear();
       const patient_facility_code = await generatePatientCode(
         connection, 
@@ -706,7 +982,6 @@ router.put('/:id',
         updateFields.push('diagnosis_date = ?');
         updateValues.push(finalDiagnosisDate);
       } else if (hiv_status === 'REACTIVE' && !oldValues.diagnosis_date) {
-        // If status changed to reactive and no diagnosis date exists, set it
         updateFields.push('diagnosis_date = ?');
         updateValues.push(finalDiagnosisDate);
       }
@@ -784,7 +1059,7 @@ router.put('/:id',
     }
 });
 
-// DELETE patient (soft delete - deactivate user account instead)
+// DELETE patient (soft delete)
 router.delete('/:id', 
   authenticateToken, 
   authorize('ADMIN'),
@@ -846,7 +1121,7 @@ router.delete('/:id',
         req
       );
 
-      // Delete patient (cascade will handle related records)
+      // Delete patient
       await connection.execute(
         'DELETE FROM patients WHERE id = ?',
         [req.patientId]
@@ -868,7 +1143,6 @@ router.delete('/:id',
       await connection.rollback();
       console.error('Error deleting patient:', error);
       
-      // Check if foreign key constraint error
       if (error.code === 'ER_ROW_IS_REFERENCED_2') {
         return res.status(400).json({
           success: false,
@@ -893,7 +1167,6 @@ router.get('/:id/summary',
     try {
       const patientId = req.patientId;
 
-      // Get patient basic info
       const [patient] = await pool.execute(
         'SELECT * FROM patients WHERE id = ?',
         [patientId]
@@ -952,7 +1225,7 @@ router.get('/:id/summary',
         [patientId]
       );
 
-      // Get treatment adherence (if on ART)
+      // Get treatment adherence
       let adherence = null;
       if (patient[0].art_start_date) {
         const [missedAppointments] = await pool.execute(
@@ -983,7 +1256,7 @@ router.get('/:id/summary',
         }
       }
 
-      // Get recent activity (last 10 events)
+      // Get recent activity
       const [recentActivity] = await pool.execute(
         `(SELECT 
             'appointment' as type, 
@@ -1060,7 +1333,6 @@ router.get('/:id/appointments',
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
       
-      // Convert to integers for LIMIT/OFFSET concatenation
       const limitNum = parseInt(limit) || 100;
       const offsetNum = parseInt(offset) || 0;
       
@@ -1096,11 +1368,9 @@ router.get('/:id/appointments',
         params.push(status);
       }
 
-      // Get total count
       const [countResult] = await pool.execute(countQuery, params);
       const total = countResult[0].total;
 
-      // Add ORDER BY, LIMIT, OFFSET with concatenated values
       baseQuery += ` ORDER BY a.scheduled_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
       const [appointments] = await pool.execute(baseQuery, params);
@@ -1135,7 +1405,6 @@ router.get('/:id/lab-results',
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
       
-      // Convert to integers for LIMIT/OFFSET concatenation
       const limitNum = parseInt(limit) || 100;
       const offsetNum = parseInt(offset) || 0;
       
@@ -1167,28 +1436,16 @@ router.get('/:id/lab-results',
         params.push(testType);
       }
 
-      // Get total count
       const [countResult] = await pool.execute(countQuery, params);
       const total = countResult[0].total;
 
-      // Add ORDER BY, LIMIT, OFFSET with concatenated values
       baseQuery += ` ORDER BY lr.test_date DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
       const [labResults] = await pool.execute(baseQuery, params);
 
-      // Group by test type for easier consumption
-      const grouped = {};
-      labResults.forEach(result => {
-        if (!grouped[result.test_type]) {
-          grouped[result.test_type] = [];
-        }
-        grouped[result.test_type].push(result);
-      });
-
       res.json({
         success: true,
         data: labResults,
-        grouped_by_type: grouped,
         pagination: {
           page,
           limit,
@@ -1216,7 +1473,6 @@ router.get('/:id/encounters',
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
       
-      // Convert to integers for LIMIT/OFFSET concatenation
       const limitNum = parseInt(limit) || 100;
       const offsetNum = parseInt(offset) || 0;
       
@@ -1249,11 +1505,9 @@ router.get('/:id/encounters',
         params.push(type);
       }
 
-      // Get total count
       const [countResult] = await pool.execute(countQuery, params);
       const total = countResult[0].total;
 
-      // Add ORDER BY, LIMIT, OFFSET with concatenated values
       baseQuery += ` ORDER BY ce.encounter_date DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
       const [encounters] = await pool.execute(baseQuery, params);
@@ -1288,7 +1542,6 @@ router.get('/:id/queue-history',
       const patientId = req.patientId;
       const { page, limit, offset } = req.pagination;
       
-      // Convert to integers for LIMIT/OFFSET concatenation
       const limitNum = parseInt(limit) || 100;
       const offsetNum = parseInt(offset) || 0;
 
@@ -1307,7 +1560,6 @@ router.get('/:id/queue-history',
         [patientId]
       );
 
-      // Get total count
       const [countResult] = await pool.execute(
         `SELECT COUNT(*) as total
          FROM queue q
@@ -1363,12 +1615,10 @@ router.post('/import',
 
       for (const patientData of patients) {
         try {
-          // Auto-set diagnosis date if patient is reactive
           if (patientData.hiv_status === 'REACTIVE' && !patientData.diagnosis_date) {
             patientData.diagnosis_date = new Date().toISOString().split('T')[0];
           }
 
-          // Generate patient facility code
           const registrationYear = new Date().getFullYear();
           const patient_facility_code = await generatePatientCode(
             connection, 
@@ -1379,7 +1629,6 @@ router.post('/import',
             registrationYear
           );
 
-          // Insert patient
           const [result] = await connection.execute(
             `INSERT INTO patients (
               patient_facility_code, first_name, last_name, middle_name,
@@ -1495,7 +1744,6 @@ router.get('/export/csv',
 
       const [patients] = await pool.execute(query, params);
 
-      // Convert to CSV
       const json2csvParser = new Parser();
       const csv = json2csvParser.parse(patients);
 

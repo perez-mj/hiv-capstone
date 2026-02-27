@@ -6,14 +6,17 @@
       <div>
         <h1 class="text-h4 font-weight-bold text-primary">Welcome, {{ patient.first_name || 'Patient' }}</h1>
         <p class="text-body-1 text-medium-emphasis mt-2">
-          Patient ID: {{ patient.patient_facility_code || patient.patient_id }}
+          <!-- CHANGED: from "Patient ID" to "Facility ID" -->
+          Facility ID: {{ patient.patient_facility_code || patient.patient_id }}
         </p>
       </div>
       <v-btn 
-        color="primary" 
+        color="error" 
         variant="outlined"
         @click="logout"
         :loading="loggingOut"
+        :disabled="loggingOut"
+        prepend-icon="mdi-logout"
       >
         Logout
       </v-btn>
@@ -229,7 +232,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { patientApi, appointmentsApi, labResultsApi, queueApi } from '@/api' // Import all APIs
+import { patientApi } from '@/api'
 
 const router = useRouter()
 
@@ -274,22 +277,18 @@ onMounted(async () => {
 // Methods
 async function loadPatientData() {
   try {
-    // Try to get from localStorage first
     const patientData = localStorage.getItem('patientData')
     if (patientData) {
       patient.value = JSON.parse(patientData)
     }
     
-    // Then fetch fresh data from API
     const response = await patientApi.getProfile()
     if (response.data.success) {
       patient.value = response.data.data
-      // Update localStorage
       localStorage.setItem('patientData', JSON.stringify(response.data.data))
     }
   } catch (err) {
     console.error('Error loading patient data:', err)
-    // Don't show error if we have cached data
     if (!patient.value.first_name) {
       error.value = 'Failed to load patient information'
     }
@@ -303,7 +302,6 @@ async function loadDashboardData() {
     
     console.log('Loading patient dashboard data...')
     
-    // Use Promise.allSettled to handle individual failures
     const [appointmentsRes, labResultsRes, queueRes, statsRes] = await Promise.allSettled([
       patientApi.getAppointments({ limit: 3 }).catch(err => {
         console.error('Appointments error:', err)
@@ -323,26 +321,22 @@ async function loadDashboardData() {
       })
     ])
 
-    // Process appointments
     if (appointmentsRes.status === 'fulfilled') {
       const appointmentsData = appointmentsRes.value.data
       recentAppointments.value = appointmentsData.data || appointmentsData || []
       stats.value.upcomingAppointments = recentAppointments.value.length
     }
 
-    // Process lab results
     if (labResultsRes.status === 'fulfilled') {
       const labData = labResultsRes.value.data
       recentLabResults.value = labData.data || labData || []
       stats.value.totalTests = recentLabResults.value.length
     }
 
-    // Process queue info
     if (queueRes.status === 'fulfilled' && queueRes.value.data) {
       queueInfo.value = queueRes.value.data
     }
 
-    // Process stats
     if (statsRes.status === 'fulfilled' && statsRes.value.data) {
       const statsData = statsRes.value.data
       stats.value = {
@@ -366,7 +360,7 @@ function goToAppointments() {
 }
 
 function goToTestHistory() {
-  router.push('/patient/test-history')
+  router.push('/patient/history')
 }
 
 function goToMessages() {
@@ -421,32 +415,29 @@ function formatDateTime(dateString) {
   })
 }
 
-function formatTimeAgo(dateString) {
-  const now = new Date()
-  const time = new Date(dateString)
-  const diffMs = now - time
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  return `${Math.floor(diffHours / 24)}d ago`
-}
-
+// FIXED: Logout function
 async function logout() {
+  if (loggingOut.value) return
+  
+  loggingOut.value = true
+  console.log('Logging out...')
+  
   try {
-    loggingOut.value = true
-    // Optional: Call logout API
-    // await authApi.logout()
-  } catch (err) {
-    console.error('Logout error:', err)
-  } finally {
-    // Clear storage regardless
     localStorage.removeItem('patientToken')
     localStorage.removeItem('patientData')
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('authUser')
     localStorage.removeItem('userRole')
-    router.push('/patient/login')
+    
+    sessionStorage.clear()
+    
+    console.log('Storage cleared, redirecting to login...')
+    
+    window.location.href = '/patient/login'
+    
+  } catch (error) {
+    console.error('Logout error:', error)
+    window.location.href = '/patient/login'
   }
 }
 </script>
@@ -475,7 +466,6 @@ async function logout() {
   border-bottom: none;
 }
 
-/* Responsive adjustments */
 @media (max-width: 600px) {
   .v-container {
     padding: 12px !important;
