@@ -8,6 +8,10 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+const { setupAppointmentScheduler } = require('./services/appointmentScheduler');
+
+// After database connection is established
+setupAppointmentScheduler();
 
 // Import routes
 const patientRoutes = require('./routes/patients');

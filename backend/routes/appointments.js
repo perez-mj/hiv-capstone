@@ -36,7 +36,7 @@ router.get('/types', authenticateToken, async (req, res) => {
 router.post('/types', 
   authenticateToken, 
   authorize('ADMIN'),
-  validate('appointmentTypeCreate'),
+  validate('appointmentTypeCreate', 'body'),
   async (req, res) => {
     const connection = await pool.getConnection();
     
@@ -105,7 +105,7 @@ router.post('/types',
 router.put('/types/:id', 
   authenticateToken, 
   authorize('ADMIN'),
-  validate('appointmentTypeUpdate'),
+  validate('appointmentTypeUpdate', 'body'),
   async (req, res) => {
     const connection = await pool.getConnection();
     
@@ -1445,7 +1445,7 @@ router.get('/:id',
 router.post('/', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
-  validate('appointmentCreate'),
+  validate('appointmentCreate', 'body'),
   async (req, res) => {
     const connection = await pool.getConnection();
     
@@ -1650,11 +1650,11 @@ router.patch('/:id/status',
         });
       }
 
-      // Update status
+      // Update status - REMOVED updated_by
       await connection.execute(
-        `UPDATE appointments SET status = ?, updated_by = ?, updated_at = NOW() 
+        `UPDATE appointments SET status = ?, updated_at = NOW() 
          WHERE id = ?`,
-        [status, req.user.id, req.params.id]
+        [status, req.params.id]
       );
 
       // If status is CANCELLED or NO_SHOW and there's a queue entry, update it
@@ -1718,7 +1718,7 @@ router.patch('/:id/status',
 router.put('/:id', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
-  validate('appointmentUpdate'),
+  validate('appointmentUpdate', 'body'),
   async (req, res) => {
     const connection = await pool.getConnection();
     
@@ -1764,7 +1764,7 @@ router.put('/:id',
         }
       }
 
-      // Build update query
+      // Build update query - REMOVED updated_by
       const updateFields = [];
       const values = [];
 
@@ -1785,8 +1785,6 @@ router.put('/:id',
         values.push(status);
       }
 
-      updateFields.push('updated_by = ?');
-      values.push(req.user.id);
       updateFields.push('updated_at = NOW()');
 
       values.push(req.params.id);

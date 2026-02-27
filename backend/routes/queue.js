@@ -1,4 +1,4 @@
-// backend/routes/queue.js - FIXED VERSION
+// backend/routes/queue.js - UPDATED VERSION
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -15,17 +15,13 @@ router.get('/display', async (req, res) => {
   try {
     const [queue] = await pool.execute(
       `SELECT 
-        q.id,
         q.queue_number,
         q.status,
         q.called_at,
-        q.served_at,
-        a.appointment_number,
-        p.first_name as patient_first_name,
-        p.last_name as patient_last_name,
+        p.first_name,
+        p.last_name,
         CONCAT(LEFT(p.first_name, 1), '. ', p.last_name) as display_name,
-        at.type_name,
-        TIMESTAMPDIFF(MINUTE, q.called_at, NOW()) as minutes_since_called
+        at.type_name
       FROM queue q
       JOIN appointments a ON q.appointment_id = a.id
       JOIN patients p ON a.patient_id = p.id
@@ -33,54 +29,27 @@ router.get('/display', async (req, res) => {
       WHERE DATE(q.created_at) = CURDATE()
         AND q.status IN ('WAITING', 'CALLED', 'SERVING')
       ORDER BY 
-        CASE 
-          WHEN q.status = 'CALLED' THEN 1
-          WHEN q.status = 'SERVING' THEN 2
+        CASE q.status
+          WHEN 'SERVING' THEN 1
+          WHEN 'CALLED' THEN 2
           ELSE 3
         END,
         q.queue_number ASC`
     );
 
-    // Get currently serving and last 3 called
-    const nowServing = queue.find(q => q.status === 'SERVING');
-    const recentlyCalled = queue
-      .filter(q => q.status === 'CALLED')
-      .slice(0, 3);
-    
-    const waiting = queue.filter(q => q.status === 'WAITING');
-
     res.json({
       success: true,
-      data: {
-        now_serving: nowServing ? {
-          number: nowServing.queue_number,
-          name: nowServing.display_name,
-          type: nowServing.type_name,
-          since: nowServing.served_at
-        } : null,
-        recently_called: recentlyCalled.map(c => ({
-          number: c.queue_number,
-          name: c.display_name,
-          type: c.type_name,
-          called_at: c.called_at
-        })),
-        waiting_count: waiting.length,
-        next_numbers: waiting.slice(0, 5).map(w => w.queue_number)
-      }
+      data: queue
     });
-
   } catch (error) {
     console.error('Error fetching queue display:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to fetch queue display' 
-    });
+    res.status(500).json({ success: false, error: 'Failed to fetch queue' });
   }
 });
 
 // ==================== AUTHENTICATED ROUTES ====================
 
-// GET /api/queue/current - CURRENT QUEUE STATUS (what frontend needs)
+// GET /api/queue/current - CURRENT QUEUE STATUS
 router.get('/current', authenticateToken, async (req, res) => {
   try {
     console.log('Fetching current queue status...');
@@ -97,12 +66,14 @@ router.get('/current', authenticateToken, async (req, res) => {
         p.middle_name as patient_middle_name,
         at.type_name,
         at.duration_minutes,
-        u.username as created_by_username
+        creator.username as created_by_username,
+        updater.username as updated_by_username
       FROM queue q
       JOIN appointments a ON q.appointment_id = a.id
       JOIN patients p ON a.patient_id = p.id
       LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-      LEFT JOIN users u ON q.created_by = u.id
+      LEFT JOIN users creator ON q.created_by = creator.id
+      LEFT JOIN users updater ON q.updated_by = updater.id
       WHERE DATE(q.created_at) = CURDATE()
         AND q.status IN ('WAITING', 'CALLED', 'SERVING')
       ORDER BY 
@@ -122,19 +93,27 @@ router.get('/current', authenticateToken, async (req, res) => {
     // Calculate estimated wait time (15 minutes per waiting patient)
     const estimatedWaitTime = waitingCount * 15;
 
+    // Group by status
+    const grouped = {
+      waiting: queue.filter(q => q.status === 'WAITING'),
+      called: queue.filter(q => q.status === 'CALLED'),
+      serving: queue.filter(q => q.status === 'SERVING')
+    };
+
     res.json({
       success: true,
-      data: {
-        queue: queue,
-        now_serving: nowServing ? {
-          number: nowServing.queue_number,
-          name: `${nowServing.patient_first_name} ${nowServing.patient_last_name}`,
-          type: nowServing.type_name
-        } : null,
+      data: grouped,
+      now_serving: nowServing ? {
+        number: nowServing.queue_number,
+        name: `${nowServing.patient_first_name} ${nowServing.patient_last_name}`,
+        type: nowServing.type_name
+      } : null,
+      stats: {
         waiting_count: waitingCount,
         called_count: calledCount,
-        estimated_wait_time: estimatedWaitTime,
-        total_in_queue: queue.length
+        serving_count: grouped.serving.length,
+        total_in_queue: queue.length,
+        estimated_total_wait: estimatedWaitTime
       }
     });
 
@@ -147,7 +126,7 @@ router.get('/current', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/queue - All queue (Admin/Nurse only) - KEEP ORIGINAL
+// GET /api/queue - All queue (Admin/Nurse only)
 router.get('/', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
@@ -165,12 +144,14 @@ router.get('/',
           p.middle_name as patient_middle_name,
           at.type_name,
           at.duration_minutes,
-          u.username as created_by_username
+          creator.username as created_by_username,
+          updater.username as updated_by_username
         FROM queue q
         JOIN appointments a ON q.appointment_id = a.id
         JOIN patients p ON a.patient_id = p.id
         LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-        LEFT JOIN users u ON q.created_by = u.id
+        LEFT JOIN users creator ON q.created_by = creator.id
+        LEFT JOIN users updater ON q.updated_by = updater.id
         WHERE DATE(q.created_at) = CURDATE()
           AND q.status IN ('WAITING', 'CALLED', 'SERVING')
         ORDER BY 
@@ -273,8 +254,8 @@ router.get('/patient/:patientId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/queue/my-status - Patient's own queue status
-router.get('/my-status', 
+// GET /api/queue/patient/me - Patient's own queue status
+router.get('/patient/me', 
   authenticateToken,
   async (req, res) => {
     try {
@@ -314,7 +295,7 @@ router.get('/my-status',
              AND q2.queue_number < q.queue_number) as position
         FROM queue q
         JOIN appointments a ON q.appointment_id = a.id
-        JOIN appointment_types at ON a.appointment_type_id = at.id
+        LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
         WHERE a.patient_id = ?
           AND DATE(q.created_at) = CURDATE()
           AND q.status IN ('WAITING', 'CALLED', 'SERVING')
@@ -360,7 +341,15 @@ router.get('/history',
   async (req, res) => {
     try {
       const { page, limit, offset } = req.pagination;
+      // Convert to integers for safe concatenation
+      const limitNum = parseInt(limit) || 20;
+      const offsetNum = parseInt(offset) || 0;
+      
       const { start_date, end_date, status } = req.query;
+
+      console.log('Fetching queue history with params:', { 
+        page, limit, offset, start_date, end_date, status 
+      });
 
       let query = `
         SELECT 
@@ -371,14 +360,14 @@ router.get('/history',
           p.first_name as patient_first_name,
           p.last_name as patient_last_name,
           at.type_name,
-          u.username as created_by_username,
+          creator.username as created_by_username,
           TIMESTAMPDIFF(MINUTE, q.called_at, q.served_at) as service_duration,
           TIMESTAMPDIFF(MINUTE, q.created_at, q.called_at) as wait_duration
         FROM queue q
         JOIN appointments a ON q.appointment_id = a.id
         JOIN patients p ON a.patient_id = p.id
         LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-        LEFT JOIN users u ON q.created_by = u.id
+        LEFT JOIN users creator ON q.created_by = creator.id
         WHERE 1=1
       `;
       
@@ -395,8 +384,15 @@ router.get('/history',
       }
 
       if (status) {
-        query += ` AND q.status = ?`;
-        params.push(status);
+        // Handle comma-separated status values
+        const statusArray = status.split(',');
+        if (statusArray.length > 1) {
+          query += ` AND q.status IN (${statusArray.map(() => '?').join(', ')})`;
+          params.push(...statusArray);
+        } else {
+          query += ` AND q.status = ?`;
+          params.push(status);
+        }
       }
 
       // Get total count
@@ -405,48 +401,96 @@ router.get('/history',
         'SELECT COUNT(*) as total FROM queue q'
       );
       
-      const [countResult] = await pool.execute(countQuery, params);
-      const total = countResult[0].total;
+      console.log('Count query:', countQuery);
+      console.log('Count params:', params);
 
-      // Add pagination
-      query += ` ORDER BY q.created_at DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
+      let countResult;
+      try {
+        if (params.length > 0) {
+          [countResult] = await pool.execute(countQuery, params);
+        } else {
+          [countResult] = await pool.query(countQuery);
+        }
+        
+        console.log('Count result:', countResult);
+      } catch (countError) {
+        console.error('Error executing count query:', countError);
+        // Fallback to a simple count without filters if complex query fails
+        const [simpleCount] = await pool.execute(
+          'SELECT COUNT(*) as total FROM queue'
+        );
+        countResult = simpleCount;
+      }
 
-      const [history] = await pool.execute(query, params);
+      // Ensure countResult exists and has the expected structure
+      if (!countResult || !Array.isArray(countResult) || countResult.length === 0) {
+        console.error('Invalid count result:', countResult);
+        countResult = [{ total: 0 }];
+      }
+
+      const total = countResult[0]?.total || 0;
+
+      // Add pagination - use string concatenation for LIMIT and OFFSET
+      query += ` ORDER BY q.created_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
+
+      console.log('Main query:', query);
+      console.log('Main params:', params);
+
+      // Execute the main query
+      let history = [];
+      try {
+        if (params.length > 0) {
+          [history] = await pool.execute(query, params);
+        } else {
+          [history] = await pool.query(query);
+        }
+        console.log(`Found ${history.length} history entries`);
+      } catch (mainError) {
+        console.error('Error executing main query:', mainError);
+        history = [];
+      }
 
       // Calculate summary statistics
-      const [summary] = await pool.execute(
-        `SELECT 
-          AVG(TIMESTAMPDIFF(MINUTE, created_at, called_at)) as avg_wait_time,
-          AVG(TIMESTAMPDIFF(MINUTE, called_at, served_at)) as avg_service_time,
-          COUNT(*) as total_served,
-          SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END) as skipped_count
-        FROM queue
-        WHERE DATE(created_at) = CURDATE()`
-      );
+      let summary = [{ avg_wait_time: 0, avg_service_time: 0, total_served: 0, skipped_count: 0 }];
+      try {
+        const [summaryResult] = await pool.execute(
+          `SELECT 
+            AVG(TIMESTAMPDIFF(MINUTE, created_at, called_at)) as avg_wait_time,
+            AVG(TIMESTAMPDIFF(MINUTE, called_at, served_at)) as avg_service_time,
+            COUNT(*) as total_served,
+            SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END) as skipped_count
+          FROM queue
+          WHERE DATE(created_at) = CURDATE()`
+        );
+        summary = summaryResult || summary;
+      } catch (summaryError) {
+        console.error('Error fetching summary stats:', summaryError);
+      }
 
       res.json({
         success: true,
         data: history,
         summary: {
-          avg_wait_time: Math.round(summary[0].avg_wait_time || 0),
-          avg_service_time: Math.round(summary[0].avg_service_time || 0),
-          total_served: summary[0].total_served || 0,
-          skipped_count: summary[0].skipped_count || 0
+          avg_wait_time: Math.round(summary[0]?.avg_wait_time || 0),
+          avg_service_time: Math.round(summary[0]?.avg_service_time || 0),
+          total_served: summary[0]?.total_served || 0,
+          skipped_count: summary[0]?.skipped_count || 0
         },
         pagination: {
           page,
           limit,
           total,
-          total_pages: Math.ceil(total / limit)
+          total_pages: Math.ceil(total / limitNum)
         }
       });
 
     } catch (error) {
       console.error('Error fetching queue history:', error);
+      console.error('Error stack:', error.stack);
       res.status(500).json({ 
         success: false,
-        error: 'Failed to fetch queue history' 
+        error: 'Failed to fetch queue history',
+        details: error.message 
       });
     }
 });
@@ -541,27 +585,211 @@ router.get('/stats/overview',
     }
 });
 
-// POST add patient to queue
-router.post('/', 
+// POST add walk-in patient to queue (no appointment)
+router.post('/walkin', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
-  validate('queueAdd'),
   async (req, res) => {
     const connection = await pool.getConnection();
     
     try {
       await connection.beginTransaction();
 
-      const { appointment_id, priority = 0 } = req.body;
+      const {
+        patient_id,
+        appointment_type_id,
+        notes
+      } = req.body;
 
-      // Check if appointment exists and is suitable for queue
+      // Validate required fields
+      if (!patient_id || !appointment_type_id) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'Patient ID and appointment type are required'
+        });
+      }
+
+      // Check if patient exists
+      const [patient] = await connection.execute(
+        'SELECT id, first_name, last_name FROM patients WHERE id = ?',
+        [patient_id]
+      );
+
+      if (patient.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Patient not found' 
+        });
+      }
+
+      // Check if appointment type exists
+      const [appType] = await connection.execute(
+        'SELECT * FROM appointment_types WHERE id = ? AND is_active = 1',
+        [appointment_type_id]
+      );
+
+      if (appType.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Appointment type not found or inactive' 
+        });
+      }
+
+      // Check if patient is already in queue today
+      const [existingInQueue] = await connection.execute(
+        `SELECT q.id 
+         FROM queue q
+         JOIN appointments a ON q.appointment_id = a.id
+         WHERE a.patient_id = ? 
+           AND DATE(q.created_at) = CURDATE()
+           AND q.status IN ('WAITING', 'CALLED', 'SERVING')`,
+        [patient_id]
+      );
+
+      if (existingInQueue.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({ 
+          success: false,
+          error: 'Patient is already in today\'s queue' 
+        });
+      }
+
+      // Generate appointment number for walk-in
+      const date = new Date();
+      const year = date.getFullYear().toString().slice(-2);
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const datePrefix = `W${year}${month}${day}`; // 'W' prefix for walk-in
+      
+      const [lastAppointment] = await connection.execute(
+        `SELECT appointment_number FROM appointments 
+         WHERE appointment_number LIKE ? 
+         ORDER BY id DESC LIMIT 1`,
+        [`${datePrefix}%`]
+      );
+
+      let sequence = 1;
+      if (lastAppointment.length > 0) {
+        const lastSeq = parseInt(lastAppointment[0].appointment_number.split('-')[1]);
+        sequence = lastSeq + 1;
+      }
+      
+      const appointmentNumber = `${datePrefix}-${String(sequence).padStart(4, '0')}`;
+
+      // Create a temporary appointment for walk-in
+      const scheduledAt = new Date();
+      scheduledAt.setMinutes(scheduledAt.getMinutes() + 5); // Set 5 minutes from now
+
+      const [appointmentResult] = await connection.execute(
+        `INSERT INTO appointments (
+          appointment_number, patient_id, appointment_type_id, 
+          scheduled_at, notes, status, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 'CONFIRMED', ?, NOW(), NOW())`,
+        [
+          appointmentNumber,
+          patient_id,
+          appointment_type_id,
+          scheduledAt,
+          notes || 'Walk-in patient',
+          req.user.id
+        ]
+      );
+
+      // Generate queue number
+      const [lastQueue] = await connection.execute(
+        `SELECT MAX(queue_number) as max_num 
+         FROM queue 
+         WHERE DATE(created_at) = CURDATE()`
+      );
+      
+      const queueNumber = (lastQueue[0].max_num || 0) + 1;
+
+      // Add to queue
+      const [queueResult] = await connection.execute(
+        `INSERT INTO queue (
+          appointment_id, queue_number, priority, status, 
+          created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, 'WAITING', ?, NOW(), NOW())`,
+        [appointmentResult.insertId, queueNumber, 0, req.user.id]
+      );
+
+      // Get created queue entry with patient info
+      const [newQueue] = await connection.execute(
+        `SELECT 
+          q.*,
+          a.appointment_number,
+          a.notes as appointment_notes,
+          p.id as patient_id,
+          p.patient_facility_code,
+          p.first_name as patient_first_name,
+          p.last_name as patient_last_name,
+          p.contact_number,
+          at.type_name,
+          at.duration_minutes
+        FROM queue q
+        JOIN appointments a ON q.appointment_id = a.id
+        JOIN patients p ON a.patient_id = p.id
+        LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+        WHERE q.id = ?`,
+        [queueResult.insertId]
+      );
+
+      // Log audit
+      await logAudit(
+        req.user.id,
+        'WALKIN_ADD',
+        'queue',
+        queueResult.insertId,
+        patient_id,
+        null,
+        newQueue[0],
+        `Added walk-in patient ${patient[0].first_name} ${patient[0].last_name} to queue (No. ${queueNumber})`,
+        req
+      );
+
+      await connection.commit();
+
+      res.status(201).json({
+        success: true,
+        message: 'Walk-in patient added to queue successfully',
+        data: newQueue[0]
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error adding walk-in patient:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to add walk-in patient to queue' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+// POST confirm appointment and add to queue
+router.post('/confirm/:appointmentId', 
+  authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+
+      const { appointmentId } = req.params;
+
+      // Check if appointment exists and is in SCHEDULED status
       const [appointment] = await connection.execute(
         `SELECT a.*, p.first_name, p.last_name, at.type_name
          FROM appointments a
          JOIN patients p ON a.patient_id = p.id
          JOIN appointment_types at ON a.appointment_type_id = at.id
          WHERE a.id = ?`,
-        [appointment_id]
+        [appointmentId]
       );
 
       if (appointment.length === 0) {
@@ -574,12 +802,12 @@ router.post('/',
 
       const appt = appointment[0];
 
-      // Check if appointment is suitable for queue
-      if (!['SCHEDULED', 'CONFIRMED'].includes(appt.status)) {
+      // Check if appointment is suitable for confirmation
+      if (appt.status !== 'SCHEDULED') {
         await connection.rollback();
         return res.status(400).json({ 
           success: false,
-          error: `Cannot add appointment with status '${appt.status}' to queue` 
+          error: `Cannot confirm appointment with status '${appt.status}'` 
         });
       }
 
@@ -587,7 +815,7 @@ router.post('/',
       const [existing] = await connection.execute(
         `SELECT id FROM queue 
          WHERE appointment_id = ? AND DATE(created_at) = CURDATE()`,
-        [appointment_id]
+        [appointmentId]
       );
 
       if (existing.length > 0) {
@@ -598,26 +826,31 @@ router.post('/',
         });
       }
 
-      // Generate queue number
-      const queue_number = await generateQueueNumber(connection);
+      // Update appointment status to CONFIRMED
+      await connection.execute(
+        `UPDATE appointments 
+         SET status = 'CONFIRMED', updated_at = NOW(), updated_by = ? 
+         WHERE id = ?`,
+        [req.user.id, appointmentId]
+      );
+
+      // Generate queue number for today
+      const [lastQueue] = await connection.execute(
+        `SELECT MAX(queue_number) as max_num 
+         FROM queue 
+         WHERE DATE(created_at) = CURDATE()`
+      );
+      
+      const queueNumber = (lastQueue[0].max_num || 0) + 1;
 
       // Add to queue
-      const [result] = await connection.execute(
+      const [queueResult] = await connection.execute(
         `INSERT INTO queue (
           appointment_id, queue_number, priority, status, 
           created_by, created_at, updated_at
         ) VALUES (?, ?, ?, 'WAITING', ?, NOW(), NOW())`,
-        [appointment_id, queue_number, priority, req.user.id]
+        [appointmentId, queueNumber, 0, req.user.id]
       );
-
-      // Update appointment status to CONFIRMED if it was SCHEDULED
-      if (appt.status === 'SCHEDULED') {
-        await connection.execute(
-          `UPDATE appointments SET status = 'CONFIRMED', updated_at = NOW() 
-           WHERE id = ?`,
-          [appointment_id]
-        );
-      }
 
       // Get created queue entry
       const [newQueue] = await connection.execute(
@@ -630,19 +863,19 @@ router.post('/',
         JOIN appointments a ON q.appointment_id = a.id
         JOIN patients p ON a.patient_id = p.id
         WHERE q.id = ?`,
-        [result.insertId]
+        [queueResult.insertId]
       );
 
       // Log audit
       await logAudit(
         req.user.id,
-        'INSERT',
+        'CONFIRM_AND_ADD_TO_QUEUE',
         'queue',
-        result.insertId,
+        queueResult.insertId,
         appt.patient_id,
-        null,
-        newQueue[0],
-        `Added patient ${appt.first_name} ${appt.last_name} to queue (No. ${queue_number})`,
+        { status: appt.status },
+        { status: 'CONFIRMED', queue_number: queueNumber },
+        `Confirmed appointment for ${appt.first_name} ${appt.last_name} and added to queue (No. ${queueNumber})`,
         req
       );
 
@@ -650,24 +883,30 @@ router.post('/',
 
       res.status(201).json({
         success: true,
-        message: 'Patient added to queue successfully',
-        data: newQueue[0]
+        message: 'Appointment confirmed and added to queue successfully',
+        data: {
+          appointment: {
+            id: appt.id,
+            status: 'CONFIRMED'
+          },
+          queue: newQueue[0]
+        }
       });
 
     } catch (error) {
       await connection.rollback();
-      console.error('Error adding to queue:', error);
+      console.error('Error confirming appointment:', error);
       res.status(500).json({ 
         success: false,
-        error: 'Failed to add patient to queue' 
+        error: 'Failed to confirm appointment' 
       });
     } finally {
       connection.release();
     }
 });
 
-// POST call next patient
-router.post('/call-next', 
+// POST call patient (with ID or 'next')
+router.post('/call/:id', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
   async (req, res) => {
@@ -676,97 +915,183 @@ router.post('/call-next',
     try {
       await connection.beginTransaction();
 
-      // Find next patient in queue
-      const [nextPatients] = await connection.execute(
-        `SELECT q.*, a.patient_id, a.appointment_number,
-                p.first_name, p.last_name
-         FROM queue q
-         JOIN appointments a ON q.appointment_id = a.id
-         JOIN patients p ON a.patient_id = p.id
-         WHERE DATE(q.created_at) = CURDATE()
-           AND q.status = 'WAITING'
-         ORDER BY q.priority DESC, q.queue_number ASC
-         LIMIT 1`
-      );
+      const { id } = req.params;
 
-      if (nextPatients.length === 0) {
-        await connection.rollback();
-        return res.status(404).json({ 
-          success: false,
-          error: 'No patients waiting in queue' 
+      if (id === 'next') {
+        // Call next patient
+        const [nextPatients] = await connection.execute(
+          `SELECT q.*, a.patient_id, a.appointment_number,
+                  p.first_name, p.last_name
+           FROM queue q
+           JOIN appointments a ON q.appointment_id = a.id
+           JOIN patients p ON a.patient_id = p.id
+           WHERE DATE(q.created_at) = CURDATE()
+             AND q.status = 'WAITING'
+           ORDER BY q.priority DESC, q.queue_number ASC
+           LIMIT 1`
+        );
+
+        if (nextPatients.length === 0) {
+          await connection.rollback();
+          return res.status(404).json({ 
+            success: false,
+            error: 'No patients waiting in queue' 
+          });
+        }
+
+        const nextPatient = nextPatients[0];
+
+        // Update queue status
+        await connection.execute(
+          `UPDATE queue 
+           SET status = 'CALLED', called_at = NOW(), updated_by = ?, updated_at = NOW() 
+           WHERE id = ?`,
+          [req.user.id, nextPatient.id]
+        );
+
+        // Update appointment status
+        await connection.execute(
+          `UPDATE appointments 
+           SET status = 'IN_PROGRESS', updated_at = NOW() 
+           WHERE id = ?`,
+          [nextPatient.appointment_id]
+        );
+
+        // Get updated queue entry
+        const [updated] = await connection.execute(
+          `SELECT 
+            q.*,
+            a.appointment_number,
+            p.first_name as patient_first_name,
+            p.last_name as patient_last_name,
+            p.contact_number,
+            at.type_name
+          FROM queue q
+          JOIN appointments a ON q.appointment_id = a.id
+          JOIN patients p ON a.patient_id = p.id
+          JOIN appointment_types at ON a.appointment_type_id = at.id
+          WHERE q.id = ?`,
+          [nextPatient.id]
+        );
+
+        // Log audit
+        await logAudit(
+          req.user.id,
+          'CALL_NEXT',
+          'queue',
+          nextPatient.id,
+          nextPatient.patient_id,
+          { status: 'WAITING' },
+          { status: 'CALLED' },
+          `Called patient ${nextPatient.first_name} ${nextPatient.last_name} (No. ${nextPatient.queue_number})`,
+          req
+        );
+
+        await connection.commit();
+
+        return res.json({
+          success: true,
+          message: 'Next patient called successfully',
+          data: updated[0]
+        });
+      } else {
+        // Call specific patient by ID
+        const [patient] = await connection.execute(
+          `SELECT q.*, a.patient_id, a.appointment_number,
+                  p.first_name, p.last_name
+           FROM queue q
+           JOIN appointments a ON q.appointment_id = a.id
+           JOIN patients p ON a.patient_id = p.id
+           WHERE q.id = ?`,
+          [id]
+        );
+
+        if (patient.length === 0) {
+          await connection.rollback();
+          return res.status(404).json({ 
+            success: false,
+            error: 'Queue entry not found' 
+          });
+        }
+
+        const queueEntry = patient[0];
+
+        if (queueEntry.status !== 'WAITING') {
+          await connection.rollback();
+          return res.status(400).json({ 
+            success: false,
+            error: `Cannot call patient with status '${queueEntry.status}'` 
+          });
+        }
+
+        // Update queue status
+        await connection.execute(
+          `UPDATE queue 
+           SET status = 'CALLED', called_at = NOW(), updated_by = ?, updated_at = NOW() 
+           WHERE id = ?`,
+          [req.user.id, id]
+        );
+
+        // Update appointment status
+        await connection.execute(
+          `UPDATE appointments 
+           SET status = 'IN_PROGRESS', updated_at = NOW() 
+           WHERE id = ?`,
+          [queueEntry.appointment_id]
+        );
+
+        // Get updated queue entry
+        const [updated] = await connection.execute(
+          `SELECT 
+            q.*,
+            a.appointment_number,
+            p.first_name as patient_first_name,
+            p.last_name as patient_last_name,
+            at.type_name
+          FROM queue q
+          JOIN appointments a ON q.appointment_id = a.id
+          JOIN patients p ON a.patient_id = p.id
+          JOIN appointment_types at ON a.appointment_type_id = at.id
+          WHERE q.id = ?`,
+          [id]
+        );
+
+        // Log audit
+        await logAudit(
+          req.user.id,
+          'CALL',
+          'queue',
+          id,
+          queueEntry.patient_id,
+          { status: queueEntry.status },
+          { status: 'CALLED' },
+          `Called patient ${queueEntry.first_name} ${queueEntry.last_name} (No. ${queueEntry.queue_number})`,
+          req
+        );
+
+        await connection.commit();
+
+        res.json({
+          success: true,
+          message: 'Patient called successfully',
+          data: updated[0]
         });
       }
 
-      const nextPatient = nextPatients[0];
-
-      // Update queue status
-      await connection.execute(
-        `UPDATE queue 
-         SET status = 'CALLED', called_at = NOW(), updated_at = NOW() 
-         WHERE id = ?`,
-        [nextPatient.id]
-      );
-
-      // Update appointment status
-      await connection.execute(
-        `UPDATE appointments 
-         SET status = 'IN_PROGRESS', updated_at = NOW() 
-         WHERE id = ?`,
-        [nextPatient.appointment_id]
-      );
-
-      // Get updated queue entry
-      const [updated] = await connection.execute(
-        `SELECT 
-          q.*,
-          a.appointment_number,
-          p.first_name as patient_first_name,
-          p.last_name as patient_last_name,
-          p.contact_number,
-          at.type_name
-        FROM queue q
-        JOIN appointments a ON q.appointment_id = a.id
-        JOIN patients p ON a.patient_id = p.id
-        JOIN appointment_types at ON a.appointment_type_id = at.id
-        WHERE q.id = ?`,
-        [nextPatient.id]
-      );
-
-      // Log audit
-      await logAudit(
-        req.user.id,
-        'CALL_NEXT',
-        'queue',
-        nextPatient.id,
-        nextPatient.patient_id,
-        { status: 'WAITING' },
-        { status: 'CALLED' },
-        `Called patient ${nextPatient.first_name} ${nextPatient.last_name} (No. ${nextPatient.queue_number})`,
-        req
-      );
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: 'Next patient called successfully',
-        data: updated[0]
-      });
-
     } catch (error) {
       await connection.rollback();
-      console.error('Error calling next patient:', error);
+      console.error('Error calling patient:', error);
       res.status(500).json({ 
         success: false,
-        error: 'Failed to call next patient' 
+        error: 'Failed to call patient' 
       });
     } finally {
       connection.release();
     }
 });
 
-// PUT start serving patient
-router.put('/:id/start', 
+// POST start serving patient
+router.post('/start-serving/:id', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
   async (req, res) => {
@@ -809,9 +1134,9 @@ router.put('/:id/start',
       // Update queue status
       await connection.execute(
         `UPDATE queue 
-         SET status = 'SERVING', served_at = NOW(), updated_at = NOW() 
+         SET status = 'SERVING', served_at = NOW(), updated_by = ?, updated_at = NOW() 
          WHERE id = ?`,
-        [id]
+        [req.user.id, id]
       );
 
       // Get updated queue entry
@@ -861,8 +1186,8 @@ router.put('/:id/start',
     }
 });
 
-// PUT complete service
-router.put('/:id/complete', 
+// POST complete serving patient
+router.post('/complete/:id', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
   async (req, res) => {
@@ -905,9 +1230,9 @@ router.put('/:id/complete',
       // Update queue status
       await connection.execute(
         `UPDATE queue 
-         SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() 
+         SET status = 'COMPLETED', completed_at = NOW(), updated_by = ?, updated_at = NOW() 
          WHERE id = ?`,
-        [id]
+        [req.user.id, id]
       );
 
       // Update appointment status
@@ -966,8 +1291,8 @@ router.put('/:id/complete',
     }
 });
 
-// PUT skip patient
-router.put('/:id/skip', 
+// POST skip patient
+router.post('/skip/:id', 
   authenticateToken, 
   authorize('ADMIN', 'NURSE'),
   async (req, res) => {
@@ -1011,13 +1336,10 @@ router.put('/:id/skip',
       // Update queue status
       await connection.execute(
         `UPDATE queue 
-         SET status = 'SKIPPED', updated_at = NOW() 
+         SET status = 'SKIPPED', updated_by = ?, updated_at = NOW() 
          WHERE id = ?`,
-        [id]
+        [req.user.id, id]
       );
-
-      // Optionally update appointment status (keep as CONFIRMED or change to NO_SHOW?)
-      // For now, leave appointment status as is
 
       // Log audit
       await logAudit(
@@ -1057,27 +1379,24 @@ router.put('/:id/skip',
     }
 });
 
-// DELETE remove from queue (Admin only)
-router.delete('/:id', 
+// POST reorder queue (update priority)
+router.post('/reorder', 
   authenticateToken, 
-  authorize('ADMIN'),
+  authorize('ADMIN', 'NURSE'),
   async (req, res) => {
     const connection = await pool.getConnection();
     
     try {
       await connection.beginTransaction();
 
-      const { id } = req.params;
+      const { queue_id, priority } = req.body;
 
-      // Check queue entry
       const [queue] = await connection.execute(
-        `SELECT q.*, a.patient_id, a.appointment_id,
-                p.first_name, p.last_name
+        `SELECT q.*, a.patient_id
          FROM queue q
          JOIN appointments a ON q.appointment_id = a.id
-         JOIN patients p ON a.patient_id = p.id
          WHERE q.id = ?`,
-        [id]
+        [queue_id]
       );
 
       if (queue.length === 0) {
@@ -1088,48 +1407,283 @@ router.delete('/:id',
         });
       }
 
-      const queueEntry = queue[0];
+      const oldPriority = queue[0].priority;
 
-      // Log audit before deletion
+      await connection.execute(
+        `UPDATE queue 
+         SET priority = ?, updated_by = ?, updated_at = NOW() 
+         WHERE id = ?`,
+        [priority, req.user.id, queue_id]
+      );
+
       await logAudit(
         req.user.id,
-        'DELETE',
+        'UPDATE_PRIORITY',
         'queue',
-        id,
-        queueEntry.patient_id,
-        queueEntry,
-        null,
-        `Removed patient ${queueEntry.first_name} ${queueEntry.last_name} from queue`,
+        queue_id,
+        queue[0].patient_id,
+        { priority: oldPriority },
+        { priority },
+        `Updated queue priority from ${oldPriority} to ${priority}`,
         req
       );
 
-      // Delete queue entry
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'Queue priority updated successfully'
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error reordering queue:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to reorder queue' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+// DELETE reset queue (with filters)
+router.delete('/reset', 
+  authenticateToken, 
+  authorize('ADMIN'),
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+
+      const { appointment_id, date } = req.query;
+
+      let whereClause = '';
+      const params = [];
+
+      if (appointment_id) {
+        whereClause = 'WHERE appointment_id = ?';
+        params.push(appointment_id);
+      } else if (date) {
+        whereClause = 'WHERE DATE(created_at) = ?';
+        params.push(date);
+      } else {
+        // Default to today
+        whereClause = 'WHERE DATE(created_at) = CURDATE()';
+      }
+
+      const [queueEntries] = await connection.execute(
+        `SELECT q.*, a.patient_id, p.first_name, p.last_name
+         FROM queue q
+         JOIN appointments a ON q.appointment_id = a.id
+         JOIN patients p ON a.patient_id = p.id
+         ${whereClause}`,
+        params
+      );
+
+      if (queueEntries.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'No queue entries found to reset' 
+        });
+      }
+
+      // Log audit for each entry
+      for (const entry of queueEntries) {
+        await logAudit(
+          req.user.id,
+          'DELETE',
+          'queue',
+          entry.id,
+          entry.patient_id,
+          entry,
+          null,
+          `Reset queue entry for patient ${entry.first_name} ${entry.last_name}`,
+          req
+        );
+      }
+
+      // Delete queue entries
       await connection.execute(
-        'DELETE FROM queue WHERE id = ?',
-        [id]
+        `DELETE FROM queue ${whereClause}`,
+        params
       );
 
       await connection.commit();
 
       res.json({ 
         success: true,
-        message: 'Patient removed from queue successfully',
-        deleted_entry: {
-          id: queueEntry.id,
-          queue_number: queueEntry.queue_number,
-          patient_name: `${queueEntry.first_name} ${queueEntry.last_name}`
-        }
+        message: `Successfully reset ${queueEntries.length} queue entries`,
+        count: queueEntries.length
       });
 
     } catch (error) {
       await connection.rollback();
-      console.error('Error removing from queue:', error);
+      console.error('Error resetting queue:', error);
       res.status(500).json({ 
         success: false,
-        error: 'Failed to remove patient from queue' 
+        error: 'Failed to reset queue' 
       });
     } finally {
       connection.release();
+    }
+});
+
+// GET queue summary
+router.get('/current/summary', 
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const [summary] = await pool.execute(
+        `SELECT 
+          COUNT(*) as total_in_queue,
+          SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END) as waiting,
+          SUM(CASE WHEN status = 'CALLED' THEN 1 ELSE 0 END) as called,
+          SUM(CASE WHEN status = 'SERVING' THEN 1 ELSE 0 END) as serving,
+          MIN(CASE WHEN status = 'WAITING' THEN queue_number ELSE NULL END) as next_number
+        FROM queue
+        WHERE DATE(created_at) = CURDATE()
+          AND status IN ('WAITING', 'CALLED', 'SERVING')`
+      );
+
+      res.json({
+        success: true,
+        data: summary[0]
+      });
+
+    } catch (error) {
+      console.error('Error fetching queue summary:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch queue summary' 
+      });
+    }
+});
+
+// GET check if appointment is in queue
+router.get('/check-appointment/:appointmentId', 
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { appointmentId } = req.params;
+
+      const [queue] = await pool.execute(
+        `SELECT q.*, 
+          (SELECT COUNT(*) + 1 
+           FROM queue q2 
+           WHERE DATE(q2.created_at) = CURDATE() 
+             AND q2.status IN ('WAITING', 'CALLED')
+             AND q2.queue_number < q.queue_number) as position
+         FROM queue q
+         WHERE q.appointment_id = ?
+           AND DATE(q.created_at) = CURDATE()
+           AND q.status IN ('WAITING', 'CALLED', 'SERVING')`,
+        [appointmentId]
+      );
+
+      if (queue.length === 0) {
+        return res.json({
+          success: true,
+          in_queue: false
+        });
+      }
+
+      res.json({
+        success: true,
+        in_queue: true,
+        data: queue[0]
+      });
+
+    } catch (error) {
+      console.error('Error checking appointment in queue:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to check appointment in queue' 
+      });
+    }
+});
+
+// GET daily stats
+router.get('/stats/daily', 
+  authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
+  async (req, res) => {
+    try {
+      const { start_date, end_date } = req.query;
+
+      let query = `
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+          SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END) as skipped,
+          AVG(CASE WHEN status = 'COMPLETED' 
+            THEN TIMESTAMPDIFF(MINUTE, created_at, completed_at) 
+            ELSE NULL END) as avg_total_time
+        FROM queue
+        WHERE 1=1
+      `;
+      
+      const params = [];
+
+      if (start_date) {
+        query += ` AND DATE(created_at) >= ?`;
+        params.push(start_date);
+      }
+
+      if (end_date) {
+        query += ` AND DATE(created_at) <= ?`;
+        params.push(end_date);
+      }
+
+      query += ` GROUP BY DATE(created_at) ORDER BY date DESC`;
+
+      const [stats] = await pool.execute(query, params);
+
+      res.json({
+        success: true,
+        data: stats
+      });
+
+    } catch (error) {
+      console.error('Error fetching daily stats:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch daily stats' 
+      });
+    }
+});
+
+// GET peak hours stats
+router.get('/stats/peak-hours', 
+  authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
+  async (req, res) => {
+    try {
+      const [peakHours] = await pool.execute(
+        `SELECT 
+          HOUR(created_at) as hour,
+          COUNT(*) as total_count,
+          AVG(COUNT(*)) OVER() as avg_count
+        FROM queue
+        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY HOUR(created_at)
+        ORDER BY total_count DESC`
+      );
+
+      res.json({
+        success: true,
+        data: peakHours
+      });
+
+    } catch (error) {
+      console.error('Error fetching peak hours stats:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch peak hours stats' 
+      });
     }
 });
 

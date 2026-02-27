@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Feb 27, 2026 at 06:03 AM
+-- Generation Time: Feb 27, 2026 at 06:49 AM
 -- Server version: 8.0.45-0ubuntu0.24.04.1
 -- PHP Version: 8.3.6
 
@@ -179,6 +179,8 @@ CREATE TABLE `queue` (
   `appointment_id` int NOT NULL,
   `queue_number` int NOT NULL,
   `priority` tinyint DEFAULT '0',
+  `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
   `status` enum('WAITING','CALLED','SERVING','COMPLETED','SKIPPED') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'WAITING',
   `called_at` timestamp NULL DEFAULT NULL,
   `served_at` timestamp NULL DEFAULT NULL,
@@ -235,7 +237,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `email`, `role`, `is_active`, `last_login`, `created_at`, `updated_at`) VALUES
-(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-02-26 13:54:41', '2025-11-26 02:59:49', '2026-02-26 13:54:41');
+(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-02-27 06:08:03', '2025-11-26 02:59:49', '2026-02-27 06:08:03');
 
 --
 -- Indexes for dumped tables
@@ -324,7 +326,9 @@ ALTER TABLE `queue`
   ADD KEY `idx_queue_number_date` (`queue_number`,`created_at`),
   ADD KEY `idx_status` (`status`),
   ADD KEY `idx_created_at` (`created_at`),
-  ADD KEY `idx_queue_status_created` (`status`,`created_at`);
+  ADD KEY `idx_queue_status_created` (`status`,`created_at`),
+  ADD KEY `idx_created_by` (`created_by`),
+  ADD KEY `idx_updated_by` (`updated_by`);
 
 --
 -- Indexes for table `staff`
@@ -453,7 +457,9 @@ ALTER TABLE `patients`
 -- Constraints for table `queue`
 --
 ALTER TABLE `queue`
-  ADD CONSTRAINT `fk_queue_appointment_id` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `fk_queue_appointment_id` FOREIGN KEY (`appointment_id`) REFERENCES `appointments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_queue_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_queue_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `staff`

@@ -91,6 +91,23 @@ const validateAppointmentId = async (req, res, next) => {
 };
 
 /**
+ * Validate queue ID parameter
+ */
+const validateQueueId = async (req, res, next) => {
+  const queueId = parseInt(req.params.id);
+  
+  if (isNaN(queueId) || queueId <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid queue ID'
+    });
+  }
+  
+  req.queueId = queueId;
+  next();
+};
+
+/**
  * Validate pagination parameters
  */
 const validatePagination = (req, res, next) => {
@@ -205,6 +222,7 @@ module.exports = {
   validate,
   validatePatientId,
   validateAppointmentId,
+  validateQueueId,
   validatePagination,
   validateDateRange,
   validateFileUpload,

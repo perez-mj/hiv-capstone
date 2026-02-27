@@ -26,8 +26,9 @@ const routes = [
       { path: 'users', name: 'UserManagement', component: () => import('@/pages/admin/UserManagement.vue'), meta: { allowedRoles: ['ADMIN'] } },
       { path: 'patients/:id', name: 'PatientDetails', component: () => import('@/pages/admin/PatientDetails.vue') },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
+      { path: 'queue', name: 'QueueManagement', component: () => import('@/pages/admin/QueueManagement.vue') },
       { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
-      { path: 'kiosks', name: 'KioskDevices', component: () => import('@/pages/admin/KioskDevices.vue'), meta: { requiresAuth: true, allowedRoles: ['ADMIN'] } },
+      { path: 'kiosks', name: 'KioskDevices', component: () => import('@/pages/admin/KioskDevices.vue'), meta: { allowedRoles: ['ADMIN'] } },
     ]
   },
   {

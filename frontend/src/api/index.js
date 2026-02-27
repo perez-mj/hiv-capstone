@@ -7,27 +7,27 @@ import http from './http'
 export const patientApi = {
   // Dashboard - get patient's own data
   getDashboard: () => http.get('/patients/me/dashboard'),
-  
+
   // Profile - get/update patient's own profile
   getProfile: () => http.get('/patients/me'),
   updateProfile: (data) => http.put('/patients/me', data),
-  
+
   // Appointments - patient's own appointments
   getAppointments: (params) => http.get('/appointments/patient/me/history', { params }),
   getUpcomingAppointments: () => http.get('/appointments/patient/me/upcoming'),
   getNextAppointment: () => http.get('/appointments/patient/me/next'),
   bookAppointment: (data) => http.post('/appointments/patient/me/book', data),
   cancelAppointment: (id) => http.delete(`/appointments/patient/me/cancel/${id}`),
-  
+
   // Lab Results - patient's own lab results
   getLabResults: (params) => http.get('/lab-results/patient/me', { params }),
-  
+
   // Queue - patient's queue position
   getQueuePosition: () => http.get('/queue/patient/me'),
-  
+
   // Statistics - patient's own stats
   getStats: () => http.get('/patients/me/stats'),
-  
+
   // Clinical Encounters - patient's own encounters
   getEncounters: (params) => http.get('/clinical-encounters/patient/me', { params })
 }
@@ -50,6 +50,7 @@ export const patientsApi = {
   getStats: () => http.get('/patients/stats/overview'),
   search: (query, limit = 10) => http.get('/patients/search/query', { params: { q: query, limit } }),
   getById: (id) => http.get(`/patients/${id}`),
+  getToday: () => http.get('/appointments/today'),
   create: (data) => http.post('/patients', data),
   update: (id, data) => http.put(`/patients/${id}`, data),
   delete: (id) => http.delete(`/patients/${id}`),
@@ -59,9 +60,9 @@ export const patientsApi = {
   getEncounters: (id, params) => http.get(`/patients/${id}/encounters`, { params }),
   getQueueHistory: (id, params) => http.get(`/patients/${id}/queue-history`, { params }),
   import: (data) => http.post('/patients/import', data),
-  exportCSV: (params) => http.get('/patients/export/csv', { 
-    params, 
-    responseType: 'blob' 
+  exportCSV: (params) => http.get('/patients/export/csv', {
+    params,
+    responseType: 'blob'
   })
 }
 
@@ -84,7 +85,7 @@ export const appointmentsApi = {
   getById: (id) => http.get(`/appointments/${id}`),
   create: (data) => http.post('/appointments', data),
   update: (id, data) => http.put(`/appointments/${id}`, data),
-  updateStatus: (id, data) => http.patch(`/appointments/${id}/status`, data ),
+  updateStatus: (id, data) => http.patch(`/appointments/${id}/status`, data),
   delete: (id) => http.delete(`/appointments/${id}`),
 
   // utility
@@ -96,24 +97,37 @@ export const appointmentsApi = {
 
 // Queue API - ALIGNED WITH YOUR BACKEND ROUTES
 export const queueApi = {
+  // Public routes
+  getDisplayBoard: () => http.get('/queue/display'),
+
+  // Current queue status
   getCurrent: () => http.get('/queue/current'),
-  getPosition: (queueNumber) => http.get(`/queue/position/${queueNumber}`),
+  getSummary: () => http.get('/queue/current/summary'),
+
+  // Patient-specific routes
   getPatientQueue: (patientId) => http.get(`/queue/patient/${patientId}`),
-  addToQueue: (data) => http.post('/queue/add', data),
-  callPatient: (id, data = {}) => http.post(`/queue/call/${id}`, data),
+  getMyQueueStatus: () => http.get('/queue/patient/me'),
+
+  // Queue management (Admin/Nurse only)
+  getAll: () => http.get('/queue'),
+  getHistory: (params) => http.get('/queue/history', { params }),
+
+  // Queue operations
+  addWalkin: (data) => http.post('/queue/walkin', data),
+  confirmAppointment: (appointmentId) => http.post(`/queue/confirm/${appointmentId}`),
+  callPatient: (id) => http.post(`/queue/call/${id}`), // id can be numeric or 'next'
   startServing: (id) => http.post(`/queue/start-serving/${id}`),
   completeServing: (id) => http.post(`/queue/complete/${id}`),
   skipPatient: (id, data = {}) => http.post(`/queue/skip/${id}`, data),
   reorderQueue: (data) => http.post('/queue/reorder', data),
-  getHistory: (params) => http.get('/queue/history', { params }),
 
-  // statistics
+  // Statistics
+  getStatsOverview: () => http.get('/queue/stats/overview'),
   getDailyStats: (params) => http.get('/queue/stats/daily', { params }),
   getPeakHoursStats: () => http.get('/queue/stats/peak-hours'),
 
-  // utility
+  // Utility
   resetQueue: (params) => http.delete('/queue/reset', { params }),
-  getSummary: () => http.get('/queue/current/summary'),
   checkAppointmentInQueue: (appointmentId) => http.get(`/queue/check-appointment/${appointmentId}`)
 }
 
@@ -155,24 +169,24 @@ export const labResultsApi = {
 export const kioskApi = {
   // Public: Check device status and auto-register if needed
   checkStatus: (deviceId) => http.get(`/kiosk/status/${deviceId}`),
-  
+
   // Public: Get queue data for display on kiosk
-  getQueueData: (deviceId) => http.get('/kiosk/queue-data', { 
-    params: { device: deviceId } 
+  getQueueData: (deviceId) => http.get('/kiosk/queue-data', {
+    params: { device: deviceId }
   }),
 
   // Admin: Get all kiosk devices
   getDevices: () => http.get('/kiosk/admin/devices'),
-  
+
   // Admin: Authorize a specific device
   authorizeDevice: (deviceId) => http.post(`/kiosk/admin/devices/${deviceId}/authorize`),
-  
+
   // Admin: Deauthorize a specific device
   deauthorizeDevice: (deviceId) => http.post(`/kiosk/admin/devices/${deviceId}/deauthorize`),
-  
+
   // Admin: Update device name/information
   updateDevice: (deviceId, data) => http.put(`/kiosk/admin/devices/${deviceId}`, data),
-  
+
   // Admin: Delete/remove a device
   deleteDevice: (deviceId) => http.delete(`/kiosk/admin/devices/${deviceId}`)
 }
@@ -189,7 +203,7 @@ export const dashboardApi = {
 
 export default {
   auth: authApi,
-  patient: patientApi, 
+  patient: patientApi,
   patients: patientsApi,
   appointments: appointmentsApi,
   queue: queueApi,

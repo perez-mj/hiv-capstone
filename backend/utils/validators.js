@@ -2,10 +2,19 @@
 const Joi = require('joi');
 
 /**
+ * Helper function to get date 1 month from now
+ */
+const getOneMonthFromNow = () => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + 1);
+  return date;
+};
+
+/**
  * Validation schemas for different data types
  */
 const validationSchemas = {
-  // User validation schemas
+  // User validation schemas (keep existing)
   userLogin: Joi.object({
     username: Joi.string().min(3).max(100).required(),
     password: Joi.string().min(5).required()
@@ -37,7 +46,7 @@ const validationSchemas = {
     confirm_password: Joi.string().valid(Joi.ref('new_password')).required()
   }),
 
-  // Patient validation schemas
+  // Patient validation schemas (keep existing)
   patientCreate: Joi.object({
     first_name: Joi.string().max(100).required(),
     last_name: Joi.string().max(100).required(),
@@ -86,23 +95,46 @@ const validationSchemas = {
     latest_viral_load: Joi.number().integer().min(0).optional().allow(null)
   }),
 
-  // Appointment validation schemas
+  // ==================== UPDATED APPOINTMENT VALIDATION SCHEMAS ====================
+  // Appointment validation schemas with 1-month limit
   appointmentCreate: Joi.object({
     patient_id: Joi.number().integer().positive().required(),
     appointment_type_id: Joi.number().integer().positive().required(),
-    scheduled_at: Joi.date().min('now').required(),
+    scheduled_at: Joi.date()
+      .min('now')
+      .max(getOneMonthFromNow())
+      .required()
+      .messages({
+        'date.min': 'Scheduled date cannot be in the past',
+        'date.max': 'Scheduled date cannot exceed 1 month from today'
+      }),
     notes: Joi.string().max(1000).optional().allow(null, '')
   }),
 
   appointmentUpdate: Joi.object({
     appointment_type_id: Joi.number().integer().positive().optional(),
-    scheduled_at: Joi.date().min('now').optional(),
+    scheduled_at: Joi.date()
+      .min('now')
+      .max(getOneMonthFromNow())
+      .optional()
+      .messages({
+        'date.min': 'Scheduled date cannot be in the past',
+        'date.max': 'Scheduled date cannot exceed 1 month from today'
+      }),
     notes: Joi.string().max(1000).optional().allow(null, ''),
     status: Joi.string().valid(
       'SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW'
     ).optional()
   }),
 
+  // ==================== NEW WALK-IN VALIDATION SCHEMA ====================
+  walkInAdd: Joi.object({
+    patient_id: Joi.number().integer().positive().required(),
+    appointment_type_id: Joi.number().integer().positive().required(),
+    notes: Joi.string().max(1000).optional().allow(null, '')
+  }),
+
+  // Appointment types (keep existing)
   appointmentTypeCreate: Joi.object({
     type_name: Joi.string().max(100).required(),
     description: Joi.string().optional().allow(null, ''),
@@ -116,13 +148,22 @@ const validationSchemas = {
     is_active: Joi.boolean().optional()
   }),
 
-  // Queue validation schemas
+  // ==================== UPDATED QUEUE VALIDATION SCHEMAS ====================
   queueAdd: Joi.object({
     appointment_id: Joi.number().integer().positive().required(),
     priority: Joi.number().integer().min(0).max(10).default(0)
   }),
 
-  // Lab results validation schemas
+  // New schema for confirming appointment and adding to queue
+  confirmAppointment: Joi.object({
+    appointment_id: Joi.number().integer().positive().required()
+  }),
+
+  skipPatient: Joi.object({
+    reason: Joi.string().max(500).optional().allow(null, '')
+  }),
+
+  // Lab results validation schemas (keep existing)
   labResultCreate: Joi.object({
     patient_id: Joi.number().integer().positive().required(),
     appointment_id: Joi.number().integer().positive().optional().allow(null),
@@ -149,7 +190,7 @@ const validationSchemas = {
     interpretation: Joi.string().optional().allow(null, '')
   }),
 
-  // Clinical encounter validation schemas
+  // Clinical encounter validation schemas (keep existing)
   encounterCreate: Joi.object({
     patient_id: Joi.number().integer().positive().required(),
     staff_id: Joi.number().integer().positive().required(),
@@ -164,7 +205,7 @@ const validationSchemas = {
     notes: Joi.string().max(5000).optional().allow(null, '')
   }),
 
-  // Staff validation schemas
+  // Staff validation schemas (keep existing)
   staffCreate: Joi.object({
     user_id: Joi.number().integer().positive().required(),
     first_name: Joi.string().max(100).required(),
@@ -182,7 +223,7 @@ const validationSchemas = {
     contact_number: Joi.string().pattern(/^[0-9+\-\s()]+$/).max(20).optional().allow(null, '')
   }),
 
-  // Search and filter validation
+  // Search and filter validation (keep existing)
   searchQuery: Joi.object({
     q: Joi.string().max(255).optional(),
     page: Joi.number().integer().min(1).default(1),
@@ -292,6 +333,31 @@ const customValidators = {
     const diffDays = (end - start) / (1000 * 60 * 60 * 24);
     
     return diffDays >= 0 && diffDays <= maxDays;
+  },
+
+  /**
+   * Check if appointment is within 1 month from now
+   */
+  isWithinOneMonth: (date) => {
+    const checkDate = new Date(date);
+    const maxDate = getOneMonthFromNow();
+    return checkDate <= maxDate;
+  },
+
+  /**
+   * Check if patient is already in queue today
+   */
+  isPatientInQueueToday: async (pool, patientId) => {
+    const [rows] = await pool.execute(
+      `SELECT q.id 
+       FROM queue q
+       JOIN appointments a ON q.appointment_id = a.id
+       WHERE a.patient_id = ? 
+         AND DATE(q.created_at) = CURDATE()
+         AND q.status IN ('WAITING', 'CALLED', 'SERVING')`,
+      [patientId]
+    );
+    return rows.length > 0;
   }
 };
 
