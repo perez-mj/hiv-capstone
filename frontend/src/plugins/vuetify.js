@@ -1,4 +1,3 @@
-// plugins/vuetify.js
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
@@ -17,72 +16,55 @@ export default createVuetify({
           primary: colors.primary,
           'primary-darken-1': colors.primaryDark,
           'primary-lighten-1': colors.primaryLight,
+          'on-primary': colors.onPrimary,
           
           secondary: colors.secondary,
           'secondary-darken-1': colors.secondaryDark,
           'secondary-lighten-1': colors.secondaryLight,
+          'on-secondary': colors.onSecondary,
           
           accent: colors.accent,
           'accent-darken-1': colors.accentDark,
           'accent-lighten-1': colors.accentLight,
           
           success: colors.success,
-          'success-darken-1': colors.successDark,
-          'success-lighten-1': colors.successLight,
-          
           warning: colors.warning,
-          'warning-darken-1': colors.warningDark,
-          'warning-lighten-1': colors.warningLight,
-          
           error: colors.error,
-          'error-darken-1': colors.errorDark,
-          'error-lighten-1': colors.errorLight,
-          
           info: colors.info,
-          'info-darken-1': colors.infoDark,
-          'info-lighten-1': colors.infoLight,
           
           background: colors.background,
           surface: colors.surface,
-          'surface-dark': colors.surfaceDark,
-          'surface-light': colors.surfaceLight
+          'surface-variant': colors.surfaceDark,
+          'on-surface': colors.textPrimary,
+          'on-surface-variant': colors.textSecondary,
+          outline: colors.border,
         }
       },
       dark: {
         dark: true,
         colors: {
+          // Inverting for Dark Mode (using Light variants as base)
           primary: colors.primaryLight,
           'primary-darken-1': colors.primary,
-          'primary-lighten-1': '#63ccff',
+          'primary-lighten-1': colors.primaryLight, 
           
           secondary: colors.secondaryLight,
           'secondary-darken-1': colors.secondary,
-          'secondary-lighten-1': '#ffabdb',
           
           accent: colors.accentLight,
-          'accent-darken-1': colors.accent,
-          'accent-lighten-1': '#b2fab4',
           
           success: colors.successLight,
-          'success-darken-1': colors.success,
-          'success-lighten-1': '#b2fab4',
-          
           warning: colors.warningLight,
-          'warning-darken-1': colors.warning,
-          'warning-lighten-1': '#ffcc80',
-          
           error: colors.errorLight,
-          'error-darken-1': colors.error,
-          'error-lighten-1': '#ffb0a8',
-          
           info: colors.infoLight,
-          'info-darken-1': colors.info,
-          'info-lighten-1': '#a7d8ff',
           
           background: colors.darkBackground,
           surface: colors.darkSurface,
-          'surface-dark': colors.darkSurfaceDark,
-          'surface-light': '#252525'
+          'surface-variant': colors.darkSurfaceDark,
+          'surface-light': colors.darkSurfaceLight,
+          'on-surface': colors.darkTextPrimary,
+          'on-surface-variant': colors.darkTextSecondary,
+          outline: colors.darkBorder,
         }
       }
     }
@@ -96,12 +78,14 @@ export default createVuetify({
     },
     VCard: {
       rounded: 'lg',
-      variant: 'flat'
+      variant: 'flat',
+      color: 'surface' // Explicitly link to variable
     },
     VTextField: {
       color: 'primary',
       variant: 'outlined',
-      density: 'comfortable'
+      density: 'comfortable',
+      bgColor: 'transparent'
     },
     VSelect: {
       color: 'primary',

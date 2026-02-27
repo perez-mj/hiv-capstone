@@ -229,7 +229,7 @@ const mainMenu = ref([
     badge: null
   },
   { 
-    title: 'Appointments', 
+    title: 'Calendar', 
     to: '/admin/appointments-calendar', 
     icon: 'mdi-calendar',
     badge: null

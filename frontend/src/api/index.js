@@ -170,6 +170,10 @@ export const kioskApi = {
   // Public: Check device status and auto-register if needed
   checkStatus: (deviceId) => http.get(`/kiosk/status/${deviceId}`),
 
+  getQueueStats: (deviceId) => http.get('/kiosk/queue-stats', {
+    params: { device: deviceId }
+  }),
+
   // Public: Get queue data for display on kiosk
   getQueueData: (deviceId) => http.get('/kiosk/queue-data', {
     params: { device: deviceId }
