@@ -20,6 +20,9 @@ const validate = (schemaName, property = 'body') => {
         });
       }
 
+      // Log what we're validating
+      console.log(`Validating ${schemaName}:`, req[property]);
+
       // Validate the request data
       const { error, value } = schema.validate(req[property], {
         abortEarly: false,
@@ -27,6 +30,7 @@ const validate = (schemaName, property = 'body') => {
       });
 
       if (error) {
+        console.log('Validation errors:', error.details);
         const errors = error.details.map(detail => ({
           field: detail.path.join('.'),
           message: detail.message

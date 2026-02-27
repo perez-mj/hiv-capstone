@@ -234,6 +234,12 @@ const mainMenu = ref([
     icon: 'mdi-calendar',
     badge: null
   },
+  { 
+    title: 'Queue', 
+    to: '/admin/queue', 
+    icon: 'mdi-human-queue',
+    badge: null
+  },
 ])
 
 const managementMenu = ref([
@@ -255,6 +261,11 @@ const managementMenu = ref([
 ])
 
 const systemMenu = ref([
+  { 
+    title: 'Administration', 
+    to: '/admin/administration', 
+    icon: 'mdi-security',
+  },
   { 
     title: 'Settings', 
     to: '/admin/settings', 

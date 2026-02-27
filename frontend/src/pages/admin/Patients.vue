@@ -242,7 +242,7 @@
               :style="{ color: 'var(--color-info)' }"
               @click="goToPatientDetails(item)"
             >
-              {{ maskSensitiveData ? maskString(item.patient_facility_code, 4) : item.patient_facility_code }}
+            {{ item.patient_facility_code }}
             </span>
           </template>
 

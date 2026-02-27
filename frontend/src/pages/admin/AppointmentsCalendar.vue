@@ -435,28 +435,29 @@
             <v-row>
               <v-col cols="12">
                 <v-autocomplete
-  v-model="formData.patient"
-  :items="patients"
-  :item-title="(item) => `${item.last_name}, ${item.first_name}${item.middle_name ? ' ' + item.middle_name : ''} (${item.patient_facility_code})`"
-  item-value="id"
-  label="Select Patient"
-  :color="colors.primary"
-  :rules="[rules.required]"
-  prepend-inner-icon="mdi-account"
-  :loading="searchingPatients"
-  :search-input.sync="patientSearch"
-  @update:search="searchPatients"
-  return-object
-  required
->
-  <template v-slot:item="{ props, item }">
-    <v-list-item
-      v-bind="props"
-      :title="`${item.raw.last_name}, ${item.raw.first_name}`"
-      :subtitle="`${item.raw.patient_facility_code} | ${item.raw.hiv_status} | ${item.raw.contact_number || 'No contact'}`"
-    />
-  </template>
-</v-autocomplete>
+                  v-model="formData.patient"
+                  :items="patients"
+                  :item-title="(item) => `${item.last_name}, ${item.first_name}${item.middle_name ? ' ' + item.middle_name : ''} (${item.patient_facility_code})`"
+                  :item-value="(item) => item"
+                  label="Select Patient"
+                  :color="colors.primary"
+                  :rules="[rules.required]"
+                  prepend-inner-icon="mdi-account"
+                  :loading="searchingPatients"
+                  :search-input.sync="patientSearch"
+                  @update:search="searchPatients"
+                  return-object
+                  required
+                  clearable
+                >
+                  <template v-slot:item="{ props, item }">
+                    <v-list-item
+                      v-bind="props"
+                      :title="`${item.raw.last_name}, ${item.raw.first_name}`"
+                      :subtitle="`${item.raw.patient_facility_code} | ${item.raw.hiv_status} | ${item.raw.contact_number || 'No contact'}`"
+                    />
+                  </template>
+                </v-autocomplete>
               </v-col>
 
               <v-col cols="12" md="6">
@@ -594,14 +595,14 @@ export default {
     })
 
     const formData = reactive({
-  patient: null, // This will hold the entire patient object
-  patient_id: null, // We'll extract the ID from the patient object
-  appointment_type_id: null,
-  scheduled_date: '',
-  scheduled_time: '',
-  duration: 30,
-  notes: ''
-})
+      patient: null,
+      patient_id: null,
+      appointment_type_id: null,
+      scheduled_date: '',
+      scheduled_time: '',
+      duration: 30,
+      notes: ''
+    })
 
     // Constants
     const MAX_DAILY_APPOINTMENTS = 16
@@ -616,7 +617,11 @@ export default {
       { title: 'No Show', value: 'NO_SHOW' }
     ]
     const rules = {
-      required: v => !!v || 'This field is required'
+      required: v => {
+        if (v === null || v === undefined || v === '') return 'This field is required'
+        if (typeof v === 'object' && Object.keys(v).length === 0) return 'This field is required'
+        return true
+      }
     }
     const minDate = computed(() => {
       return format(new Date(), 'yyyy-MM-dd')
@@ -770,7 +775,6 @@ export default {
       searchingPatients.value = true
       try {
         const response = await patientStore.searchPatients(search)
-        // The backend returns the patients array directly
         patients.value = response || []
         console.log('Patients found:', patients.value)
       } catch (error) {
@@ -786,7 +790,6 @@ export default {
 
       checkingAvailability.value = true
       try {
-        // Ensure date is in YYYY-MM-DD format
         const dateStr = formData.scheduled_date
 
         const response = await appointmentStore.checkAvailability({
@@ -795,17 +798,14 @@ export default {
         })
 
         if (response.success) {
-          // Filter out past times for today
           const now = new Date()
           const today = new Date().toISOString().split('T')[0]
           const isToday = dateStr === today
 
           availableTimeSlots.value = (response.data.slots || [])
             .filter(slot => {
-              // First check if slot is available
               if (!slot.available) return false
 
-              // For today, filter out past times
               if (isToday) {
                 const [hours, minutes] = slot.time.split(':').map(Number)
                 const slotTime = new Date()
@@ -828,7 +828,6 @@ export default {
         checkingAvailability.value = false
       }
     }
-
 
     const getAppointmentsForDay = (date) => {
       return appointments.value.filter(a =>
@@ -904,40 +903,38 @@ export default {
     }
 
     const openCreateDialog = () => {
-  editingAppointment.value = false
-  formData.patient = null
-  formData.patient_id = null
-  formData.appointment_type_id = null
-  formData.scheduled_date = format(selectedDate.value, 'yyyy-MM-dd')
-  formData.scheduled_time = ''
-  formData.duration = 30
-  formData.notes = ''
-  patientSearch.value = ''
-  patients.value = []
-  availableTimeSlots.value = []
-  appointmentDialog.value = true
-}
+      editingAppointment.value = false
+      resetForm()
+      formData.scheduled_date = format(selectedDate.value, 'yyyy-MM-dd')
+      appointmentDialog.value = true
+    }
+
+    const resetForm = () => {
+      formData.patient = null
+      formData.patient_id = null
+      formData.appointment_type_id = null
+      formData.scheduled_date = ''
+      formData.scheduled_time = ''
+      formData.duration = 30
+      formData.notes = ''
+      patientSearch.value = ''
+      patients.value = []
+      availableTimeSlots.value = []
+    }
 
     const createAppointmentAtTime = (date, hour) => {
-  const count = getAppointmentsCountForDay(date)
-  if (count >= MAX_DAILY_APPOINTMENTS) {
-    toast.warning('This date has reached maximum capacity')
-    return
-  }
+      const count = getAppointmentsCountForDay(date)
+      if (count >= MAX_DAILY_APPOINTMENTS) {
+        toast.warning('This date has reached maximum capacity')
+        return
+      }
 
-  editingAppointment.value = false
-  formData.patient = null
-  formData.patient_id = null
-  formData.appointment_type_id = null
-  formData.scheduled_date = date
-  formData.scheduled_time = `${hour.toString().padStart(2, '0')}:00`
-  formData.duration = 30
-  formData.notes = ''
-  patientSearch.value = ''
-  patients.value = []
-  availableTimeSlots.value = []
-  appointmentDialog.value = true
-}
+      editingAppointment.value = false
+      resetForm()
+      formData.scheduled_date = date
+      formData.scheduled_time = `${hour.toString().padStart(2, '0')}:00`
+      appointmentDialog.value = true
+    }
 
     const editAppointment = () => {
       if (!selectedAppointment.value) return
@@ -946,6 +943,17 @@ export default {
       const appointment = selectedAppointment.value
       const scheduledDate = parseISO(appointment.scheduled_at)
 
+      // Set patient object first
+      const patientObj = {
+        id: appointment.patient_id,
+        first_name: appointment.patient_first_name,
+        last_name: appointment.patient_last_name,
+        patient_facility_code: appointment.patient_facility_code,
+        contact_number: appointment.patient_contact,
+        hiv_status: appointment.hiv_status
+      }
+
+      formData.patient = patientObj
       formData.patient_id = appointment.patient_id
       formData.appointment_type_id = appointment.appointment_type_id
       formData.scheduled_date = format(scheduledDate, 'yyyy-MM-dd')
@@ -953,17 +961,7 @@ export default {
       formData.duration = appointment.duration_minutes || 30
       formData.notes = appointment.notes || ''
 
-      // Load the patient info
-      if (appointment.patient_id) {
-        patients.value = [{
-          id: appointment.patient_id,
-          first_name: appointment.patient_first_name,
-          last_name: appointment.patient_last_name,
-          patient_facility_code: appointment.patient_facility_code,
-          contact_number: appointment.patient_contact,
-          hiv_status: appointment.hiv_status
-        }]
-      }
+      patients.value = [patientObj]
 
       detailsDialog.value = false
       appointmentDialog.value = true
@@ -972,104 +970,100 @@ export default {
 
     const closeAppointmentDialog = () => {
       appointmentDialog.value = false
+      resetForm()
       if (appointmentForm.value) {
         appointmentForm.value.reset()
       }
     }
 
     const saveAppointment = async () => {
-  if (!appointmentForm.value?.validate()) return
-  
-  saving.value = true
-  try {
-    // Debug: log the current form data
-    console.log('Current formData:', formData)
-    console.log('Patient object:', formData.patient)
-    console.log('Patient ID:', formData.patient_id)
-    
-    // Check if we have a patient selected
-    if (!formData.patient) {
-      toast.error('Please select a patient')
-      return
-    }
+      // Validate form
+      if (!appointmentForm.value?.validate()) return
 
-    // Ensure patient_id is a number
-    const patientId = parseInt(formData.patient_id)
-    if (isNaN(patientId)) {
-      toast.error('Invalid patient selected')
-      return
-    }
-
-    // Create datetime string and ensure it's in the future
-    const dateTimeStr = `${formData.scheduled_date}T${formData.scheduled_time}:00`
-    const scheduledDateTime = new Date(dateTimeStr)
-    const now = new Date()
-    
-    // Check if the date is in the past (ignore time for date comparison)
-    const scheduledDate = new Date(formData.scheduled_date)
-    const today = new Date(now.setHours(0, 0, 0, 0))
-    
-    if (scheduledDate < today) {
-      toast.error('Appointment date cannot be in the past')
-      return
-    }
-    
-    // If it's today, check if time is in the past
-    if (scheduledDate.getTime() === today.getTime()) {
-      const [hours, minutes] = formData.scheduled_time.split(':').map(Number)
-      const nowHours = now.getHours()
-      const nowMinutes = now.getMinutes()
-      
-      if (hours < nowHours || (hours === nowHours && minutes <= nowMinutes)) {
-        toast.error('Appointment time must be in the future')
+      // Validate patient selection
+      if (!formData.patient) {
+        toast.error('Please select a patient')
         return
       }
-    }
 
-    // Format the datetime properly
-    const scheduledAt = `${formData.scheduled_date}T${formData.scheduled_time}:00`
-    
-    const appointmentData = {
-      patient_id: patientId, // This is now a number
-      appointment_type_id: parseInt(formData.appointment_type_id),
-      scheduled_at: scheduledAt,
-      notes: formData.notes || null
-    }
+      // Get patient ID from the selected patient object
+      const patientId = formData.patient.id
+      if (!patientId) {
+        toast.error('Invalid patient selected')
+        return
+      }
 
-    console.log('Saving appointment with data:', appointmentData)
+      saving.value = true
+      try {
+        // Create datetime string
+        const dateTimeStr = `${formData.scheduled_date}T${formData.scheduled_time}:00`
+        const scheduledDateTime = new Date(dateTimeStr)
+        const now = new Date()
+        
+        // Check if date is in the past
+        const scheduledDate = new Date(formData.scheduled_date)
+        const today = new Date(now.setHours(0, 0, 0, 0))
+        
+        if (scheduledDate < today) {
+          toast.error('Appointment date cannot be in the past')
+          return
+        }
+        
+        // If today, check if time is in the past
+        if (scheduledDate.getTime() === today.getTime()) {
+          const [hours, minutes] = formData.scheduled_time.split(':').map(Number)
+          const nowHours = now.getHours()
+          const nowMinutes = now.getMinutes()
+          
+          if (hours < nowHours || (hours === nowHours && minutes <= nowMinutes)) {
+            toast.error('Appointment time must be in the future')
+            return
+          }
+        }
 
-    let response
-    if (editingAppointment.value && selectedAppointment.value) {
-      response = await appointmentStore.updateAppointment(selectedAppointment.value.id, appointmentData)
-      toast.success('Appointment updated successfully')
-    } else {
-      response = await appointmentStore.createAppointment(appointmentData)
-      toast.success('Appointment created successfully')
-    }
+        // Format the datetime
+        const scheduledAt = `${formData.scheduled_date}T${formData.scheduled_time}:00`
+        
+        const appointmentData = {
+          patient_id: patientId,
+          appointment_type_id: parseInt(formData.appointment_type_id),
+          scheduled_at: scheduledAt,
+          notes: formData.notes || null
+        }
 
-    if (response) {
-      closeAppointmentDialog()
-      fetchAppointments()
+        console.log('Saving appointment with data:', appointmentData)
+
+        let response
+        if (editingAppointment.value && selectedAppointment.value) {
+          response = await appointmentStore.updateAppointment(selectedAppointment.value.id, appointmentData)
+          toast.success('Appointment updated successfully')
+        } else {
+          response = await appointmentStore.createAppointment(appointmentData)
+          toast.success('Appointment created successfully')
+        }
+
+        if (response) {
+          closeAppointmentDialog()
+          fetchAppointments()
+        }
+      } catch (error) {
+        console.error('Error saving appointment:', error)
+        const errorMessage = error.response?.data?.error || 
+                            error.response?.data?.message || 
+                            'Failed to save appointment'
+        
+        if (error.response?.data?.validation_errors) {
+          const validationErrors = error.response.data.validation_errors
+          validationErrors.forEach(err => {
+            toast.error(`${err.field}: ${err.message}`)
+          })
+        } else {
+          toast.error(errorMessage)
+        }
+      } finally {
+        saving.value = false
+      }
     }
-  } catch (error) {
-    console.error('Error saving appointment:', error)
-    // Show more detailed error message
-    const errorMessage = error.response?.data?.error || 
-                        error.response?.data?.message || 
-                        'Failed to save appointment'
-    
-    if (error.response?.data?.validation_errors) {
-      const validationErrors = error.response.data.validation_errors
-      validationErrors.forEach(err => {
-        toast.error(`${err.field}: ${err.message}`)
-      })
-    } else {
-      toast.error(errorMessage)
-    }
-  } finally {
-    saving.value = false
-  }
-}
 
     const openStatusDialog = () => {
       newStatus.value = ''
@@ -1189,7 +1183,7 @@ export default {
     }, 500)
 
     // Watchers
-    watch([() => formData.scheduled_date, () => formData.appointment_type_id], () => {
+    watch(() => [formData.scheduled_date, formData.appointment_type_id], () => {
       checkAvailability()
     })
 
@@ -1198,13 +1192,13 @@ export default {
     })
 
     watch(() => formData.patient, (newPatient) => {
-  if (newPatient) {
-    formData.patient_id = newPatient.id
-    console.log('Patient selected:', newPatient, 'Patient ID set to:', newPatient.id)
-  } else {
-    formData.patient_id = null
-  }
-}, { deep: true })
+      if (newPatient && newPatient.id) {
+        formData.patient_id = newPatient.id
+        console.log('Patient selected:', newPatient, 'Patient ID set to:', newPatient.id)
+      } else {
+        formData.patient_id = null
+      }
+    })
 
     // Lifecycle
     onMounted(() => {

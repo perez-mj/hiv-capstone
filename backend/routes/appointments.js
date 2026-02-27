@@ -1593,127 +1593,6 @@ router.post('/',
     }
 });
 
-// UPDATE appointment
-router.put('/:id', 
-  authenticateToken, 
-  authorize('ADMIN', 'NURSE'),
-  validate('appointmentUpdate'),
-  async (req, res) => {
-    const connection = await pool.getConnection();
-    
-    try {
-      await connection.beginTransaction();
-
-      // Check if appointment exists
-      const [existing] = await connection.execute(
-        'SELECT * FROM appointments WHERE id = ?',
-        [req.params.id]
-      );
-
-      if (existing.length === 0) {
-        await connection.rollback();
-        return res.status(404).json({ 
-          success: false,
-          error: 'Appointment not found' 
-        });
-      }
-
-      const oldValues = existing[0];
-      const {
-        appointment_type_id,
-        scheduled_at,
-        notes,
-        status
-      } = req.body;
-
-      // Check if appointment is in queue
-      if (status) {
-        const [queue] = await connection.execute(
-          'SELECT id FROM queue WHERE appointment_id = ?',
-          [req.params.id]
-        );
-
-        if (queue.length > 0 && ['CANCELLED', 'NO_SHOW'].includes(status)) {
-          // Update queue status if cancelling or no-show
-          await connection.execute(
-            `UPDATE queue SET status = 'SKIPPED', updated_at = NOW() 
-             WHERE appointment_id = ?`,
-            [req.params.id]
-          );
-        }
-      }
-
-      // Build update query
-      const updateFields = [];
-      const values = [];
-
-      if (appointment_type_id) {
-        updateFields.push('appointment_type_id = ?');
-        values.push(appointment_type_id);
-      }
-      if (scheduled_at) {
-        updateFields.push('scheduled_at = ?');
-        values.push(scheduled_at);
-      }
-      if (notes !== undefined) {
-        updateFields.push('notes = ?');
-        values.push(notes);
-      }
-      if (status) {
-        updateFields.push('status = ?');
-        values.push(status);
-      }
-
-      updateFields.push('updated_by = ?');
-      values.push(req.user.id);
-      updateFields.push('updated_at = NOW()');
-
-      values.push(req.params.id);
-
-      await connection.execute(
-        `UPDATE appointments SET ${updateFields.join(', ')} WHERE id = ?`,
-        values
-      );
-
-      // Get updated appointment
-      const [updated] = await connection.execute(
-        'SELECT * FROM appointments WHERE id = ?',
-        [req.params.id]
-      );
-
-      // Log audit
-      await logAudit(
-        req.user.id,
-        'UPDATE',
-        'appointments',
-        req.params.id,
-        oldValues.patient_id,
-        oldValues,
-        updated[0],
-        'Updated appointment',
-        req
-      );
-
-      await connection.commit();
-
-      res.json({
-        success: true,
-        message: 'Appointment updated successfully',
-        data: updated[0]
-      });
-
-    } catch (error) {
-      await connection.rollback();
-      console.error('Error updating appointment:', error);
-      res.status(500).json({ 
-        success: false,
-        error: 'Failed to update appointment' 
-      });
-    } finally {
-      connection.release();
-    }
-});
-
 // UPDATE appointment status
 router.patch('/:id/status', 
   authenticateToken, 
@@ -1829,6 +1708,127 @@ router.patch('/:id/status',
       res.status(500).json({ 
         success: false,
         error: 'Failed to update appointment status' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+// UPDATE appointment
+router.put('/:id', 
+  authenticateToken, 
+  authorize('ADMIN', 'NURSE'),
+  validate('appointmentUpdate'),
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+
+      // Check if appointment exists
+      const [existing] = await connection.execute(
+        'SELECT * FROM appointments WHERE id = ?',
+        [req.params.id]
+      );
+
+      if (existing.length === 0) {
+        await connection.rollback();
+        return res.status(404).json({ 
+          success: false,
+          error: 'Appointment not found' 
+        });
+      }
+
+      const oldValues = existing[0];
+      const {
+        appointment_type_id,
+        scheduled_at,
+        notes,
+        status
+      } = req.body;
+
+      // Check if appointment is in queue
+      if (status) {
+        const [queue] = await connection.execute(
+          'SELECT id FROM queue WHERE appointment_id = ?',
+          [req.params.id]
+        );
+
+        if (queue.length > 0 && ['CANCELLED', 'NO_SHOW'].includes(status)) {
+          // Update queue status if cancelling or no-show
+          await connection.execute(
+            `UPDATE queue SET status = 'SKIPPED', updated_at = NOW() 
+             WHERE appointment_id = ?`,
+            [req.params.id]
+          );
+        }
+      }
+
+      // Build update query
+      const updateFields = [];
+      const values = [];
+
+      if (appointment_type_id) {
+        updateFields.push('appointment_type_id = ?');
+        values.push(appointment_type_id);
+      }
+      if (scheduled_at) {
+        updateFields.push('scheduled_at = ?');
+        values.push(scheduled_at);
+      }
+      if (notes !== undefined) {
+        updateFields.push('notes = ?');
+        values.push(notes);
+      }
+      if (status) {
+        updateFields.push('status = ?');
+        values.push(status);
+      }
+
+      updateFields.push('updated_by = ?');
+      values.push(req.user.id);
+      updateFields.push('updated_at = NOW()');
+
+      values.push(req.params.id);
+
+      await connection.execute(
+        `UPDATE appointments SET ${updateFields.join(', ')} WHERE id = ?`,
+        values
+      );
+
+      // Get updated appointment
+      const [updated] = await connection.execute(
+        'SELECT * FROM appointments WHERE id = ?',
+        [req.params.id]
+      );
+
+      // Log audit
+      await logAudit(
+        req.user.id,
+        'UPDATE',
+        'appointments',
+        req.params.id,
+        oldValues.patient_id,
+        oldValues,
+        updated[0],
+        'Updated appointment',
+        req
+      );
+
+      await connection.commit();
+
+      res.json({
+        success: true,
+        message: 'Appointment updated successfully',
+        data: updated[0]
+      });
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error updating appointment:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to update appointment' 
       });
     } finally {
       connection.release();

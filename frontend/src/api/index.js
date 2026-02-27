@@ -84,7 +84,7 @@ export const appointmentsApi = {
   getById: (id) => http.get(`/appointments/${id}`),
   create: (data) => http.post('/appointments', data),
   update: (id, data) => http.put(`/appointments/${id}`, data),
-  updateStatus: (id, status) => http.patch(`/appointments/${id}/status`, { status }),
+  updateStatus: (id, data) => http.patch(`/appointments/${id}/status`, data ),
   delete: (id) => http.delete(`/appointments/${id}`),
 
   // utility

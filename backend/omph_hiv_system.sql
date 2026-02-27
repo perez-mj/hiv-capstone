@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Feb 25, 2026 at 01:16 PM
+-- Generation Time: Feb 27, 2026 at 06:03 AM
 -- Server version: 8.0.45-0ubuntu0.24.04.1
 -- PHP Version: 8.3.6
 
@@ -36,6 +36,7 @@ CREATE TABLE `appointments` (
   `status` enum('SCHEDULED','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED','NO_SHOW') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'SCHEDULED',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `created_by` int DEFAULT NULL,
+  `updated_by` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -61,9 +62,9 @@ CREATE TABLE `appointment_types` (
 
 INSERT INTO `appointment_types` (`id`, `type_name`, `description`, `duration_minutes`, `is_active`, `created_at`) VALUES
 (1, 'Consultation', 'Regular medical consultation with doctor', 30, 1, '2026-02-24 09:47:42'),
-(2, 'Lab Test', 'Blood work and laboratory tests', 20, 1, '2026-02-24 09:47:42'),
-(3, 'Counseling', 'Psychological or adherence counseling', 45, 1, '2026-02-24 09:47:42'),
-(4, 'Emergency', 'Urgent medical attention', 60, 1, '2026-02-24 09:47:42');
+(2, 'Testing', 'Blood work and laboratory tests', 20, 1, '2026-02-24 09:47:42'),
+(3, 'Refill', 'Adherence to medication and treatment', 45, 1, '2026-02-24 09:47:42'),
+(4, 'Others', 'Other clinical or non clinical appointments', 60, 1, '2026-02-24 09:47:42');
 
 -- --------------------------------------------------------
 
@@ -234,7 +235,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `email`, `role`, `is_active`, `last_login`, `created_at`, `updated_at`) VALUES
-(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-02-25 11:14:20', '2025-11-26 02:59:49', '2026-02-25 11:14:20');
+(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-02-26 13:54:41', '2025-11-26 02:59:49', '2026-02-26 13:54:41');
 
 --
 -- Indexes for dumped tables
@@ -250,7 +251,8 @@ ALTER TABLE `appointments`
   ADD KEY `idx_appointment_type` (`appointment_type_id`),
   ADD KEY `idx_scheduled_at` (`scheduled_at`),
   ADD KEY `idx_status` (`status`),
-  ADD KEY `idx_created_by` (`created_by`);
+  ADD KEY `idx_created_by` (`created_by`),
+  ADD KEY `fk_appointments_updated_by` (`updated_by`);
 
 --
 -- Indexes for table `appointment_types`
@@ -403,7 +405,7 @@ ALTER TABLE `staff`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- Constraints for dumped tables
@@ -415,7 +417,8 @@ ALTER TABLE `users`
 ALTER TABLE `appointments`
   ADD CONSTRAINT `fk_appointments_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_appointments_patient_id` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `fk_appointments_type_id` FOREIGN KEY (`appointment_type_id`) REFERENCES `appointment_types` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+  ADD CONSTRAINT `fk_appointments_type_id` FOREIGN KEY (`appointment_type_id`) REFERENCES `appointment_types` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_appointments_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `audit_logs`
