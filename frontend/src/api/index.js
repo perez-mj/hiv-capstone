@@ -195,6 +195,17 @@ export const kioskApi = {
   deleteDevice: (deviceId) => http.delete(`/kiosk/admin/devices/${deviceId}`)
 }
 
+// Staff API
+export const staffApi = {
+  getAll: (params) => http.get('/staff', { params }),
+  getStats: () => http.get('/staff/stats'),
+  getById: (id) => http.get(`/staff/${id}`),
+  getPositions: () => http.get('/staff/positions/list'),
+  create: (data) => http.post('/staff', data),
+  update: (id, data) => http.put(`/staff/${id}`, data),
+  delete: (id) => http.delete(`/staff/${id}`)
+}
+
 // Dashboard API
 export const dashboardApi = {
   getStats: () => http.get('/dashboard/stats'),
@@ -215,5 +226,6 @@ export default {
   users: usersApi,
   labResults: labResultsApi,
   kiosk: kioskApi,
+  staff: staffApi,
   dashboard: dashboardApi
 }

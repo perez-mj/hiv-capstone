@@ -15,10 +15,10 @@
     <!-- Header with Logo - Click to toggle rail mode -->
     <div class="sidebar-header" :class="{ 'rail-mode': railMode }" @click="toggleRail">
       <div class="logo-container">
-        <img src="@/assets/images/logo.png" alt="OMPH HIV Care Logo" class="logo" />
+        <img src="@/assets/images/logo.png" alt="OMPH HIV AQMS Logo" class="logo" />
         <div class="logo-text" v-if="!railMode">
-          <div class="logo-title">HIV Care</div>
-          <div class="logo-subtitle">Enrollment System</div>
+          <div class="logo-title">OMPH HIV AQMS</div>
+          <div class="logo-subtitle">Appointment & Queue System</div>
         </div>
       </div>
       <v-icon 
@@ -247,16 +247,6 @@ const managementMenu = ref([
     title: 'Patients', 
     to: '/admin/patients', 
     icon: 'mdi-account-group',
-  },
-  { 
-    title: 'Kiosk Devices', 
-    to: '/admin/kiosks', 
-    icon: 'mdi-monitor',
-  },
-  { 
-    title: 'Users', 
-    to: '/admin/users', 
-    icon: 'mdi-account-cog',
   },
 ])
 

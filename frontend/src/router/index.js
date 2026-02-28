@@ -21,14 +21,11 @@ const routes = [
       { path: '', redirect: '/admin/dashboard' },
       { path: 'dashboard', name: 'Dashboard', component: () => import('@/pages/admin/Dashboard.vue') },
       { path: 'patients', name: 'Patients', component: () => import('@/pages/admin/Patients.vue') },
-      { path: 'enroll', name: 'Enrollment', component: () => import('@/pages/admin/Enrollment.vue') },
-      { path: 'audit-security', name: 'AuditSecurity', component: () => import('@/pages/admin/AuditSecurity.vue') },
-      { path: 'users', name: 'UserManagement', component: () => import('@/pages/admin/UserManagement.vue'), meta: { allowedRoles: ['ADMIN'] } },
       { path: 'patients/:id', name: 'PatientDetails', component: () => import('@/pages/admin/PatientDetails.vue') },
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'queue', name: 'QueueManagement', component: () => import('@/pages/admin/QueueManagement.vue') },
-      { path: 'messaging-center', name: 'MessagingCenter', component: () => import('@/pages/admin/MessagingCenter.vue') },
-      { path: 'kiosks', name: 'KioskDevices', component: () => import('@/pages/admin/KioskDevices.vue'), meta: { allowedRoles: ['ADMIN'] } },
+      { path: 'administration', name: 'Administartion', component: () => import('@/pages/admin/Administration.vue'), meta: { allowedRoles: ['ADMIN'] } },
+
     ]
   },
   {

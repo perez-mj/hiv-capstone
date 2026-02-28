@@ -22,7 +22,9 @@ const queueRouter = require('./routes/queue');
 const encountersRouter = require('./routes/encounters');
 const labResultsRouter = require('./routes/lab-results');
 const kioskRoutes = require('./routes/kiosk');
+const staffRoutes = require('./routes/staff');
 
+app.use('/api/staff', staffRoutes);
 app.use('/api/kiosk', kioskRoutes);
 app.use('/api/encounters', encountersRouter);
 app.use('/api/lab-results', labResultsRouter);

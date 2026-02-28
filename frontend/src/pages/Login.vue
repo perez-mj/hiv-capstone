@@ -8,23 +8,24 @@
           <div class="brand-content-wrapper d-flex align-center justify-center fill-height">
             <div class="brand-content text-center">
               <div class="brand-logo mb-8">
-                <img src="@/assets/images/logo.png" alt="OMPH HIV Care Logo" class="logo mb-6" />
+                <img src="@/assets/images/logo.png" alt="OMPH HIV AQMS Logo" class="logo mb-6" />
                 <div class="d-flex align-center justify-center mb-4">
-                  <h1 class="text-h2 font-weight-bold mr-3">OMPH</h1>
+                  <h1 class="text-h2 font-weight-bold mr-3">OMPH HIV</h1>
                   <div class="accent-pill">
-                    <span class="text-subtitle-1 font-weight-bold">HMS</span>
+                    <span class="text-subtitle-1 font-weight-bold">AQMS</span>
                   </div>
                 </div>
-                <p class="text-h5 font-weight-medium mb-2">Secure Patient Management System</p>
+                <p class="text-h5 font-weight-medium mb-2">Secure Appoinment & Queueu Management System</p>
               </div>
-              
+
               <div class="brand-subtitle mb-10">
                 <p class="text-body-1 mb-4">
                   <v-icon color="white" class="mr-2">mdi-heart-pulse</v-icon>
                   <strong>Advanced HIV Patient Enrollment Platform</strong>
                 </p>
                 <p class="text-body-2">
-                  Blockchain-integrated system for comprehensive patient management with enhanced security and data integrity.
+                  Blockchain-integrated system for comprehensive patient management with enhanced security and data
+                  integrity.
                 </p>
               </div>
 
@@ -100,10 +101,10 @@
                   <v-icon size="32" color="white">mdi-shield-account</v-icon>
                 </v-avatar>
                 <h1 class="text-h4 font-weight-bold text-primary mb-2">
-                  Welcome Back
+                  Welcome
                 </h1>
                 <p class="text-body-1 text-medium-emphasis">
-                  Sign in to your HIV Enrollment System
+                  Sign in to manage appointments, records, and facility services.
                 </p>
               </div>
 
@@ -134,36 +135,6 @@
                   </div>
                 </v-alert>
               </v-form>
-
-              <!-- Demo Credentials -->
-              <v-expansion-panels variant="accordion" class="mt-6">
-                <v-expansion-panel elevation="0">
-                  <v-expansion-panel-title class="text-caption">
-                    <v-icon start size="small">mdi-information</v-icon>
-                    Demo Credentials
-                  </v-expansion-panel-title>
-                  <v-expansion-panel-text>
-                    <v-list density="compact" class="pa-0">
-                      <v-list-item class="px-0">
-                        <template v-slot:prepend>
-                          <v-icon color="primary" size="small">mdi-account</v-icon>
-                        </template>
-                        <v-list-item-title class="text-caption">
-                          <strong>Username:</strong> admin
-                        </v-list-item-title>
-                      </v-list-item>
-                      <v-list-item class="px-0">
-                        <template v-slot:prepend>
-                          <v-icon color="primary" size="small">mdi-key</v-icon>
-                        </template>
-                        <v-list-item-title class="text-caption">
-                          <strong>Password:</strong> admin
-                        </v-list-item-title>
-                      </v-list-item>
-                    </v-list>
-                  </v-expansion-panel-text>
-                </v-expansion-panel>
-              </v-expansion-panels>
 
               <!-- Security Notice -->
               <v-alert type="info" variant="tonal" density="compact" class="mt-4">
@@ -354,9 +325,12 @@ const handleLogin = async () => {
 
 /* Enhanced Animations */
 @keyframes float {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-10px);
   }
@@ -367,6 +341,7 @@ const handleLogin = async () => {
     opacity: 0;
     transform: translateY(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -378,6 +353,7 @@ const handleLogin = async () => {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -390,18 +366,36 @@ const handleLogin = async () => {
   opacity: 0;
 }
 
-.feature-item:nth-child(1) { animation-delay: 0.1s; }
-.feature-item:nth-child(2) { animation-delay: 0.2s; }
-.feature-item:nth-child(3) { animation-delay: 0.3s; }
-.feature-item:nth-child(4) { animation-delay: 0.4s; }
-.feature-item:nth-child(5) { animation-delay: 0.5s; }
-.feature-item:nth-child(6) { animation-delay: 0.6s; }
+.feature-item:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.feature-item:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.feature-item:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.feature-item:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+.feature-item:nth-child(5) {
+  animation-delay: 0.5s;
+}
+
+.feature-item:nth-child(6) {
+  animation-delay: 0.6s;
+}
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
     transform: translateY(15px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -490,20 +484,20 @@ const handleLogin = async () => {
   .brand-content {
     padding: var(--spacing-xl);
   }
-  
+
   .logo {
     width: 90px;
     height: 90px;
   }
-  
+
   .brand-logo h1 {
     font-size: 2.5rem;
   }
-  
+
   .feature-list {
     grid-template-columns: 1fr;
   }
-  
+
   .brand-content-wrapper {
     padding: var(--spacing-lg);
   }
@@ -513,20 +507,20 @@ const handleLogin = async () => {
   .brand-content {
     padding: var(--spacing-md);
   }
-  
+
   .brand-logo h1 {
     font-size: 2rem;
   }
-  
+
   .text-h5 {
     font-size: 1.25rem !important;
   }
-  
+
   .stats-banner .d-flex {
     flex-direction: column;
     gap: var(--spacing-md);
   }
-  
+
   .stats-banner .v-divider {
     display: none;
   }
@@ -538,7 +532,7 @@ const handleLogin = async () => {
     overflow-y: auto;
     padding: var(--spacing-md) 0;
   }
-  
+
   .brand-content {
     padding: var(--spacing-lg) var(--spacing-md);
   }

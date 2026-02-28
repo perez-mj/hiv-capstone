@@ -17,6 +17,10 @@ router.get('/',
   async (req, res) => {
     try {
       const { page, limit, offset } = req.pagination;
+      // Convert to integers for LIMIT/OFFSET
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
+      
       const search = req.query.search || '';
       const role = req.query.role;
       const status = req.query.status;
@@ -53,18 +57,28 @@ router.get('/',
         queryParams.push(status === 'active' ? 1 : 0);
       }
 
-      // Get total count
-      const countQuery = query.replace(
-        /SELECT.*FROM users/,
-        'SELECT COUNT(*) as total FROM users'
-      );
+      // Get total count - clone the WHERE conditions for count query
+      let countQuery = 'SELECT COUNT(*) as total FROM users WHERE 1=1';
+      const countParams = [...queryParams];
       
-      const [countResult] = await pool.execute(countQuery, queryParams);
+      // Reconstruct the WHERE conditions for count query
+      // We need to rebuild the WHERE clauses without SELECT fields
+      if (search) {
+        countQuery += ` AND (username LIKE ? OR email LIKE ?)`;
+        // countParams already has the search patterns from above
+      }
+      if (role) {
+        countQuery += ` AND role = ?`;
+      }
+      if (status !== undefined) {
+        countQuery += ` AND is_active = ?`;
+      }
+      
+      const [countResult] = await pool.execute(countQuery, countParams);
       const total = countResult[0].total;
 
-      // Add sorting and pagination
-      query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-      queryParams.push(limit, offset);
+      // Add sorting and pagination - LIMIT and OFFSET must be added directly, not as parameters
+      query += ` ORDER BY created_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
       const [users] = await pool.execute(query, queryParams);
 
@@ -217,6 +231,10 @@ router.get('/:id/activity',
     try {
       const { id } = req.params;
       const { page, limit, offset } = req.pagination;
+      
+      // Convert to integers for LIMIT/OFFSET
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = parseInt(offset) || 0;
 
       // Check if user exists
       const [user] = await pool.execute(
@@ -231,7 +249,7 @@ router.get('/:id/activity',
         });
       }
 
-      // Get activity logs
+      // Get activity logs - LIMIT and OFFSET added directly
       const [logs] = await pool.execute(
         `SELECT 
           id, action_type, table_name, record_id, patient_id,
@@ -239,8 +257,8 @@ router.get('/:id/activity',
         FROM audit_logs 
         WHERE user_id = ?
         ORDER BY timestamp DESC
-        LIMIT ? OFFSET ?`,
-        [id, limit, offset]
+        LIMIT ${limitNum} OFFSET ${offsetNum}`,
+        [id]
       );
 
       // Get total count
