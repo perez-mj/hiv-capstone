@@ -202,6 +202,7 @@ export const staffApi = {
   getById: (id) => http.get(`/staff/${id}`),
   getPositions: () => http.get('/staff/positions/list'),
   create: (data) => http.post('/staff', data),
+  createWithUser: (data) => http.post('/staff/with-user', data), // New method
   update: (id, data) => http.put(`/staff/${id}`, data),
   delete: (id) => http.delete(`/staff/${id}`)
 }

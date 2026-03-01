@@ -14,59 +14,32 @@
 
       <div class="d-flex gap-2 mt-2 mt-sm-0">
         <!-- Mask Sensitive Data Toggle -->
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          :prepend-icon="maskSensitiveData ? 'mdi-eye-off' : 'mdi-eye'"
-          @click="toggleMaskSensitiveData"
-          :color="maskSensitiveData ? 'warning' : 'primary'"
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
+        <v-btn variant="outlined" size="small" :prepend-icon="maskSensitiveData ? 'mdi-eye-off' : 'mdi-eye'"
+          @click="toggleMaskSensitiveData" :color="maskSensitiveData ? 'warning' : 'primary'"
+          :style="{ borderColor: 'var(--color-border)' }">
           {{ maskSensitiveData ? 'Unmask Data' : 'Mask Data' }}
         </v-btn>
-        
+
         <!-- Import Button -->
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          prepend-icon="mdi-upload" 
-          @click="openImportDialog"
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
+        <v-btn variant="outlined" size="small" prepend-icon="mdi-upload" @click="openImportDialog"
+          :style="{ borderColor: 'var(--color-border)' }">
           Import
         </v-btn>
-        
-        <v-btn 
-          color="primary" 
-          size="small" 
-          prepend-icon="mdi-account-plus" 
-          @click="openEnrollmentDialog"
+
+        <v-btn color="primary" size="small" prepend-icon="mdi-account-plus" @click="openEnrollmentDialog"
           :loading="loading"
-          :style="{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text-on-primary)' }"
-        >
+          :style="{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text-on-primary)' }">
           New Enrollment
         </v-btn>
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          prepend-icon="mdi-download" 
-          @click="exportPatientData"
-          :disabled="filteredPatients.length === 0" 
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
+        <v-btn variant="outlined" size="small" prepend-icon="mdi-download" @click="exportPatientData"
+          :disabled="filteredPatients.length === 0" :style="{ borderColor: 'var(--color-border)' }">
           Export
         </v-btn>
       </div>
     </div>
 
     <!-- Tabs for HIV Status -->
-    <v-tabs
-      v-model="activeTab"
-      color="primary"
-      align-tabs="start"
-      class="mb-4"
-      show-arrows
-    >
+    <v-tabs v-model="activeTab" color="primary" align-tabs="start" class="mb-4" show-arrows>
       <v-tab value="all">
         <v-icon start>mdi-account-multiple</v-icon>
         All
@@ -86,16 +59,11 @@
     <!-- Compact Stats Cards -->
     <v-row class="mb-4">
       <v-col v-for="stat in compactStats" :key="stat.label" cols="6" sm="3" md="3" lg="3">
-        <v-card 
-          elevation="0" 
-          border 
-          class="stat-card"
-          :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
-        >
+        <v-card elevation="0" border class="stat-card"
+          :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
           <v-card-text class="pa-3 d-flex align-center">
             <v-avatar size="40" :color="stat.color" class="mr-3"
-              :style="{ backgroundColor: `var(--color-${stat.color})` }"
-            >
+              :style="{ backgroundColor: `var(--color-${stat.color})` }">
               <v-icon :icon="stat.icon" size="24" color="white"></v-icon>
             </v-avatar>
             <div>
@@ -108,54 +76,29 @@
     </v-row>
 
     <!-- Error Alert -->
-    <v-alert 
-      v-if="error" 
-      type="error" 
-      variant="tonal" 
-      class="mb-4" 
-      closable 
-      @click:close="error = ''"
-      :style="{ backgroundColor: 'var(--color-error-light)', color: 'var(--color-error-dark)' }"
-    >
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="error = ''"
+      :style="{ backgroundColor: 'var(--color-error-light)', color: 'var(--color-error-dark)' }">
       <template v-slot:title>Error Loading Patients</template>
       {{ error }}
     </v-alert>
 
     <!-- Search and Filters - Compact Horizontal Layout -->
-    <v-card 
-      elevation="0" 
-      border 
-      class="mb-4"
-      :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
-    >
+    <v-card elevation="0" border class="mb-4"
+      :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
       <v-card-text class="pa-3">
         <div class="d-flex flex-wrap align-center ga-3">
           <!-- Search - Compact -->
           <div style="min-width: 200px; flex: 1;">
-            <v-text-field 
-              v-model="search" 
-              density="compact" 
-              variant="outlined"
-              placeholder="Search patients..." 
-              prepend-inner-icon="mdi-magnify" 
-              hide-details 
-              clearable
-              @update:model-value="handleSearch"
-              class="compact-field"
-            />
+            <v-text-field v-model="search" density="compact" variant="outlined" placeholder="Search patients..."
+              prepend-inner-icon="mdi-magnify" hide-details clearable @update:model-value="handleSearch"
+              class="compact-field" />
           </div>
 
           <!-- Sex Filter - Compact -->
           <div class="d-flex align-center ga-1" style="flex-wrap: nowrap;">
             <span class="text-caption text-medium-emphasis mr-1" style="white-space: nowrap;">Sex:</span>
-            <v-btn-toggle
-              v-model="filters.sex"
-              mandatory="false"
-              density="compact"
-              color="primary"
-              variant="outlined"
-              @update:model-value="handleFilterChange"
-            >
+            <v-btn-toggle v-model="filters.sex" mandatory="false" density="compact" color="primary" variant="outlined"
+              @update:model-value="handleFilterChange">
               <v-btn value="MALE" size="small">M</v-btn>
               <v-btn value="FEMALE" size="small">F</v-btn>
               <v-btn value="OTHER" size="small">O</v-btn>
@@ -164,38 +107,18 @@
 
           <!-- Sort - Compact -->
           <div style="min-width: 120px;">
-            <v-select 
-              v-model="sortBy" 
-              density="compact" 
-              variant="outlined" 
-              :items="sortFields" 
-              placeholder="Sort"
-              hide-details 
-              @update:model-value="handleSortChange" 
-              class="compact-field"
-            />
+            <v-select v-model="sortBy" density="compact" variant="outlined" :items="sortFields" placeholder="Sort"
+              hide-details @update:model-value="handleSortChange" class="compact-field" />
           </div>
 
           <!-- Sort Order Toggle - Compact -->
-          <v-btn 
-            variant="outlined" 
-            density="compact"
-            size="small"
-            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" 
-            @click="toggleSortOrder"
-            :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" 
-          />
+          <v-btn variant="outlined" density="compact" size="small"
+            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" @click="toggleSortOrder"
+            :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" />
 
           <!-- Clear Filters - Compact -->
-          <v-btn 
-            variant="text" 
-            color="primary" 
-            size="small" 
-            prepend-icon="mdi-filter-remove" 
-            @click="clearFilters"
-            :disabled="!hasActiveFilters" 
-            :style="{ color: 'var(--color-primary)' }" 
-          >
+          <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-filter-remove" @click="clearFilters"
+            :disabled="!hasActiveFilters" :style="{ color: 'var(--color-primary)' }">
             Clear
           </v-btn>
         </div>
@@ -203,11 +126,7 @@
     </v-card>
 
     <!-- Main Table -->
-    <v-card 
-      elevation="0" 
-      border 
-      :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
-    >
+    <v-card elevation="0" border :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
       <v-card-title class="d-flex justify-space-between align-center py-3 px-4">
         <span class="text-subtitle-1 font-weight-medium">{{ activeTabTitle }}</span>
         <span class="text-caption text-medium-emphasis">
@@ -218,18 +137,9 @@
       <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
 
       <v-card-text class="pa-0">
-        <v-data-table-server 
-          v-model:items-per-page="perPage" 
-          v-model:page="page" 
-          :headers="tableHeaders" 
-          :items="filteredPatients"
-          :items-length="totalFilteredPatients" 
-          :loading="loading" 
-          @update:options="handleTableSort"
-          class="elevation-0 patients-table" 
-          density="compact" 
-          hover
-        >
+        <v-data-table-server v-model:items-per-page="perPage" v-model:page="page" :headers="tableHeaders"
+          :items="filteredPatients" :items-length="totalFilteredPatients" :loading="loading"
+          @update:options="handleTableSort" class="elevation-0 patients-table" density="compact" hover>
           <!-- Loading State -->
           <template v-slot:loading>
             <v-skeleton-loader type="table-row@10" />
@@ -237,12 +147,9 @@
 
           <!-- Patient Facility Code Column -->
           <template v-slot:item.patient_facility_code="{ item }">
-            <span 
-              class="patient-id-link font-weight-medium cursor-pointer" 
-              :style="{ color: 'var(--color-info)' }"
-              @click="goToPatientDetails(item)"
-            >
-            {{ item.patient_facility_code }}
+            <span class="patient-id-link font-weight-medium cursor-pointer" :style="{ color: 'var(--color-info)' }"
+              @click="goToPatientDetails(item)">
+              {{ item.patient_facility_code }}
             </span>
           </template>
 
@@ -285,12 +192,8 @@
 
           <!-- HIV Status Column -->
           <template v-slot:item.hiv_status="{ item }">
-            <v-chip 
-              size="x-small" 
-              :color="getHivStatusColor(item.hiv_status)" 
-              variant="flat"
-              :prepend-icon="getHivStatusIcon(item.hiv_status)"
-            >
+            <v-chip size="x-small" :color="getHivStatusColor(item.hiv_status)" variant="flat"
+              :prepend-icon="getHivStatusIcon(item.hiv_status)">
               {{ formatHivStatus(item.hiv_status) }}
             </v-chip>
           </template>
@@ -298,22 +201,10 @@
           <!-- On Treatment Column (replaces ART Status) -->
           <template v-slot:item.on_treatment="{ item }">
             <div v-if="item.hiv_status === 'REACTIVE'">
-              <v-chip 
-                v-if="item.art_start_date"
-                size="x-small" 
-                color="success" 
-                variant="flat"
-                prepend-icon="mdi-check"
-              >
+              <v-chip v-if="item.art_start_date" size="x-small" color="success" variant="flat" prepend-icon="mdi-check">
                 YES
               </v-chip>
-              <v-chip 
-                v-else
-                size="x-small" 
-                color="error" 
-                variant="flat"
-                prepend-icon="mdi-close"
-              >
+              <v-chip v-else size="x-small" color="error" variant="flat" prepend-icon="mdi-close">
                 NO
               </v-chip>
             </div>
@@ -336,24 +227,10 @@
           <!-- Actions Column -->
           <template v-slot:item.actions="{ item }">
             <div class="d-flex gap-1">
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="warning" 
-                icon="mdi-pencil" 
-                @click="editPatient(item)"
-                :style="{ color: 'var(--color-warning)' }" 
-                title="Edit patient"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="error" 
-                icon="mdi-delete" 
-                @click="deletePatient(item)"
-                :style="{ color: 'var(--color-error)' }" 
-                title="Delete patient"
-              />
+              <v-btn size="x-small" variant="text" color="warning" icon="mdi-pencil" @click="editPatient(item)"
+                :style="{ color: 'var(--color-warning)' }" title="Edit patient" />
+              <v-btn size="x-small" variant="text" color="error" icon="mdi-delete" @click="deletePatient(item)"
+                :style="{ color: 'var(--color-error)' }" title="Delete patient" />
             </div>
           </template>
 
@@ -365,13 +242,8 @@
               <div class="text-caption text-grey mt-1">
                 {{ hasActiveFilters ? 'Try adjusting your filters' : 'Enroll your first patient' }}
               </div>
-              <v-btn 
-                color="primary" 
-                size="small" 
-                @click="openEnrollmentDialog" 
-                class="mt-3"
-                :style="{ backgroundColor: 'var(--color-primary)' }"
-              >
+              <v-btn color="primary" size="small" @click="openEnrollmentDialog" class="mt-3"
+                :style="{ backgroundColor: 'var(--color-primary)' }">
                 <v-icon start>mdi-account-plus</v-icon>
                 Enroll First
               </v-btn>
@@ -382,12 +254,8 @@
     </v-card>
 
     <!-- Patient Dialog -->
-    <PatientDialog 
-      v-model="showPatientDialog" 
-      :patient="selectedPatient" 
-      :mode="dialogMode"
-      @saved="handlePatientSaved" 
-    />
+    <PatientDialog v-model="showPatientDialog" :patient="selectedPatient" :mode="dialogMode"
+      @saved="handlePatientSaved" />
 
     <!-- Import Dialog -->
     <v-dialog v-model="showImportDialog" max-width="600">
@@ -398,51 +266,39 @@
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-card-title>
-        
+
         <v-card-text>
-          <v-alert
-            type="info"
-            variant="tonal"
-            class="mb-4"
-          >
+          <v-alert type="info" variant="tonal" class="mb-4">
             <strong>Import Instructions:</strong>
             <ul class="mt-2">
               <li>Upload a CSV file with patient data</li>
-              <li>Required columns: first_name, last_name, date_of_birth, sex, hiv_status</li>
-              <li>Optional columns: middle_name, address, contact_number, diagnosis_date, art_start_date, latest_cd4_count, latest_viral_load</li>
+              <li><span class="font-weight-medium">Required columns:</span> first_name, last_name, date_of_birth, sex,
+                hiv_status</li>
+              <li><span class="font-weight-medium">Optional columns:</span> patient_facility_code (auto-generated if not
+                provided), middle_name, address, contact_number, diagnosis_date, art_start_date, latest_cd4_count,
+                latest_viral_load</li>
+              <li><span class="font-weight-medium">Date format:</span> YYYY-MM-DD (e.g., 1990-01-15)</li>
+              <li><span class="font-weight-medium">Sex values:</span> MALE, FEMALE, OTHER</li>
+              <li><span class="font-weight-medium">HIV Status values:</span> REACTIVE, NON_REACTIVE, INDETERMINATE</li>
+              <li>If you provide a patient_facility_code, it will be used. If it already exists, a unique code will be
+                generated automatically.</li>
+              <li>For reactive patients, diagnosis date will be auto-set to today if not provided</li>
               <li>Download a sample template using the button below</li>
-              <li>For reactive patients, diagnosis date will be auto-set if not provided</li>
             </ul>
           </v-alert>
 
           <div class="d-flex justify-end mb-4">
-            <v-btn
-              variant="text"
-              color="primary"
-              prepend-icon="mdi-download"
-              @click="downloadTemplate"
-            >
+            <v-btn variant="text" color="primary" prepend-icon="mdi-download" @click="downloadTemplate">
               Download Template
             </v-btn>
           </div>
 
-          <v-file-input
-            v-model="importFile"
-            label="Choose CSV file"
-            accept=".csv"
-            variant="outlined"
-            density="comfortable"
-            :rules="[v => !!v || 'Please select a file']"
-            prepend-icon="mdi-file"
-            show-size
-            @update:model-value="validateImportFile"
-          />
+          <v-file-input v-model="importFile" label="Choose CSV file" accept=".csv" variant="outlined"
+            density="comfortable" :rules="[v => !!v || 'Please select a file']" prepend-icon="mdi-file" show-size
+            @update:model-value="validateImportFile" />
 
           <div v-if="importValidation" class="mt-3">
-            <v-alert
-              :type="importValidation.valid ? 'success' : 'error'"
-              variant="tonal"
-            >
+            <v-alert :type="importValidation.valid ? 'success' : 'error'" variant="tonal">
               <div v-if="importValidation.valid">
                 ✅ File is valid. Found {{ importValidation.count }} patient records ready to import.
               </div>
@@ -458,6 +314,7 @@
             <v-table density="compact">
               <thead>
                 <tr>
+                  <th>Facility Code</th>
                   <th>Name</th>
                   <th>DOB</th>
                   <th>Sex</th>
@@ -466,10 +323,22 @@
               </thead>
               <tbody>
                 <tr v-for="(item, index) in importPreview" :key="index">
+                  <td>
+                    <span v-if="item.patient_facility_code" class="font-weight-medium">
+                      {{ item.patient_facility_code }}
+                    </span>
+                    <span v-else class="text-caption text-grey">
+                      (Auto-generated)
+                    </span>
+                  </td>
                   <td>{{ item.last_name }}, {{ item.first_name }}</td>
                   <td>{{ formatDate(item.date_of_birth) }}</td>
                   <td>{{ formatSex(item.sex) }}</td>
-                  <td>{{ formatHivStatus(item.hiv_status) }}</td>
+                  <td>
+                    <v-chip size="x-small" :color="getHivStatusColor(item.hiv_status)" variant="flat">
+                      {{ formatHivStatus(item.hiv_status) }}
+                    </v-chip>
+                  </td>
                 </tr>
               </tbody>
             </v-table>
@@ -478,19 +347,10 @@
 
         <v-card-actions>
           <v-spacer />
-          <v-btn
-            color="secondary"
-            variant="text"
-            @click="showImportDialog = false"
-          >
+          <v-btn color="secondary" variant="text" @click="showImportDialog = false">
             Cancel
           </v-btn>
-          <v-btn
-            color="primary"
-            :loading="importLoading"
-            :disabled="!importValidation?.valid"
-            @click="importPatients"
-          >
+          <v-btn color="primary" :loading="importLoading" :disabled="!importValidation?.valid" @click="importPatients">
             Import {{ importValidation?.count || 0 }} Patients
           </v-btn>
         </v-card-actions>
@@ -500,13 +360,8 @@
     <!-- Toast Notifications -->
     <div class="toast-container">
       <transition-group name="toast">
-        <div
-          v-for="toast in toasts"
-          :key="toast.id"
-          class="toast"
-          :class="`toast-${toast.type}`"
-          @click="removeToast(toast.id)"
-        >
+        <div v-for="toast in toasts" :key="toast.id" class="toast" :class="`toast-${toast.type}`"
+          @click="removeToast(toast.id)">
           <div class="toast-content">
             <v-icon :icon="toast.icon" size="20" class="mr-2" />
             <span>{{ toast.message }}</span>
@@ -646,7 +501,7 @@ function showToast(message, type = 'success', duration = 3000) {
     warning: 'mdi-alert',
     info: 'mdi-information'
   }[type] || 'mdi-information'
-  
+
   toasts.value.push({
     id,
     message,
@@ -654,7 +509,7 @@ function showToast(message, type = 'success', duration = 3000) {
     icon,
     duration
   })
-  
+
   setTimeout(() => {
     removeToast(id)
   }, duration)
@@ -669,17 +524,17 @@ function removeToast(id) {
 
 // Compact stats cards
 const compactStats = computed(() => {
-  const reactiveStat = Array.isArray(stats.value.by_hiv_status) 
-    ? stats.value.by_hiv_status.find(s => s.hiv_status === 'REACTIVE') 
+  const reactiveStat = Array.isArray(stats.value.by_hiv_status)
+    ? stats.value.by_hiv_status.find(s => s.hiv_status === 'REACTIVE')
     : { count: 0 }
-  
+
   const nonReactiveStat = Array.isArray(stats.value.by_hiv_status)
     ? stats.value.by_hiv_status.filter(s => s.hiv_status === 'NON_REACTIVE' || s.hiv_status === 'INDETERMINATE')
-        .reduce((sum, s) => sum + s.count, 0)
+      .reduce((sum, s) => sum + s.count, 0)
     : 0
-  
+
   const onArtStat = stats.value.on_art || 0
-  
+
   return [
     {
       label: 'Total Patients',
@@ -798,7 +653,7 @@ onMounted(async () => {
 async function loadPatients() {
   // Prevent multiple simultaneous requests
   if (loading.value) return
-  
+
   loading.value = true
   error.value = ''
 
@@ -829,7 +684,7 @@ async function loadPatients() {
     }
 
     const response = await patientsApi.getAll(params)
-    
+
     if (response.data) {
       if (response.data.success === true) {
         patients.value = response.data.data || []
@@ -863,7 +718,7 @@ async function loadPatients() {
 async function fetchStats() {
   try {
     const response = await patientsApi.getStats()
-    
+
     if (response.data) {
       if (response.data.success === true) {
         stats.value = response.data.stats || stats.value
@@ -985,7 +840,7 @@ function openEnrollmentDialog() {
 
 function editPatient(patient) {
   const formattedPatient = { ...patient }
-  
+
   if (patient.date_of_birth) {
     formattedPatient.date_of_birth = formatDateForInput(patient.date_of_birth)
   }
@@ -995,7 +850,7 @@ function editPatient(patient) {
   if (patient.art_start_date) {
     formattedPatient.art_start_date = formatDateForInput(patient.art_start_date)
   }
-  
+
   selectedPatient.value = formattedPatient
   dialogMode.value = 'edit'
   showPatientDialog.value = true
@@ -1006,10 +861,10 @@ function formatDateForInput(dateString) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     return dateString
   }
-  
+
   const date = new Date(dateString)
   if (isNaN(date.getTime())) return ''
-  
+
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -1036,7 +891,7 @@ async function deletePatient(patient) {
 async function exportPatientData() {
   try {
     loading.value = true
-    
+
     // Build export params based on current filters
     const params = {}
     if (search.value?.trim()) {
@@ -1051,7 +906,7 @@ async function exportPatientData() {
 
     // Use the export endpoint
     const response = await patientsApi.exportCSV(params)
-    
+
     // Create download link
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
@@ -1061,7 +916,7 @@ async function exportPatientData() {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-    
+
     showToast('Patient data exported successfully', 'success')
   } catch (err) {
     console.error('Export error:', err)
@@ -1089,6 +944,7 @@ function openImportDialog() {
 function downloadTemplate() {
   const template = [
     {
+      patient_facility_code: "PR23-JSD", // Example format
       first_name: "John",
       last_name: "Doe",
       middle_name: "Smith",
@@ -1101,11 +957,47 @@ function downloadTemplate() {
       art_start_date: "2023-02-01",
       latest_cd4_count: 500,
       latest_viral_load: 40
+    },
+    {
+      patient_facility_code: "PR22-JS",
+      first_name: "Jane",
+      last_name: "Smith",
+      middle_name: "",
+      date_of_birth: "1985-05-20",
+      sex: "FEMALE",
+      address: "456 Oak Ave",
+      contact_number: "+9876543210",
+      hiv_status: "NON_REACTIVE",
+      diagnosis_date: "",
+      art_start_date: "",
+      latest_cd4_count: "",
+      latest_viral_load: ""
     }
   ]
-  
-  // Convert to CSV
-  const csv = Papa.unparse(template)
+
+  // Add headers in a specific order
+  const fields = [
+    'patient_facility_code',
+    'first_name',
+    'last_name',
+    'middle_name',
+    'date_of_birth',
+    'sex',
+    'address',
+    'contact_number',
+    'hiv_status',
+    'diagnosis_date',
+    'art_start_date',
+    'latest_cd4_count',
+    'latest_viral_load'
+  ]
+
+  // Convert to CSV with specified field order
+  const csv = Papa.unparse({
+    fields: fields,
+    data: template.map(item => fields.map(field => item[field] || ''))
+  })
+
   const dataBlob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(dataBlob)
   const link = document.createElement('a')
@@ -1130,30 +1022,59 @@ function validateImportFile() {
     complete: (results) => {
       try {
         const data = results.data
-        
+
         if (data.length === 0) {
           throw new Error('File contains no data')
         }
-        
+
+        // Required fields (patient_facility_code is optional, will be auto-generated if not provided)
         const requiredFields = ['first_name', 'last_name', 'date_of_birth', 'sex', 'hiv_status']
+        const optionalFields = ['patient_facility_code', 'middle_name', 'address', 'contact_number',
+          'diagnosis_date', 'art_start_date', 'latest_cd4_count', 'latest_viral_load']
+
         const errors = []
-        
+
         data.forEach((patient, index) => {
+          // Check required fields
           requiredFields.forEach(field => {
-            if (!patient[field]) {
+            if (!patient[field] || patient[field].trim() === '') {
               errors.push(`Row ${index + 1}: Missing required field '${field}'`)
             }
           })
-          
+
+          // Validate sex
           if (patient.sex && !['MALE', 'FEMALE', 'OTHER'].includes(patient.sex)) {
             errors.push(`Row ${index + 1}: Invalid sex '${patient.sex}'. Must be MALE, FEMALE, or OTHER`)
           }
-          
+
+          // Validate HIV status
           if (patient.hiv_status && !['REACTIVE', 'NON_REACTIVE', 'INDETERMINATE'].includes(patient.hiv_status)) {
             errors.push(`Row ${index + 1}: Invalid HIV status '${patient.hiv_status}'. Must be REACTIVE, NON_REACTIVE, or INDETERMINATE`)
           }
+
+          // Validate date formats if provided
+          if (patient.date_of_birth && !isValidDateFormat(patient.date_of_birth)) {
+            errors.push(`Row ${index + 1}: Invalid date format for date_of_birth. Use YYYY-MM-DD`)
+          }
+
+          if (patient.diagnosis_date && !isValidDateFormat(patient.diagnosis_date)) {
+            errors.push(`Row ${index + 1}: Invalid date format for diagnosis_date. Use YYYY-MM-DD`)
+          }
+
+          if (patient.art_start_date && !isValidDateFormat(patient.art_start_date)) {
+            errors.push(`Row ${index + 1}: Invalid date format for art_start_date. Use YYYY-MM-DD`)
+          }
+
+          // Validate numeric fields
+          if (patient.latest_cd4_count && isNaN(parseInt(patient.latest_cd4_count))) {
+            errors.push(`Row ${index + 1}: latest_cd4_count must be a number`)
+          }
+
+          if (patient.latest_viral_load && isNaN(parseInt(patient.latest_viral_load))) {
+            errors.push(`Row ${index + 1}: latest_viral_load must be a number`)
+          }
         })
-        
+
         if (errors.length > 0) {
           importValidation.value = {
             valid: false,
@@ -1185,32 +1106,63 @@ function validateImportFile() {
   })
 }
 
+// Helper function to validate date format
+function isValidDateFormat(dateString) {
+  if (!dateString) return true
+  const regex = /^\d{4}-\d{2}-\d{2}$/
+  if (!regex.test(dateString)) return false
+
+  const date = new Date(dateString)
+  return !isNaN(date.getTime())
+}
+
 async function importPatients() {
   if (!importValidation.value?.valid || !importFile.value) return
-  
+
   importLoading.value = true
-  
+
   Papa.parse(importFile.value, {
     header: true,
     skipEmptyLines: true,
     complete: async (results) => {
       try {
-        const patients = results.data
-        
+        const patients = results.data.map(patient => {
+          // Clean up the data - remove empty strings and trim values
+          const cleanedPatient = {}
+          Object.keys(patient).forEach(key => {
+            const value = patient[key]
+            if (value && typeof value === 'string' && value.trim() !== '') {
+              cleanedPatient[key] = value.trim()
+            } else if (value && typeof value !== 'string') {
+              cleanedPatient[key] = value
+            }
+          })
+          return cleanedPatient
+        })
+
+        console.log('Importing patients:', patients)
+
         const response = await patientsApi.import({ patients })
-        
+
         showImportDialog.value = false
         await loadPatients()
         await fetchStats()
-        
+
         if (response.data.success) {
           showToast(response.data.message || 'Patients imported successfully', 'success')
+
+          // Show detailed results if there were failures
+          if (response.data.results?.failed > 0) {
+            console.warn('Import failures:', response.data.results.errors)
+            showToast(`${response.data.results.failed} records failed to import`, 'warning')
+          }
         } else {
           showToast('Import completed with errors', 'warning')
           console.error('Import errors:', response.data.results?.errors)
         }
       } catch (err) {
-        showToast('Failed to import patients: ' + err.message, 'error')
+        console.error('Import error:', err)
+        showToast('Failed to import patients: ' + (err.response?.data?.error || err.message), 'error')
       } finally {
         importLoading.value = false
       }
@@ -1404,6 +1356,7 @@ async function importPatients() {
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -1414,6 +1367,7 @@ async function importPatients() {
   from {
     width: 100%;
   }
+
   to {
     width: 0%;
   }

@@ -264,11 +264,11 @@ const systemMenu = ref([
 ])
 
 // Auth computed properties
-const userName = computed(() => authStore.user?.name || 'System Administrator')
+const userName = computed(() => authStore.user?.username || 'System Administrator')
 const userRole = computed(() => authStore.user?.role || 'Admin')
 
 const userInitials = computed(() => {
-  const name = authStore.user?.name || 'SA'
+  const name = authStore.user?.username || 'SA'
   return name
     .split(' ')
     .map(word => word[0]?.toUpperCase() || '')

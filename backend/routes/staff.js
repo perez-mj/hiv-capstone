@@ -205,6 +205,202 @@ router.get('/:id',
     }
 });
 
+// POST /api/staff/with-user - Create new staff member with user account (Admin only)
+router.post('/with-user', 
+  authenticateToken, 
+  authorize('ADMIN'),
+  async (req, res) => {
+    const connection = await pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+
+      const { 
+        first_name, 
+        last_name, 
+        middle_name, 
+        position, 
+        contact_number,
+        username,
+        password,
+        role,
+        email
+      } = req.body;
+
+      console.log('Creating staff member with user account:', { 
+        first_name, 
+        last_name, 
+        position,
+        username,
+        role
+      });
+
+      // Validate required fields
+      if (!first_name || !last_name) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'First name and last name are required'
+        });
+      }
+
+      // Check if username already exists (if provided)
+      if (username) {
+        const [existingUser] = await connection.execute(
+          'SELECT id FROM users WHERE username = ?',
+          [username]
+        );
+        
+        if (existingUser.length > 0) {
+          await connection.rollback();
+          return res.status(400).json({
+            success: false,
+            error: 'Username already exists'
+          });
+        }
+      }
+
+      // Generate username if not provided
+      const finalUsername = username || generateUsername(first_name, last_name);
+      
+      // Generate random password if not provided
+      const finalPassword = password || generateRandomPassword();
+      
+      // Hash password
+      const bcrypt = require('bcryptjs');
+      const password_hash = await bcrypt.hash(finalPassword, 10);
+      
+      // Set default role if not provided
+      const finalRole = role || 'NURSE';
+
+      // Create user account first
+      const [userResult] = await connection.execute(
+        `INSERT INTO users 
+          (username, password_hash, email, role, is_active, created_at, updated_at) 
+        VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          finalUsername, 
+          password_hash, 
+          email || null, 
+          finalRole, 
+          1 // is_active = true
+        ]
+      );
+      
+      const userId = userResult.insertId;
+      console.log("User created with ID:", userId);
+
+      // Check if user_id already exists in staff table
+      const [existingStaff] = await connection.execute(
+        'SELECT id FROM staff WHERE user_id = ?',
+        [userId]
+      );
+      
+      if (existingStaff.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'User is already linked to a staff member'
+        });
+      }
+
+      // Create staff member linked to the user
+      const [staffResult] = await connection.execute(
+        `INSERT INTO staff 
+          (user_id, first_name, last_name, middle_name, position, contact_number, created_at, updated_at) 
+        VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          userId, 
+          first_name, 
+          last_name, 
+          middle_name || null, 
+          position || null, 
+          contact_number || null
+        ]
+      );
+      
+      console.log("Staff member created with ID:", staffResult.insertId);
+
+      // Get created staff member with user details
+      const [newStaffRows] = await connection.execute(
+        `SELECT 
+          s.*,
+          u.username,
+          u.email,
+          u.role,
+          u.is_active as user_active,
+          u.last_login
+        FROM staff s
+        LEFT JOIN users u ON s.user_id = u.id
+        WHERE s.id = ?`,
+        [staffResult.insertId]
+      );
+
+      // Log the action
+      await logAudit(
+        req.user.id,
+        'STAFF_CREATED_WITH_USER',
+        'staff',
+        staffResult.insertId,
+        null,
+        null,
+        newStaffRows[0],
+        `Staff member ${first_name} ${last_name} created with user account by ${req.user.username}`,
+        req
+      );
+
+      await connection.commit();
+
+      // Return the created password only if it was auto-generated
+      const response = {
+        success: true,
+        message: 'Staff member and user account created successfully',
+        data: newStaffRows[0]
+      };
+
+      // Include the generated password in the response if it was auto-generated
+      if (!password) {
+        response.generated_password = finalPassword;
+      }
+
+      res.status(201).json(response);
+
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error creating staff member with user:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to create staff member' 
+      });
+    } finally {
+      connection.release();
+    }
+});
+
+// Helper function to generate username
+function generateUsername(firstName, lastName) {
+  // Clean the names (remove special characters, convert to lowercase)
+  const cleanFirst = firstName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanLast = lastName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  // Generate base username
+  let baseUsername = `${cleanFirst}.${cleanLast}`;
+  
+  // Add random numbers to ensure uniqueness
+  const randomNum = Math.floor(Math.random() * 1000);
+  return `${baseUsername}${randomNum}`;
+}
+
+// Helper function to generate random password
+function generateRandomPassword(length = 10) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
 // POST /api/staff - Create new staff member (Admin only)
 router.post('/', 
   authenticateToken, 

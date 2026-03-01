@@ -809,7 +809,7 @@
                   <v-icon size="20" class="mr-2">mdi-information</v-icon>
                   <div>
                     <span class="text-caption">
-                      A user account will be automatically created for this staff member with username based on their name.
+                      A user account will be automatically created for this staff member. Username will be auto-generated from their name.
                     </span>
                   </div>
                 </div>
@@ -824,6 +824,7 @@
                     required
                     variant="outlined"
                     density="compact"
+                    @update:model-value="autoGenerateUsername"
                     hide-details="auto"
                   />
                 </v-col>
@@ -844,6 +845,7 @@
                     required
                     variant="outlined"
                     density="compact"
+                    @update:model-value="autoGenerateUsername"
                     hide-details="auto"
                   />
                 </v-col>
@@ -880,20 +882,28 @@
                 hide-details="auto"
               />
 
-              <!-- Password field for new staff (auto-create user) -->
+              <!-- Username preview for new staff -->
               <template v-if="dialog.mode === 'create'">
                 <v-divider class="my-3" />
-                <p class="text-caption font-weight-medium mb-2">User Account Details</p>
+                
+                <div class="d-flex align-center mb-3">
+                  <v-icon color="info" size="small" class="mr-2">mdi-account-details</v-icon>
+                  <span class="text-caption font-weight-medium">User Account Details</span>
+                </div>
+
                 <v-text-field
                   v-model="dialog.data.username"
-                  label="Username (optional)"
+                  label="Username"
+                  :rules="[rules.required]"
+                  required
                   variant="outlined"
                   density="compact"
                   class="mb-3"
-                  hint="Leave blank to auto-generate from name"
+                  hint="Auto-generated from name (can be customized)"
                   persistent-hint
                   hide-details="auto"
                 />
+
                 <v-text-field
                   v-model="dialog.data.password"
                   label="Password"
@@ -902,21 +912,28 @@
                   variant="outlined"
                   density="compact"
                   class="mb-3"
-                  hint="Minimum 6 characters. Leave blank to auto-generate"
+                  hint="Leave blank to auto-generate a secure password"
                   persistent-hint
                   hide-details="auto"
                 />
+
                 <v-select
                   v-model="dialog.data.role"
                   :items="['NURSE', 'ADMIN']"
                   label="Role"
+                  :rules="[rules.required]"
+                  required
                   variant="outlined"
                   density="compact"
                   class="mb-3"
-                  hint="Select user role"
-                  persistent-hint
                   hide-details="auto"
                 />
+
+                <!-- Auto-generated password preview -->
+                <div v-if="!dialog.data.password" class="password-preview mt-2">
+                  <v-icon color="success" size="small" class="mr-1">mdi-shield-check</v-icon>
+                  <span class="text-caption">A secure password will be auto-generated</span>
+                </div>
               </template>
             </template>
           </v-form>
@@ -942,6 +959,66 @@
             size="small"
           >
             {{ dialog.mode === 'create' ? 'Create' : 'Save' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Generated Password Display Dialog -->
+    <v-dialog v-model="passwordDisplayDialog.show" max-width="400" persistent>
+      <v-card class="info-dialog">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-3 bg-success-lighten-5">
+          <v-icon color="success" size="small" class="mr-2">mdi-key</v-icon>
+          Staff Account Created Successfully
+        </v-card-title>
+        
+        <v-card-text class="pa-3">
+          <div class="text-center mb-3">
+            <v-icon size="48" color="success" class="mb-2">mdi-account-check</v-icon>
+          </div>
+          
+          <p class="text-body-2 mb-2">
+            Staff member <span class="font-weight-bold">{{ passwordDisplayDialog.staffName }}</span> has been created with the following credentials:
+          </p>
+          
+          <v-sheet class="pa-3 mb-3 credentials-sheet" rounded>
+            <div class="d-flex align-center mb-2">
+              <v-icon size="small" color="primary" class="mr-2">mdi-account</v-icon>
+              <span class="text-caption font-weight-medium" style="min-width: 70px;">Username:</span>
+              <code class="text-body-2">{{ passwordDisplayDialog.username }}</code>
+            </div>
+            <div class="d-flex align-center">
+              <v-icon size="small" color="warning" class="mr-2">mdi-lock</v-icon>
+              <span class="text-caption font-weight-medium" style="min-width: 70px;">Password:</span>
+              <code class="text-body-2">{{ passwordDisplayDialog.password }}</code>
+            </div>
+          </v-sheet>
+          
+          <v-alert
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="mt-2"
+          >
+            <div class="d-flex align-center">
+              <v-icon size="18" class="mr-2">mdi-alert</v-icon>
+              <span class="text-caption">
+                Please save these credentials. They will not be shown again.
+              </span>
+            </div>
+          </v-alert>
+        </v-card-text>
+        
+        <v-card-actions class="pa-3 pt-0">
+          <v-spacer />
+          <v-btn 
+            color="primary" 
+            variant="elevated" 
+            @click="passwordDisplayDialog.show = false"
+            prepend-icon="mdi-check"
+            size="small"
+          >
+            I've Saved the Credentials
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1034,6 +1111,19 @@
               </span>
             </div>
           </v-alert>
+
+          <!-- Progress indicator for bulk delete -->
+          <div v-if="bulkDeleteDialog.progress.show" class="bulk-progress mt-3">
+            <div class="bulk-progress-text">
+              Processing: {{ bulkDeleteDialog.progress.current }} of {{ bulkDeleteDialog.progress.total }}
+            </div>
+            <v-progress-linear
+              :model-value="(bulkDeleteDialog.progress.current / bulkDeleteDialog.progress.total) * 100"
+              color="primary"
+              height="6"
+              rounded
+            />
+          </div>
         </v-card-text>
         
         <v-card-actions class="pa-3 pt-0">
@@ -1302,6 +1392,13 @@ export default {
       data: {}
     })
 
+    const passwordDisplayDialog = reactive({
+      show: false,
+      staffName: '',
+      username: '',
+      password: ''
+    })
+
     const userInfoModal = reactive({
       show: false
     })
@@ -1322,7 +1419,12 @@ export default {
       show: false,
       loading: false,
       count: 0,
-      hasUsers: false
+      hasUsers: false,
+      progress: {
+        show: false,
+        current: 0,
+        total: 0
+      }
     })
 
     const createUserDialog = reactive({
@@ -1403,7 +1505,7 @@ export default {
     ]
 
     const userHeaders = [
-      { title: '', key: 'data-table-select', width: '48' }, // Selection checkbox column
+      { title: '', key: 'data-table-select', width: '48' },
       { title: 'ID', key: 'id', width: '80' },
       { title: 'Username', key: 'username', sortable: true },
       { title: 'Email', key: 'email' },
@@ -1415,7 +1517,7 @@ export default {
     ]
 
     const staffHeaders = [
-      { title: '', key: 'data-table-select', width: '48' }, // Selection checkbox column
+      { title: '', key: 'data-table-select', width: '48' },
       { title: 'ID', key: 'id', width: '80' },
       { title: 'Name', key: 'full_name', sortable: true },
       { title: 'Position', key: 'position' },
@@ -1425,7 +1527,7 @@ export default {
     ]
 
     const kioskHeaders = [
-      { title: '', key: 'data-table-select', width: '48' }, // Selection checkbox column
+      { title: '', key: 'data-table-select', width: '48' },
       { title: 'ID', key: 'id', width: '80' },
       { title: 'Device ID', key: 'device_id', sortable: true },
       { title: 'Device Name', key: 'device_name', sortable: true },
@@ -1446,7 +1548,6 @@ export default {
         )
       }
       
-      // Sorting
       const [sortField, sortDir] = sortBy.value.split('_')
       filtered.sort((a, b) => {
         let aVal = a[sortField]
@@ -1463,7 +1564,6 @@ export default {
     const filteredUsers = computed(() => {
       let filtered = [...users.value]
       
-      // Search filter
       if (search.value) {
         const term = search.value.toLowerCase()
         filtered = filtered.filter(item => 
@@ -1472,7 +1572,6 @@ export default {
         )
       }
       
-      // Role filter (Staff/Patient)
       if (filters.value.role) {
         if (filters.value.role === 'STAFF') {
           filtered = filtered.filter(item => ['ADMIN', 'NURSE'].includes(item.role))
@@ -1481,14 +1580,12 @@ export default {
         }
       }
       
-      // Status filter
       if (filters.value.status) {
         filtered = filtered.filter(item => 
           filters.value.status === 'active' ? item.is_active : !item.is_active
         )
       }
       
-      // Sorting
       const [sortField, sortDir] = sortBy.value.split('_')
       filtered.sort((a, b) => {
         let aVal = a[sortField]
@@ -1561,7 +1658,6 @@ export default {
       return filtered
     })
 
-    // Current filtered items based on active table
     const filteredItems = computed(() => {
       switch (activeTable.value) {
         case 'appointment_types': return filteredAppointmentTypes.value
@@ -1572,7 +1668,6 @@ export default {
       }
     })
 
-    // Has active filters
     const hasActiveFilters = computed(() => {
       return search.value || filters.value.role || filters.value.status
     })
@@ -1674,6 +1769,34 @@ export default {
       passwordMinLength: v => !v || v.length >= 6 || 'Minimum 6 characters',
       passwordMatch: v => v === passwordDialog.newPassword || 'Passwords do not match'
     }
+
+    // Helper functions
+    const generateUsernameFromName = () => {
+      if (dialog.data.first_name && dialog.data.last_name) {
+        const firstName = dialog.data.first_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const lastName = dialog.data.last_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        let baseUsername = `${firstName}.${lastName}`;
+        const randomNum = Math.floor(Math.random() * 900) + 100;
+        return `${baseUsername}${randomNum}`;
+      }
+      return '';
+    };
+
+    const generateRandomPassword = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
+      let password = '';
+      for (let i = 0; i < 10; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+    };
+
+    const autoGenerateUsername = () => {
+      if (dialog.mode === 'create' && dialog.data.first_name && dialog.data.last_name && !dialog.data.username) {
+        dialog.data.username = generateUsernameFromName();
+      }
+    };
 
     // Debounced search
     const debouncedSearch = debounce(() => {
@@ -1822,16 +1945,13 @@ export default {
     const openCreateDialog = () => {
       switch (activeTable.value) {
         case 'users':
-          // Show info modal for users
           userInfoModal.show = true
           break
         case 'kiosk_devices':
-          // Show info modal for kiosk devices
           kioskInfoModal.show = true
           break
         case 'appointment_types':
         case 'staff':
-          // Open actual create dialog for these tables
           dialog.mode = 'create'
           dialog.title = `Create ${currentTableTitle.value.slice(0, -1)}`
           dialog.data = getEmptyRecord()
@@ -1874,7 +1994,6 @@ export default {
     }
 
     const editUser = (item) => {
-      // Show message that user editing is handled elsewhere
       showToast('User details can be edited in patient or staff management', 'info')
     }
 
@@ -1886,8 +2005,6 @@ export default {
     }
 
     const editKioskDevice = (item) => {
-      // For kiosk devices, we only allow toggling authorization and editing name
-      // You might want to implement a simple edit dialog for device name
       showToast('Device name can be edited in the device details', 'info')
     }
 
@@ -1956,17 +2073,45 @@ export default {
               response = await appointmentsApi.updateType(dialog.data.id, dialog.data)
             }
             break
+            
           case 'staff':
             if (dialog.mode === 'create') {
-              response = await staffApi.create(dialog.data)
+              const staffData = {
+                first_name: dialog.data.first_name,
+                last_name: dialog.data.last_name,
+                middle_name: dialog.data.middle_name || '',
+                position: dialog.data.position || '',
+                contact_number: dialog.data.contact_number || '',
+                username: dialog.data.username || generateUsernameFromName(),
+                password: dialog.data.password || generateRandomPassword(),
+                role: dialog.data.role || 'NURSE'
+              }
+              
+              response = await staffApi.createWithUser(staffData)
+              
+              if (response.data.success && response.data.generated_password) {
+                passwordDisplayDialog.staffName = `${staffData.first_name} ${staffData.last_name}`
+                passwordDisplayDialog.username = response.data.data.username
+                passwordDisplayDialog.password = response.data.generated_password
+                passwordDisplayDialog.show = true
+              }
             } else {
-              response = await staffApi.update(dialog.data.id, dialog.data)
+              response = await staffApi.update(dialog.data.id, {
+                user_id: dialog.data.user_id,
+                first_name: dialog.data.first_name,
+                last_name: dialog.data.last_name,
+                middle_name: dialog.data.middle_name,
+                position: dialog.data.position,
+                contact_number: dialog.data.contact_number
+              })
             }
             break
         }
 
         if (response?.data?.success) {
-          showToast(`Record ${dialog.mode === 'create' ? 'created' : 'updated'} successfully`, 'success')
+          if (!response.data.generated_password) {
+            showToast(`Record ${dialog.mode === 'create' ? 'created' : 'updated'} successfully`, 'success')
+          }
           closeDialog()
           await refreshTable()
         }
@@ -1987,6 +2132,7 @@ export default {
     const confirmBulkDelete = () => {
       bulkDeleteDialog.count = selectedItems.value.length
       bulkDeleteDialog.hasUsers = activeTable.value === 'users'
+      bulkDeleteDialog.progress.show = false
       bulkDeleteDialog.show = true
     }
 
@@ -2036,12 +2182,20 @@ export default {
 
     const executeBulkDelete = async () => {
       bulkDeleteDialog.loading = true
+      bulkDeleteDialog.progress.show = true
+      bulkDeleteDialog.progress.total = selectedItems.value.length
+      bulkDeleteDialog.progress.current = 0
 
       try {
-        let successCount = 0
-        let failCount = 0
+        const results = {
+          success: 0,
+          failed: 0,
+          errors: []
+        }
 
         for (const item of selectedItems.value) {
+          bulkDeleteDialog.progress.current++
+          
           try {
             let response
 
@@ -2061,30 +2215,44 @@ export default {
             }
 
             if (response?.data?.success) {
-              successCount++
+              results.success++
             } else {
-              failCount++
+              results.failed++
+              results.errors.push({
+                item,
+                error: response?.data?.error || 'Unknown error'
+              })
             }
           } catch (error) {
             console.error('Error deleting item:', item, error)
-            failCount++
+            results.failed++
+            results.errors.push({
+              item,
+              error: error.response?.data?.error || error.message || 'Request failed'
+            })
           }
+
+          await new Promise(resolve => setTimeout(resolve, 100))
         }
 
         bulkDeleteDialog.show = false
         clearSelection()
         await refreshTable()
 
-        if (failCount === 0) {
-          showToast(`Successfully deleted ${successCount} records`, 'success')
+        if (results.failed === 0) {
+          showToast(`Successfully deleted ${results.success} records`, 'success')
+        } else if (results.success > 0) {
+          showToast(`Deleted ${results.success} records, ${results.failed} failed`, 'warning')
+          console.warn('Bulk delete errors:', results.errors)
         } else {
-          showToast(`Deleted ${successCount} records, ${failCount} failed`, 'warning')
+          showToast(`Failed to delete any records`, 'error')
         }
       } catch (error) {
         console.error('Error in bulk delete:', error)
         showToast('Failed to complete bulk delete', 'error')
       } finally {
         bulkDeleteDialog.loading = false
+        bulkDeleteDialog.progress.show = false
       }
     }
 
@@ -2208,6 +2376,13 @@ export default {
       clearSelection()
     })
 
+    // Watch for name changes to auto-generate username
+    watch(() => [dialog.data.first_name, dialog.data.last_name], () => {
+      if (dialog.mode === 'create' && dialog.data.first_name && dialog.data.last_name && !dialog.data.username) {
+        dialog.data.username = generateUsernameFromName();
+      }
+    });
+
     // Initial load
     onMounted(() => {
       refreshTable()
@@ -2265,6 +2440,7 @@ export default {
       
       // Dialog state
       dialog,
+      passwordDisplayDialog,
       userInfoModal,
       kioskInfoModal,
       kioskSteps,
@@ -2316,7 +2492,12 @@ export default {
       removeToast,
       
       // Debounced search
-      debouncedSearch
+      debouncedSearch,
+      
+      // Helper functions
+      generateUsernameFromName,
+      generateRandomPassword,
+      autoGenerateUsername
     }
   }
 }
@@ -2453,6 +2634,62 @@ export default {
   box-shadow: var(--shadow-sm);
 }
 
+/* Password preview */
+.password-preview {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-sm);
+  background-color: var(--color-surface-light);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--color-success);
+}
+
+/* Credentials sheet */
+.credentials-sheet {
+  background-color: var(--color-surface-light);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-sm);
+}
+
+.credentials-sheet code {
+  background-color: var(--color-surface);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+/* Loading overlay for bulk operations */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.dark-theme .loading-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* Progress indicator for bulk delete */
+.bulk-progress {
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background-color: var(--color-surface-light);
+  border-radius: var(--radius-sm);
+}
+
+.bulk-progress-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
 /* Toast notifications */
 .toast-container {
   position: fixed;
@@ -2574,6 +2811,15 @@ export default {
 
 :root.dark-theme .toast-content {
   color: white;
+}
+
+:root.dark-theme .credentials-sheet {
+  background-color: var(--color-surface-dark);
+}
+
+:root.dark-theme .credentials-sheet code {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
 /* Tab styling */

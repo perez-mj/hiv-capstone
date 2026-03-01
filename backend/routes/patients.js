@@ -715,6 +715,7 @@ router.post('/',
       await connection.beginTransaction();
 
       const {
+        patient_facility_code, // Add this field
         first_name,
         last_name,
         middle_name,
@@ -748,16 +749,46 @@ router.post('/',
         });
       }
 
-      // Generate patient facility code
-      const registrationYear = new Date().getFullYear();
-      const patient_facility_code = await generatePatientCode(
-        connection, 
-        first_name, 
-        middle_name, 
-        last_name, 
-        hiv_status,
-        registrationYear
-      );
+      let finalPatientCode = patient_facility_code;
+
+      // If no facility code provided, generate one
+      if (!finalPatientCode) {
+        const registrationYear = new Date().getFullYear();
+        finalPatientCode = await generatePatientCode(
+          connection, 
+          first_name, 
+          middle_name, 
+          last_name, 
+          hiv_status,
+          registrationYear
+        );
+      } else {
+        // Check if the provided code already exists
+        const [existingPatient] = await connection.execute(
+          'SELECT id FROM patients WHERE patient_facility_code = ?',
+          [finalPatientCode]
+        );
+        
+        if (existingPatient.length > 0) {
+          // If code exists, generate a new one with a suffix
+          const baseCode = finalPatientCode;
+          let counter = 1;
+          let newCode = `${baseCode}${counter}`;
+          
+          while (true) {
+            const [checkExisting] = await connection.execute(
+              'SELECT id FROM patients WHERE patient_facility_code = ?',
+              [newCode]
+            );
+            
+            if (checkExisting.length === 0) break;
+            counter++;
+            newCode = `${baseCode}${counter}`;
+          }
+          
+          finalPatientCode = newCode;
+        }
+      }
 
       let user_id = null;
 
@@ -818,7 +849,7 @@ router.post('/',
           latest_viral_load, created_by, updated_by, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
-          patient_facility_code,
+          finalPatientCode,
           user_id,
           first_name,
           last_name,
@@ -857,7 +888,7 @@ router.post('/',
         patient_id,
         null,
         newPatient[0],
-        `Created patient record for ${first_name} ${last_name} with code ${patient_facility_code}`,
+        `Created patient record for ${first_name} ${last_name} with code ${finalPatientCode}`,
         req
       );
 
@@ -910,6 +941,7 @@ router.put('/:id',
       const oldValues = existingPatient[0];
 
       const {
+        patient_facility_code, // Add this field
         first_name,
         last_name,
         middle_name,
@@ -945,6 +977,25 @@ router.put('/:id',
       // Build update query dynamically
       const updateFields = [];
       const updateValues = [];
+
+      if (patient_facility_code !== undefined && patient_facility_code !== oldValues.patient_facility_code) {
+        // Check if the new code already exists (excluding current patient)
+        const [existingPatientWithCode] = await connection.execute(
+          'SELECT id FROM patients WHERE patient_facility_code = ? AND id != ?',
+          [patient_facility_code, req.patientId]
+        );
+        
+        if (existingPatientWithCode.length > 0) {
+          await connection.rollback();
+          return res.status(400).json({ 
+            success: false,
+            error: 'Patient facility code already exists' 
+          });
+        }
+        
+        updateFields.push('patient_facility_code = ?');
+        updateValues.push(patient_facility_code);
+      }
 
       if (first_name !== undefined) {
         updateFields.push('first_name = ?');
@@ -1615,19 +1666,51 @@ router.post('/import',
 
       for (const patientData of patients) {
         try {
+          // Auto-set diagnosis date for reactive patients if not provided
           if (patientData.hiv_status === 'REACTIVE' && !patientData.diagnosis_date) {
             patientData.diagnosis_date = new Date().toISOString().split('T')[0];
           }
 
-          const registrationYear = new Date().getFullYear();
-          const patient_facility_code = await generatePatientCode(
-            connection, 
-            patientData.first_name, 
-            patientData.middle_name, 
-            patientData.last_name, 
-            patientData.hiv_status,
-            registrationYear
-          );
+          let patient_facility_code = patientData.patient_facility_code;
+          
+          // If no facility code provided, generate one
+          if (!patient_facility_code) {
+            const registrationYear = new Date().getFullYear();
+            patient_facility_code = await generatePatientCode(
+              connection, 
+              patientData.first_name, 
+              patientData.middle_name, 
+              patientData.last_name, 
+              patientData.hiv_status,
+              registrationYear
+            );
+          } else {
+            // Check if the provided code already exists
+            const [existingPatient] = await connection.execute(
+              'SELECT id FROM patients WHERE patient_facility_code = ?',
+              [patient_facility_code]
+            );
+            
+            if (existingPatient.length > 0) {
+              // If code exists, generate a new one with a suffix
+              const baseCode = patient_facility_code;
+              let counter = 2;
+              let newCode = `${baseCode}${counter}`;
+              
+              while (true) {
+                const [checkExisting] = await connection.execute(
+                  'SELECT id FROM patients WHERE patient_facility_code = ?',
+                  [newCode]
+                );
+                
+                if (checkExisting.length === 0) break;
+                counter++;
+                newCode = `${baseCode}${counter}`;
+              }
+              
+              patient_facility_code = newCode;
+            }
+          }
 
           const [result] = await connection.execute(
             `INSERT INTO patients (
@@ -1648,8 +1731,8 @@ router.post('/import',
               patientData.hiv_status,
               patientData.diagnosis_date || null,
               patientData.art_start_date || null,
-              patientData.latest_cd4_count || null,
-              patientData.latest_viral_load || null,
+              patientData.latest_cd4_count ? parseInt(patientData.latest_cd4_count) : null,
+              patientData.latest_viral_load ? parseInt(patientData.latest_viral_load) : null,
               req.user.id,
               req.user.id
             ]
@@ -1659,9 +1742,10 @@ router.post('/import',
         } catch (err) {
           results.failed++;
           results.errors.push({
-            patient: `${patientData.first_name} ${patientData.last_name}`,
+            patient: `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim() || 'Unknown patient',
             error: err.message
           });
+          console.error('Import error for patient:', patientData, err);
         }
       }
 
