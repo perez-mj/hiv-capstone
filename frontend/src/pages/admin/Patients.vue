@@ -1176,251 +1176,147 @@ async function importPatients() {
 </script>
 
 <style scoped>
-@import '@/styles/variables.css';
+/* High-End Medical Forest Palette 
+   Primary: #1A4D3A (Dark Forest Green)
+   Success: #2E7D32 (Deep Grass Green)
+   Warning: #FFC107 (Medical Amber)
+   Background: #F8FAF9 (Soft Green Mist)
+*/
 
-.gap-2 {
-  gap: var(--spacing-sm);
+/* Header Section */
+h1 {
+  color: #1A4D3A !important;
+  letter-spacing: -0.5px;
 }
 
-.gap-1 {
-  gap: var(--spacing-xs);
+/* Tab Styling - Modern Forest Look */
+:deep(.v-tabs) {
+  border-bottom: 1px solid rgba(26, 77, 58, 0.1);
 }
 
-.ga-3 {
-  gap: 16px;
+:deep(.v-tab--selected) {
+  background-color: rgba(26, 77, 58, 0.05);
+  color: #1A4D3A !important;
+  font-weight: 700;
 }
 
-/* Stat card styling */
+:deep(.v-tab__slider) {
+  background: #1A4D3A !important;
+  height: 3px !important;
+}
+
+/* Stat Cards - Forest Balanced */
 .stat-card {
-  transition: all var(--transition-fast);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background-color: #FFFFFF;
+  border: 1px solid rgba(26, 77, 58, 0.1) !important;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px rgba(26, 77, 58, 0.08) !important;
 }
 
-/* Patient ID link styling */
-.patient-id-link {
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity var(--transition-fast);
-  font-weight: 600;
-}
+/* Custom Avatar Colors */
+:deep(.v-avatar.bg-primary) { background-color: #1A4D3A !important; }
+:deep(.v-avatar.bg-success) { background-color: #2E7D32 !important; }
+:deep(.v-avatar.bg-warning) { background-color: #FFC107 !important; }
+:deep(.v-avatar.bg-info) { background-color: #006064 !important; }
 
-.patient-id-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
-}
-
-/* Compact field styling */
-.compact-field :deep(.v-field) {
-  font-size: var(--font-size-sm);
-}
-
-.compact-field :deep(.v-field__input) {
-  min-height: 36px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.compact-field :deep(.v-label) {
-  font-size: var(--font-size-sm);
-}
-
-/* Table styling */
+/* Data Table - High Contrast headers */
 :deep(.v-data-table-header th) {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  background-color: var(--color-surface-dark);
-  padding: var(--spacing-sm) var(--spacing-md) !important;
-  white-space: nowrap;
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.5px;
 }
 
 :deep(.v-data-table .v-table__wrapper > table > tbody > tr > td) {
-  padding: var(--spacing-sm) var(--spacing-md) !important;
-  font-size: var(--font-size-sm);
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: 1px solid #F0F4F2 !important;
 }
 
-:deep(.v-data-table .v-table__wrapper > table > tbody > tr:hover) {
-  background-color: var(--color-surface-light);
+:deep(.v-data-table__tr:hover) {
+  background-color: #F8FAF9 !important;
 }
 
-/* Chip styling */
-:deep(.v-chip) {
-  font-size: var(--font-size-xs);
-  height: 22px;
+/* Links & Interactive Elements */
+.patient-id-link {
+  color: #1A4D3A !important;
+  font-weight: 700;
+  text-decoration: none;
 }
 
-:deep(.v-chip.v-chip--size-x-small) {
-  --v-chip-height: 20px;
-  font-size: var(--font-size-xs);
+.patient-id-link:hover {
+  text-decoration: underline;
 }
 
-/* Button styling */
-:deep(.v-btn--size-small) {
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.3px;
+/* Buttons - Solid Realistic Greens */
+:deep(.v-btn.bg-primary) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
 }
 
-:deep(.v-btn--icon.v-btn--size-x-small) {
-  width: 28px;
-  height: 28px;
+:deep(.v-btn.text-primary) {
+  color: #1A4D3A !important;
 }
 
-/* Toast Container and Notifications */
-.toast-container {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
+:deep(.v-btn--variant-outlined) {
+  border-color: rgba(26, 77, 58, 0.2) !important;
 }
 
-.toast {
-  position: relative;
-  min-width: 300px;
-  max-width: 400px;
-  padding: 12px 16px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  cursor: pointer;
-  pointer-events: auto;
-  overflow: hidden;
-  animation: toast-slide-in 0.3s ease;
-  border-left: 4px solid;
+/* Status Chips - Clean Medical Style */
+:deep(.v-chip.bg-warning) {
+  background-color: rgba(255, 193, 7, 0.2) !important;
+  color: #856404 !important; /* Muted brown-yellow for readability */
+  font-weight: 600;
 }
 
+:deep(.v-chip.bg-success) {
+  background-color: #2E7D32 !important;
+  color: #FFFFFF !important;
+}
+
+/* Dialog Header Styling */
+:deep(.v-dialog .v-card-title) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  padding: 20px !important;
+}
+
+/* Toast Notifications - Forest Style */
 .toast-success {
-  border-left-color: var(--color-success);
-  background-color: #e8f5e9;
-}
-
-.toast-error {
-  border-left-color: var(--color-error);
-  background-color: #ffebee;
+  border-left: 6px solid #2E7D32 !important;
+  background-color: #FFFFFF !important;
+  color: #1A4D3A !important;
 }
 
 .toast-warning {
-  border-left-color: var(--color-warning);
-  background-color: #fff3e0;
+  border-left: 6px solid #FFC107 !important;
+  background-color: #FFFFFF !important;
 }
 
-.toast-info {
-  border-left-color: var(--color-info);
-  background-color: #e3f2fd;
+/* Scrollbar for Forest Theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F8FAF9;
+}
+::-webkit-scrollbar-thumb {
+  background: #1A4D3A;
+  border-radius: 4px;
 }
 
-.toast-content {
-  display: flex;
-  align-items: center;
-  color: var(--color-text-primary);
-}
+/* GA Utilities */
+.ga-3 { gap: 12px; }
+.gap-2 { gap: 8px; }
 
-.toast-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background-color: rgba(0, 0, 0, 0.2);
-  animation: toast-progress linear forwards;
-}
-
-.toast-success .toast-progress {
-  background-color: var(--color-success);
-}
-
-.toast-error .toast-progress {
-  background-color: var(--color-error);
-}
-
-.toast-warning .toast-progress {
-  background-color: var(--color-warning);
-}
-
-.toast-info .toast-progress {
-  background-color: var(--color-info);
-}
-
-@keyframes toast-slide-in {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .stat-card .text-h6 {
+    font-size: 1rem !important;
   }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes toast-progress {
-  from {
-    width: 100%;
-  }
-
-  to {
-    width: 0%;
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  transform: translateX(100%);
-  opacity: 0;
-}
-
-/* Dark theme support for toasts */
-:root.dark-theme .toast-success {
-  background-color: #1b5e20;
-}
-
-:root.dark-theme .toast-error {
-  background-color: #b71c1c;
-}
-
-:root.dark-theme .toast-warning {
-  background-color: #bf360c;
-}
-
-:root.dark-theme .toast-info {
-  background-color: #0d47a1;
-}
-
-:root.dark-theme .toast-content {
-  color: white;
-}
-
-/* Dark theme support */
-:root.dark-theme .stat-card {
-  background-color: var(--color-surface);
-  border-color: var(--color-border);
-}
-
-:root.dark-theme :deep(.v-data-table-header th) {
-  background-color: var(--color-surface-dark);
-  color: var(--color-text-secondary);
-}
-
-:root.dark-theme :deep(.v-data-table .v-table__wrapper > table > tbody > tr:hover) {
-  background-color: var(--color-surface-dark);
-}
-
-.cursor-pointer {
-  cursor: pointer;
 }
 </style>

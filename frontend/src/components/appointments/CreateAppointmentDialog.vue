@@ -223,3 +223,83 @@ const handleClose = () => {
   emit('close')
 }
 </script>
+
+<style scoped>
+/* Dark Forest Palette:
+   Primary: #1A4D3A (Dark Forest)
+   Accent: #2E7D32 (Success Green)
+   Surface: #F8FAF9 (Soft Green Mist)
+*/
+
+/* Dialog Card Customization */
+:deep(.v-card) {
+  border-radius: 12px !important;
+  overflow: hidden;
+}
+
+/* Header Styling */
+:deep(.v-card-title) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  padding: 16px 24px !important;
+  letter-spacing: 0.5px;
+}
+
+/* Input Fields Focus & Label */
+:deep(.v-field--focused) {
+  color: #1A4D3A !important;
+}
+
+:deep(.v-field__outline) {
+  --v-field-border-opacity: 0.15;
+}
+
+:deep(.v-label) {
+  font-weight: 500;
+}
+
+/* Icons within fields */
+:deep(.v-field__prepend-inner .v-icon) {
+  color: #1A4D3A !important;
+}
+
+/* Action Buttons */
+:deep(.v-btn.bg-primary) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.3px;
+  padding: 0 24px;
+}
+
+:deep(.v-btn.bg-primary:hover) {
+  background-color: #123528 !important; /* Deeper forest on hover */
+}
+
+:deep(.v-btn.text-none) {
+  color: #1A4D3A !important;
+  font-weight: 500;
+}
+
+/* Textarea Customization */
+:deep(.v-textarea .v-field__input) {
+  background-color: #F8FAF9; /* Subtle green mist background */
+}
+
+/* Dropdown/Menu styling (when items are open) */
+:deep(.v-list-item--active) {
+  background-color: rgba(26, 77, 58, 0.1) !important;
+  color: #1A4D3A !important;
+}
+
+/* Scrollbar for Textarea */
+:deep(textarea::-webkit-scrollbar) {
+  width: 6px;
+}
+:deep(textarea::-webkit-scrollbar-thumb) {
+  background: #1A4D3A;
+  border-radius: 10px;
+}
+</style>

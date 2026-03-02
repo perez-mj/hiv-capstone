@@ -958,71 +958,131 @@ export default {
 </script>
 
 <style scoped>
+/* Main Color Palette:
+   Primary Forest: #1A4D3A
+   Success Mint: #2E7D32
+   Warning Gold: #FFC107
+   Soft Surface: #F8FAF9
+*/
+
 .queue-management {
   max-width: 1600px;
   margin: 0 auto;
+  background-color: #FFFFFF;
 }
 
+/* Stat Cards - Balanced with Forest Green border */
 .stat-card {
-  transition: transform 0.2s;
+  transition: all 0.3s ease;
+  border-radius: 12px;
+  background-color: #FFFFFF;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  box-shadow: 0 6px 15px rgba(26, 77, 58, 0.15);
 }
 
+/* Now Serving - Solid Forest Gradient for "Live" look */
 .now-serving-card {
-  background: linear-gradient(135deg, var(--v-primary-base) 0%, #1565C0 100%);
+  background: linear-gradient(135deg, #1A4D3A 0%, #2E7D32 100%) !important;
+  border-radius: 16px;
+  color: #FFFFFF !important;
 }
 
+/* Queue Columns - Defined by Forest borders */
 .queue-column {
   height: calc(100vh - 300px);
   display: flex;
   flex-direction: column;
+  border: 1px solid rgba(26, 77, 58, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #FFFFFF;
 }
 
+/* Column Header Headers - High contrast Dark Green */
+.queue-column :deep(.v-card-title) {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 16px;
+}
+
+/* Semantic Backgrounds - Adjusted for Forest Theme */
+.bg-warning { background-color: #FFC107 !important; color: #1A4D3A !important; }
+.bg-info { background-color: #1A4D3A !important; color: #FFFFFF !important; }
+.bg-purple { background-color: #2E7D32 !important; color: #FFFFFF !important; }
+.bg-primary { background-color: #1A4D3A !important; color: #FFFFFF !important; }
+.bg-error { background-color: #D32F2F !important; color: #FFFFFF !important; }
+
+/* Queue List Styling */
 .queue-list {
   height: 100%;
   overflow-y: auto;
+  background-color: #FFFFFF;
 }
 
 .queue-list .v-list-item {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-.queue-list .v-list-item.priority-high {
-  background-color: rgba(244, 67, 54, 0.05);
+  border-bottom: 1px solid rgba(26, 77, 58, 0.08);
+  padding: 16px !important;
 }
 
 .queue-list .v-list-item:hover {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: #F8FAF9;
 }
 
-.bg-warning {
-  background-color: #FFC107 !important;
+.queue-list .v-list-item.priority-high {
+  background-color: rgba(211, 47, 47, 0.03);
+  border-left: 4px solid #D32F2F;
 }
 
-.bg-info {
-  background-color: #2196F3 !important;
+/* Typography & Icons */
+.text-primary { color: #1A4D3A !important; }
+.text-warning { color: #E6A23C !important; } /* Muted gold for text */
+.text-success { color: #2E7D32 !important; }
+.text-purple { color: #2E7D32 !important; } /* Unified with Serving Green */
+
+/* Buttons - Realistic Forest style */
+:deep(.v-btn.bg-primary) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
 }
 
-.bg-purple {
-  background-color: #9C27B0 !important;
+:deep(.v-btn.bg-success) {
+  background-color: #2E7D32 !important;
+  color: #FFFFFF !important;
 }
 
-.bg-error {
-  background-color: #F44336 !important;
+:deep(.v-btn--variant-outlined) {
+  border-color: #1A4D3A !important;
+  color: #1A4D3A !important;
 }
 
-.text-purple {
-  color: #9C27B0 !important;
+/* Custom Scrollbar for Forest Theme */
+.queue-list::-webkit-scrollbar {
+  width: 6px;
+}
+.queue-list::-webkit-scrollbar-track {
+  background: #F8FAF9;
+}
+.queue-list::-webkit-scrollbar-thumb {
+  background: #1A4D3A;
+  border-radius: 10px;
 }
 
-/* Responsive */
+/* Dialog Header Styling */
+:deep(.v-dialog .v-card-title) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  padding: 16px !important;
+}
+
+/* Responsive adjustments */
 @media (max-width: 960px) {
   .queue-column {
     height: 500px;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
   }
 }
 
@@ -1030,10 +1090,10 @@ export default {
   .now-serving-card .v-card-text {
     flex-direction: column;
     text-align: center;
+    gap: 20px;
   }
-  
   .now-serving-card .v-icon {
-    margin-bottom: 16px;
+    margin-right: 0 !important;
   }
 }
 </style>

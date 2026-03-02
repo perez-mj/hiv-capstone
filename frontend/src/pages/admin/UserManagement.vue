@@ -1020,21 +1020,114 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* High-End User Management Forest Palette 
+   Primary: #1A4D3A (Dark Forest Green)
+   Secondary: #2E7D32 (Success Green)
+   Accent: #FFC107 (Medical Amber)
+   Surface: #F8FAF9 (Soft Green Mist)
+*/
+
+/* Page Header & Layout */
 .page-header {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  padding-bottom: 16px;
+  border-bottom: 2px solid rgba(26, 77, 58, 0.1);
+  padding-bottom: 20px;
 }
 
-.gap-1 {
-  gap: 4px;
+h1.text-primary {
+  color: #1A4D3A !important;
+  letter-spacing: -0.5px;
 }
 
-:deep(.v-data-table-header) {
-  background-color: rgba(0, 0, 0, 0.02);
+/* Stats Cards - Forest Balanced */
+.v-card {
+  border-color: rgba(26, 77, 58, 0.12) !important;
+  transition: all 0.2s ease;
 }
 
-:deep(.v-data-table .v-table__wrapper > table > thead > tr > th) {
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px rgba(26, 77, 58, 0.08) !important;
+}
+
+/* Data Table Customization */
+:deep(.v-data-table-header th) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.5px;
+}
+
+:deep(.v-data-table .v-table__wrapper > table > tbody > tr > td) {
+  border-bottom: 1px solid #F0F4F2 !important;
+}
+
+:deep(.v-data-table__tr:hover) {
+  background-color: #F8FAF9 !important; /* Soft green hover */
+}
+
+/* Avatar & User Info */
+:deep(.v-avatar.bg-primary) {
+  background-color: #1A4D3A !important;
+}
+
+/* Role & Status Chips */
+:deep(.v-chip.bg-error) { background-color: #D32F2F !important; color: white !important; } /* Admin */
+:deep(.v-chip.bg-warning) { background-color: #FFC107 !important; color: #1A4D3A !important; font-weight: 600; } /* Nurse */
+:deep(.v-chip.bg-success) { background-color: #2E7D32 !important; color: white !important; } /* Patient / Active */
+
+/* Buttons - Realistic Forest style */
+:deep(.v-btn.bg-primary) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.87);
+}
+
+:deep(.v-btn--variant-outlined) {
+  border-color: rgba(26, 77, 58, 0.3) !important;
+  color: #1A4D3A !important;
+}
+
+:deep(.v-btn--variant-outlined:hover) {
+  background-color: rgba(26, 77, 58, 0.05) !important;
+}
+
+/* Dialog Header Styling */
+:deep(.v-dialog .v-card-title) {
+  background-color: #1A4D3A !important;
+  color: #FFFFFF !important;
+  padding: 16px 24px !important;
+}
+
+:deep(.v-dialog .v-btn.icon) {
+  color: #FFFFFF !important;
+}
+
+/* Form Field Focus */
+:deep(.v-field--focused) {
+  color: #1A4D3A !important;
+}
+
+/* Utility classes */
+.gap-2 { gap: 8px; }
+.gap-1 { gap: 4px; }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F8FAF9;
+}
+::-webkit-scrollbar-thumb {
+  background: #1A4D3A;
+  border-radius: 4px;
+}
+
+/* Dark Mode Overrides (if applicable) */
+:root.dark-theme :deep(.v-card) {
+  background-color: #121212 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 </style>
