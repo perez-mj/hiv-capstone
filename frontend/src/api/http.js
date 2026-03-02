@@ -3,7 +3,7 @@ import axios from 'axios'
 
 // Try multiple possible backend URLs
 const BACKEND_URLS = [
-  'http://localhost:5000/api',
+  'http://10.17.16.99:5000/api',
   'http://127.0.0.1:5000/api',
   'http://localhost:5001/api',
   'http://127.0.0.1:5001/api'

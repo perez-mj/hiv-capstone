@@ -14,57 +14,28 @@
 
       <div class="d-flex gap-2 mt-2 mt-sm-0">
         <!-- Bulk Delete Button - Shown when items are selected -->
-        <v-btn 
-          v-if="selectedItems.length > 0"
-          variant="outlined" 
-          color="error" 
-          size="small" 
-          prepend-icon="mdi-delete-sweep" 
-          @click="confirmBulkDelete"
-          :loading="bulkDeleting"
-          :style="{ borderColor: 'var(--color-error)' }"
-        >
+        <v-btn v-if="selectedItems.length > 0" variant="outlined" color="error" size="small"
+          prepend-icon="mdi-delete-sweep" @click="confirmBulkDelete" :loading="bulkDeleting"
+          :style="{ borderColor: 'var(--color-error)' }">
           Delete Selected ({{ selectedItems.length }})
         </v-btn>
 
         <!-- Refresh Button -->
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          prepend-icon="mdi-refresh" 
-          @click="refreshTable"
-          :loading="loading"
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
+        <v-btn variant="outlined" size="small" prepend-icon="mdi-refresh" @click="refreshTable" :loading="loading"
+          :style="{ borderColor: 'var(--color-border)' }">
           Refresh
         </v-btn>
-        
+
         <!-- Create Button - Shows different modals based on table -->
-        <v-btn 
-          color="primary" 
-          size="small" 
-          prepend-icon="mdi-plus" 
-          @click="openCreateDialog"
-          :style="{ backgroundColor: 'var(--color-primary)', color: 'white' }"
-        >
+        <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="openCreateDialog"
+          :style="{ backgroundColor: 'var(--color-primary)', color: 'white' }">
           New Record
         </v-btn>
       </div>
     </div>
 
     <!-- Tabs for different tables -->
-    <v-tabs
-      v-model="activeTable"
-      color="primary"
-      align-tabs="start"
-      class="mb-4"
-      show-arrows
-    >
-      <v-tab value="appointment_types">
-        <v-icon start>mdi-calendar-clock</v-icon>
-        Appointment Types
-        <v-chip size="x-small" class="ml-2" color="primary">{{ appointmentTypes.length }}</v-chip>
-      </v-tab>
+    <v-tabs v-model="activeTable" color="primary" align-tabs="start" class="mb-4" show-arrows>
       <v-tab value="users">
         <v-icon start>mdi-account-group</v-icon>
         Users
@@ -80,33 +51,25 @@
         Kiosk Devices
         <v-chip size="x-small" class="ml-2" color="primary">{{ kioskDevices.length }}</v-chip>
       </v-tab>
+      <v-tab value="appointment_types">
+        <v-icon start>mdi-calendar-clock</v-icon>
+        Appointment Types
+        <v-chip size="x-small" class="ml-2" color="primary">{{ appointmentTypes.length }}</v-chip>
+      </v-tab>
     </v-tabs>
 
     <!-- Search and Filters Card -->
-    <v-card 
-      elevation="0" 
-      border 
-      class="mb-4"
-      :style="{ 
-        borderColor: 'var(--color-border)', 
-        borderRadius: 'var(--radius-md)' 
-      }"
-    >
+    <v-card elevation="0" border class="mb-4" :style="{
+      borderColor: 'var(--color-border)',
+      borderRadius: 'var(--radius-md)'
+    }">
       <v-card-text class="pa-3">
         <div class="d-flex flex-wrap align-center ga-3">
           <!-- Search -->
           <div style="min-width: 200px; flex: 1;">
-            <v-text-field 
-              v-model="search" 
-              density="compact" 
-              variant="outlined"
-              placeholder="Search records..." 
-              prepend-inner-icon="mdi-magnify" 
-              hide-details 
-              clearable
-              @update:model-value="debouncedSearch"
-              class="compact-field"
-            />
+            <v-text-field v-model="search" density="compact" variant="outlined" placeholder="Search records..."
+              prepend-inner-icon="mdi-magnify" hide-details clearable @update:model-value="debouncedSearch"
+              class="compact-field" />
           </div>
 
           <!-- Role Filter - Only shown for Users tab -->
@@ -114,14 +77,8 @@
             <span class="text-caption text-medium-emphasis mr-1" style="white-space: nowrap;">
               Role:
             </span>
-            <v-btn-toggle
-              v-model="filters.role"
-              mandatory="false"
-              density="compact"
-              color="primary"
-              variant="outlined"
-              @update:model-value="handleFilterChange"
-            >
+            <v-btn-toggle v-model="filters.role" mandatory="false" density="compact" color="primary" variant="outlined"
+              @update:model-value="handleFilterChange">
               <v-btn value="STAFF" size="small">
                 <v-icon start size="14">mdi-doctor</v-icon> Staff
               </v-btn>
@@ -136,14 +93,8 @@
             <span class="text-caption text-medium-emphasis mr-1" style="white-space: nowrap;">
               Status:
             </span>
-            <v-btn-toggle
-              v-model="filters.status"
-              mandatory="false"
-              density="compact"
-              color="primary"
-              variant="outlined"
-              @update:model-value="handleFilterChange"
-            >
+            <v-btn-toggle v-model="filters.status" mandatory="false" density="compact" color="primary"
+              variant="outlined" @update:model-value="handleFilterChange">
               <v-btn value="active" size="small">
                 <v-icon start size="14">mdi-check-circle</v-icon> Active
               </v-btn>
@@ -155,38 +106,18 @@
 
           <!-- Sort - Compact -->
           <div style="min-width: 120px;">
-            <v-select 
-              v-model="sortBy" 
-              density="compact" 
-              variant="outlined" 
-              :items="sortFields" 
-              placeholder="Sort"
-              hide-details 
-              @update:model-value="handleSortChange" 
-              class="compact-field"
-            />
+            <v-select v-model="sortBy" density="compact" variant="outlined" :items="sortFields" placeholder="Sort"
+              hide-details @update:model-value="handleSortChange" class="compact-field" />
           </div>
 
           <!-- Sort Order Toggle - Compact -->
-          <v-btn 
-            variant="outlined" 
-            density="compact"
-            size="small"
-            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" 
-            @click="toggleSortOrder"
-            :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" 
-          />
+          <v-btn variant="outlined" density="compact" size="small"
+            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" @click="toggleSortOrder"
+            :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" />
 
           <!-- Clear Filters -->
-          <v-btn 
-            variant="text" 
-            color="primary" 
-            size="small" 
-            prepend-icon="mdi-filter-remove" 
-            @click="clearFilters"
-            :disabled="!hasActiveFilters" 
-            :style="{ color: 'var(--color-primary)' }" 
-          >
+          <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-filter-remove" @click="clearFilters"
+            :disabled="!hasActiveFilters" :style="{ color: 'var(--color-primary)' }">
             Clear
           </v-btn>
         </div>
@@ -194,24 +125,15 @@
     </v-card>
 
     <!-- Main Table Card -->
-    <v-card 
-      elevation="0" 
-      border 
-      :style="{ 
-        borderColor: 'var(--color-border)', 
-        borderRadius: 'var(--radius-md)' 
-      }"
-    >
+    <v-card elevation="0" border :style="{
+      borderColor: 'var(--color-border)',
+      borderRadius: 'var(--radius-md)'
+    }">
       <v-card-title class="d-flex justify-space-between align-center py-3 px-4">
         <div class="d-flex align-center">
           <v-icon :color="getTableColor" class="mr-2">{{ getTableIcon }}</v-icon>
           <span class="text-subtitle-1 font-weight-medium">{{ currentTableTitle }}</span>
-          <v-chip 
-            v-if="selectedItems.length > 0"
-            size="small" 
-            color="primary" 
-            class="ml-2"
-          >
+          <v-chip v-if="selectedItems.length > 0" size="small" color="primary" class="ml-2">
             {{ selectedItems.length }} selected
           </v-chip>
         </div>
@@ -224,21 +146,10 @@
 
       <v-card-text class="pa-0">
         <!-- Appointment Types Table -->
-        <v-data-table-server
-          v-if="activeTable === 'appointment_types'"
-          v-model:items-per-page="perPage"
-          v-model:page="page"
-          v-model:selected="selectedItems"
-          :headers="appointmentTypeHeaders"
-          :items="paginatedAppointmentTypes"
-          :items-length="filteredAppointmentTypes.length"
-          :loading="loading"
-          show-select
-          @update:options="handleTableSort"
-          class="elevation-0 devices-table"
-          density="compact"
-          hover
-        >
+        <v-data-table-server v-if="activeTable === 'appointment_types'" v-model:items-per-page="perPage"
+          v-model:page="page" v-model:selected="selectedItems" :headers="appointmentTypeHeaders"
+          :items="paginatedAppointmentTypes" :items-length="filteredAppointmentTypes.length" :loading="loading"
+          show-select @update:options="handleTableSort" class="elevation-0 devices-table" density="compact" hover>
           <!-- Loading State -->
           <template v-slot:loading>
             <v-skeleton-loader type="table-row@10" />
@@ -246,12 +157,8 @@
 
           <!-- Status Column -->
           <template v-slot:item.is_active="{ item }">
-            <v-chip 
-              :color="item.is_active ? 'success' : 'error'" 
-              size="x-small" 
-              variant="flat"
-              class="font-weight-medium"
-            >
+            <v-chip :color="item.is_active ? 'success' : 'error'" size="x-small" variant="flat"
+              class="font-weight-medium">
               {{ item.is_active ? 'Active' : 'Inactive' }}
             </v-chip>
           </template>
@@ -271,23 +178,11 @@
           <!-- Actions Column -->
           <template v-slot:item.actions="{ item }">
             <div class="d-flex gap-1">
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="primary" 
-                icon="mdi-pencil" 
-                @click="editAppointmentType(item)"
-                title="Edit"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="error" 
-                icon="mdi-delete" 
-                @click="confirmDelete(item, 'appointment_types')"
-                :style="{ color: 'var(--color-error)' }" 
-                title="Delete"
-              />
+              <v-btn size="x-small" variant="text" color="primary" icon="mdi-pencil" @click="editAppointmentType(item)"
+                title="Edit" />
+              <v-btn size="x-small" variant="text" color="error" icon="mdi-delete"
+                @click="confirmDelete(item, 'appointment_types')" :style="{ color: 'var(--color-error)' }"
+                title="Delete" />
             </div>
           </template>
 
@@ -304,21 +199,10 @@
         </v-data-table-server>
 
         <!-- Users Table -->
-        <v-data-table-server
-          v-if="activeTable === 'users'"
-          v-model:items-per-page="perPage"
-          v-model:page="page"
-          v-model:selected="selectedItems"
-          :headers="userHeaders"
-          :items="paginatedUsers"
-          :items-length="filteredUsers.length"
-          :loading="loading"
-          show-select
-          @update:options="handleTableSort"
-          class="elevation-0 devices-table"
-          density="compact"
-          hover
-        >
+        <v-data-table-server v-if="activeTable === 'users'" v-model:items-per-page="perPage" v-model:page="page"
+          v-model:selected="selectedItems" :headers="userHeaders" :items="paginatedUsers"
+          :items-length="filteredUsers.length" :loading="loading" show-select @update:options="handleTableSort"
+          class="elevation-0 devices-table" density="compact" hover>
           <!-- Loading State -->
           <template v-slot:loading>
             <v-skeleton-loader type="table-row@10" />
@@ -326,24 +210,15 @@
 
           <!-- Role Column -->
           <template v-slot:item.role="{ item }">
-            <v-chip 
-              :color="getRoleColor(item.role)" 
-              size="x-small" 
-              variant="flat"
-              class="font-weight-medium"
-            >
+            <v-chip :color="getRoleColor(item.role)" size="x-small" variant="flat" class="font-weight-medium">
               {{ item.role }}
             </v-chip>
           </template>
 
           <!-- Status Column -->
           <template v-slot:item.is_active="{ item }">
-            <v-chip 
-              :color="item.is_active ? 'success' : 'error'" 
-              size="x-small" 
-              variant="flat"
-              class="font-weight-medium"
-            >
+            <v-chip :color="item.is_active ? 'success' : 'error'" size="x-small" variant="flat"
+              class="font-weight-medium">
               {{ item.is_active ? 'Active' : 'Inactive' }}
             </v-chip>
           </template>
@@ -352,17 +227,14 @@
           <template v-slot:item.last_login="{ item }">
             <div class="d-flex flex-column">
               <span class="text-caption">{{ item.last_login ? formatDateTime(item.last_login) : 'Never' }}</span>
-              <span class="text-caption text-medium-emphasis">{{ item.last_login ? timeAgo(item.last_login) : '' }}</span>
+              <span class="text-caption text-medium-emphasis">{{ item.last_login ? timeAgo(item.last_login) : ''
+                }}</span>
             </div>
           </template>
 
           <!-- Source Column - Shows where the user came from -->
           <template v-slot:item.source="{ item }">
-            <v-chip 
-              :color="getSourceColor(item)" 
-              size="x-small" 
-              variant="flat"
-            >
+            <v-chip :color="getSourceColor(item)" size="x-small" variant="flat">
               {{ getSourceLabel(item) }}
             </v-chip>
           </template>
@@ -370,31 +242,12 @@
           <!-- Actions Column -->
           <template v-slot:item.actions="{ item }">
             <div class="d-flex gap-1">
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="primary" 
-                icon="mdi-pencil" 
-                @click="editUser(item)"
-                title="Edit"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="warning" 
-                icon="mdi-lock-reset" 
-                @click="resetPassword(item)"
-                title="Reset Password"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="error" 
-                icon="mdi-delete" 
-                @click="confirmDelete(item, 'users')"
-                :style="{ color: 'var(--color-error)' }" 
-                title="Delete"
-              />
+              <v-btn size="x-small" variant="text" color="primary" icon="mdi-pencil" @click="editUser(item)"
+                title="Edit" />
+              <v-btn size="x-small" variant="text" color="warning" icon="mdi-lock-reset" @click="resetPassword(item)"
+                title="Reset Password" />
+              <v-btn size="x-small" variant="text" color="error" icon="mdi-delete" @click="confirmDelete(item, 'users')"
+                :style="{ color: 'var(--color-error)' }" title="Delete" />
             </div>
           </template>
 
@@ -404,7 +257,7 @@
               <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-account-off</v-icon>
               <div class="text-subtitle-2 text-grey">No Users Found</div>
               <div class="text-caption text-grey mt-1">
-                {{ hasActiveFilters ? 'Try adjusting your filters' : 
+                {{ hasActiveFilters ? 'Try adjusting your filters' :
                   'User accounts are created automatically when you create a Patient or Staff member' }}
               </div>
             </div>
@@ -412,21 +265,10 @@
         </v-data-table-server>
 
         <!-- Staff Table -->
-        <v-data-table-server
-          v-if="activeTable === 'staff'"
-          v-model:items-per-page="perPage"
-          v-model:page="page"
-          v-model:selected="selectedItems"
-          :headers="staffHeaders"
-          :items="paginatedStaff"
-          :items-length="filteredStaff.length"
-          :loading="loading"
-          show-select
-          @update:options="handleTableSort"
-          class="elevation-0 devices-table"
-          density="compact"
-          hover
-        >
+        <v-data-table-server v-if="activeTable === 'staff'" v-model:items-per-page="perPage" v-model:page="page"
+          v-model:selected="selectedItems" :headers="staffHeaders" :items="paginatedStaff"
+          :items-length="filteredStaff.length" :loading="loading" show-select @update:options="handleTableSort"
+          class="elevation-0 devices-table" density="compact" hover>
           <!-- Loading State -->
           <template v-slot:loading>
             <v-skeleton-loader type="table-row@10" />
@@ -434,25 +276,16 @@
 
           <!-- Name Column -->
           <template v-slot:item.full_name="{ item }">
-            <span class="font-weight-medium">{{ item.first_name }} {{ item.middle_name || '' }} {{ item.last_name }}</span>
+            <span class="font-weight-medium">{{ item.first_name }} {{ item.middle_name || '' }} {{ item.last_name
+              }}</span>
           </template>
 
           <!-- User Status Column -->
           <template v-slot:item.user_status="{ item }">
-            <v-chip 
-              v-if="item.user_id"
-              :color="item.user_active ? 'success' : 'error'" 
-              size="x-small" 
-              variant="flat"
-            >
+            <v-chip v-if="item.user_id" :color="item.user_active ? 'success' : 'error'" size="x-small" variant="flat">
               {{ item.user_active ? 'User Active' : 'User Inactive' }}
             </v-chip>
-            <v-chip 
-              v-else
-              color="warning" 
-              size="x-small" 
-              variant="flat"
-            >
+            <v-chip v-else color="warning" size="x-small" variant="flat">
               No User Account
             </v-chip>
           </template>
@@ -460,32 +293,12 @@
           <!-- Actions Column -->
           <template v-slot:item.actions="{ item }">
             <div class="d-flex gap-1">
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="primary" 
-                icon="mdi-pencil" 
-                @click="editStaff(item)"
-                title="Edit"
-              />
-              <v-btn 
-                v-if="!item.user_id"
-                size="x-small" 
-                variant="text" 
-                color="success" 
-                icon="mdi-account-plus" 
-                @click="createUserForStaff(item)"
-                title="Create User Account"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="error" 
-                icon="mdi-delete" 
-                @click="confirmDelete(item, 'staff')"
-                :style="{ color: 'var(--color-error)' }" 
-                title="Delete"
-              />
+              <v-btn size="x-small" variant="text" color="primary" icon="mdi-pencil" @click="editStaff(item)"
+                title="Edit" />
+              <v-btn v-if="!item.user_id" size="x-small" variant="text" color="success" icon="mdi-account-plus"
+                @click="createUserForStaff(item)" title="Create User Account" />
+              <v-btn size="x-small" variant="text" color="error" icon="mdi-delete" @click="confirmDelete(item, 'staff')"
+                :style="{ color: 'var(--color-error)' }" title="Delete" />
             </div>
           </template>
 
@@ -502,21 +315,10 @@
         </v-data-table-server>
 
         <!-- Kiosk Devices Table -->
-        <v-data-table-server
-          v-if="activeTable === 'kiosk_devices'"
-          v-model:items-per-page="perPage"
-          v-model:page="page"
-          v-model:selected="selectedItems"
-          :headers="kioskHeaders"
-          :items="paginatedKioskDevices"
-          :items-length="filteredKioskDevices.length"
-          :loading="loading"
-          show-select
-          @update:options="handleTableSort"
-          class="elevation-0 devices-table"
-          density="compact"
-          hover
-        >
+        <v-data-table-server v-if="activeTable === 'kiosk_devices'" v-model:items-per-page="perPage" v-model:page="page"
+          v-model:selected="selectedItems" :headers="kioskHeaders" :items="paginatedKioskDevices"
+          :items-length="filteredKioskDevices.length" :loading="loading" show-select @update:options="handleTableSort"
+          class="elevation-0 devices-table" density="compact" hover>
           <!-- Loading State -->
           <template v-slot:loading>
             <v-skeleton-loader type="table-row@10" />
@@ -531,15 +333,9 @@
 
           <!-- Authorization Column -->
           <template v-slot:item.is_authorized="{ item }">
-            <v-switch
-              :model-value="item.is_authorized"
-              color="primary"
-              hide-details
-              density="compact"
-              :loading="authLoading === item.device_id"
-              @update:model-value="toggleAuthorization(item, $event)"
-              class="authorization-switch"
-            />
+            <v-switch :model-value="item.is_authorized" color="primary" hide-details density="compact"
+              :loading="authLoading === item.device_id" @update:model-value="toggleAuthorization(item, $event)"
+              class="authorization-switch" />
           </template>
 
           <!-- Last Seen Column -->
@@ -553,31 +349,13 @@
           <!-- Actions Column -->
           <template v-slot:item.actions="{ item }">
             <div class="d-flex gap-1">
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="primary" 
-                icon="mdi-pencil" 
-                @click="editKioskDevice(item)"
-                title="Edit"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                :color="item.is_authorized ? 'warning' : 'success'" 
-                :icon="item.is_authorized ? 'mdi-shield-off' : 'mdi-shield'" 
-                @click="toggleAuthorization(item)"
-                title="Toggle Authorization"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="error" 
-                icon="mdi-delete" 
-                @click="confirmDelete(item, 'kiosk_devices')"
-                :style="{ color: 'var(--color-error)' }" 
-                title="Delete"
-              />
+              <v-btn size="x-small" variant="text" color="primary" icon="mdi-pencil" @click="editKioskDevice(item)"
+                title="Edit" />
+              <v-btn size="x-small" variant="text" :color="item.is_authorized ? 'warning' : 'success'"
+                :icon="item.is_authorized ? 'mdi-shield-off' : 'mdi-shield'" @click="toggleAuthorization(item)"
+                title="Toggle Authorization" />
+              <v-btn size="x-small" variant="text" color="error" icon="mdi-delete"
+                @click="confirmDelete(item, 'kiosk_devices')" :style="{ color: 'var(--color-error)' }" title="Delete" />
             </div>
           </template>
 
@@ -587,7 +365,7 @@
               <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-devices-off</v-icon>
               <div class="text-subtitle-2 text-grey">No Kiosk Devices Found</div>
               <div class="text-caption text-grey mt-1">
-                {{ hasActiveFilters ? 'Try adjusting your filters' : 
+                {{ hasActiveFilters ? 'Try adjusting your filters' :
                   'Devices register automatically when they access the kiosk display page' }}
               </div>
             </div>
@@ -603,16 +381,16 @@
           <v-icon color="info" size="small" class="mr-2">mdi-information</v-icon>
           Creating User Accounts
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <div class="text-center mb-3">
             <v-icon size="48" color="info" class="mb-2">mdi-account-plus</v-icon>
           </div>
-          
+
           <p class="text-body-2 mb-3">
             User accounts are automatically created when you:
           </p>
-          
+
           <v-list density="compact" bg-color="transparent" class="mb-3">
             <v-list-item>
               <template v-slot:prepend>
@@ -627,43 +405,26 @@
               <v-list-item-title class="text-caption">Create a new Staff member</v-list-item-title>
             </v-list-item>
           </v-list>
-          
+
           <p class="text-body-2 mb-2">
             To create a new user account:
           </p>
-          
+
           <div class="d-flex flex-column gap-2">
-            <v-btn
-              color="primary"
-              variant="outlined"
-              size="small"
-              prepend-icon="mdi-account-plus"
-              @click="goToPatientManagement"
-              block
-            >
+            <v-btn color="primary" variant="outlined" size="small" prepend-icon="mdi-account-plus"
+              @click="goToPatientManagement" block>
               Add New Patient
             </v-btn>
-            <v-btn
-              color="primary"
-              variant="outlined"
-              size="small"
-              prepend-icon="mdi-doctor"
-              @click="goToStaffTab"
-              block
-            >
+            <v-btn color="primary" variant="outlined" size="small" prepend-icon="mdi-doctor" @click="goToStaffTab"
+              block>
               Add New Staff
             </v-btn>
           </div>
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            color="primary" 
-            variant="text" 
-            @click="userInfoModal.show = false"
-            size="small"
-          >
+          <v-btn color="primary" variant="text" @click="userInfoModal.show = false" size="small">
             Got it
           </v-btn>
         </v-card-actions>
@@ -677,62 +438,43 @@
           <v-icon color="info" size="small" class="mr-2">mdi-information</v-icon>
           Kiosk Device Registration
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <div class="text-center mb-3">
             <v-icon size="48" color="info" class="mb-2">mdi-devices</v-icon>
           </div>
-          
+
           <p class="text-body-2 mb-3">
             Kiosk devices register automatically when they access the kiosk display page.
           </p>
-          
-          <v-alert
-            type="info"
-            variant="tonal"
-            class="mb-3"
-            density="compact"
-          >
+
+          <v-alert type="info" variant="tonal" class="mb-3" density="compact">
             <div class="d-flex align-center">
               <code class="text-caption">{{ kioskInfoModal.displayUrl }}</code>
-              <v-btn
-                size="x-small"
-                icon="mdi-content-copy"
-                variant="text"
-                @click="copyToClipboard(kioskInfoModal.displayUrl)"
-                class="ml-2"
-              />
+              <v-btn size="x-small" icon="mdi-content-copy" variant="text"
+                @click="copyToClipboard(kioskInfoModal.displayUrl)" class="ml-2" />
             </div>
           </v-alert>
-          
+
           <p class="text-caption mb-2">
             <strong>How it works:</strong>
           </p>
-          
+
           <v-timeline density="compact" align="start" side="end" class="mb-2">
-            <v-timeline-item
-              v-for="(step, index) in kioskSteps"
-              :key="index"
-              size="x-small"
-              dot-color="info"
-            >
+            <v-timeline-item v-for="(step, index) in kioskSteps" :key="index" size="x-small" dot-color="info">
               <div class="text-caption">{{ step }}</div>
             </v-timeline-item>
           </v-timeline>
-          
+
           <p class="text-caption text-medium-emphasis mt-2">
-            Once registered, the device will appear in this table. You can then authorize it to allow access to kiosk features.
+            Once registered, the device will appear in this table. You can then authorize it to allow access to kiosk
+            features.
           </p>
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            color="primary" 
-            variant="text" 
-            @click="kioskInfoModal.show = false"
-            size="small"
-          >
+          <v-btn color="primary" variant="text" @click="kioskInfoModal.show = false" size="small">
             Got it
           </v-btn>
         </v-card-actions>
@@ -742,7 +484,8 @@
     <!-- Create/Edit Dialog (Only for appointment_types and staff) -->
     <v-dialog v-model="dialog.show" max-width="500px" persistent>
       <v-card class="edit-dialog">
-        <v-card-title class="text-subtitle-1 font-weight-bold pa-3" :class="dialog.mode === 'create' ? 'bg-primary-lighten-5' : 'bg-info-lighten-5'">
+        <v-card-title class="text-subtitle-1 font-weight-bold pa-3"
+          :class="dialog.mode === 'create' ? 'bg-primary-lighten-5' : 'bg-info-lighten-5'">
           <v-icon :color="dialog.mode === 'create' ? 'primary' : 'info'" size="small" class="mr-2">
             {{ dialog.mode === 'create' ? 'mdi-plus' : 'mdi-pencil' }}
           </v-icon>
@@ -753,63 +496,29 @@
           <v-form ref="form" v-model="dialog.valid">
             <!-- Appointment Type Form -->
             <template v-if="activeTable === 'appointment_types'">
-              <v-text-field
-                v-model="dialog.data.type_name"
-                label="Type Name"
-                :rules="[rules.required]"
-                required
-                variant="outlined"
-                density="compact"
-                class="mb-3"
-                hide-details="auto"
-              />
+              <v-text-field v-model="dialog.data.type_name" label="Type Name" :rules="[rules.required]" required
+                variant="outlined" density="compact" class="mb-3" hide-details="auto" />
 
-              <v-textarea
-                v-model="dialog.data.description"
-                label="Description"
-                rows="2"
-                variant="outlined"
-                density="compact"
-                class="mb-3"
-                hide-details="auto"
-              />
+              <v-textarea v-model="dialog.data.description" label="Description" rows="2" variant="outlined"
+                density="compact" class="mb-3" hide-details="auto" />
 
-              <v-text-field
-                v-model.number="dialog.data.duration_minutes"
-                label="Duration (minutes)"
-                type="number"
-                :rules="[rules.required, rules.positive]"
-                required
-                variant="outlined"
-                density="compact"
-                class="mb-3"
-                hide-details="auto"
-              />
+              <v-text-field v-model.number="dialog.data.duration_minutes" label="Duration (minutes)" type="number"
+                :rules="[rules.required, rules.positive]" required variant="outlined" density="compact" class="mb-3"
+                hide-details="auto" />
 
-              <v-switch
-                v-model="dialog.data.is_active"
-                label="Active"
-                color="success"
-                density="compact"
-                hide-details
-                class="mt-2"
-              />
+              <v-switch v-model="dialog.data.is_active" label="Active" color="success" density="compact" hide-details
+                class="mt-2" />
             </template>
 
             <!-- Staff Form -->
             <template v-if="activeTable === 'staff'">
-              <v-alert
-                v-if="dialog.mode === 'create'"
-                type="info"
-                variant="tonal"
-                class="mb-3"
-                density="compact"
-              >
+              <v-alert v-if="dialog.mode === 'create'" type="info" variant="tonal" class="mb-3" density="compact">
                 <div class="d-flex align-center">
                   <v-icon size="20" class="mr-2">mdi-information</v-icon>
                   <div>
                     <span class="text-caption">
-                      A user account will be automatically created for this staff member. Username will be auto-generated from their name.
+                      A user account will be automatically created for this staff member. Username will be
+                      auto-generated from their name.
                     </span>
                   </div>
                 </div>
@@ -817,117 +526,50 @@
 
               <v-row dense>
                 <v-col cols="4">
-                  <v-text-field
-                    v-model="dialog.data.first_name"
-                    label="First Name"
-                    :rules="[rules.required]"
-                    required
-                    variant="outlined"
-                    density="compact"
-                    @update:model-value="autoGenerateUsername"
-                    hide-details="auto"
-                  />
+                  <v-text-field v-model="dialog.data.first_name" label="First Name" :rules="[rules.required]" required
+                    variant="outlined" density="compact" @update:model-value="autoGenerateUsername"
+                    hide-details="auto" />
                 </v-col>
                 <v-col cols="4">
-                  <v-text-field
-                    v-model="dialog.data.middle_name"
-                    label="Middle Name"
-                    variant="outlined"
-                    density="compact"
-                    hide-details="auto"
-                  />
+                  <v-text-field v-model="dialog.data.middle_name" label="Middle Name" variant="outlined"
+                    density="compact" hide-details="auto" />
                 </v-col>
                 <v-col cols="4">
-                  <v-text-field
-                    v-model="dialog.data.last_name"
-                    label="Last Name"
-                    :rules="[rules.required]"
-                    required
-                    variant="outlined"
-                    density="compact"
-                    @update:model-value="autoGenerateUsername"
-                    hide-details="auto"
-                  />
+                  <v-text-field v-model="dialog.data.last_name" label="Last Name" :rules="[rules.required]" required
+                    variant="outlined" density="compact" @update:model-value="autoGenerateUsername"
+                    hide-details="auto" />
                 </v-col>
               </v-row>
 
-              <v-select
-                v-if="dialog.mode === 'edit'"
-                v-model="dialog.data.user_id"
-                :items="userOptions"
-                item-title="username"
-                item-value="id"
-                label="Linked User"
-                variant="outlined"
-                density="compact"
-                class="mt-3"
-                hide-details="auto"
-              />
+              <v-select v-if="dialog.mode === 'edit'" v-model="dialog.data.user_id" :items="userOptions"
+                item-title="username" item-value="id" label="Linked User" variant="outlined" density="compact"
+                class="mt-3" hide-details="auto" />
 
-              <v-text-field
-                v-model="dialog.data.position"
-                label="Position"
-                variant="outlined"
-                density="compact"
-                class="mt-3"
-                hide-details="auto"
-              />
+              <v-text-field v-model="dialog.data.position" label="Position" variant="outlined" density="compact"
+                class="mt-3" hide-details="auto" />
 
-              <v-text-field
-                v-model="dialog.data.contact_number"
-                label="Contact Number"
-                variant="outlined"
-                density="compact"
-                class="mt-3"
-                hide-details="auto"
-              />
+              <v-text-field v-model="dialog.data.contact_number" label="Contact Number" variant="outlined"
+                density="compact" class="mt-3" hide-details="auto" />
 
               <!-- Username preview for new staff -->
               <template v-if="dialog.mode === 'create'">
                 <v-divider class="my-3" />
-                
+
                 <div class="d-flex align-center mb-3">
                   <v-icon color="info" size="small" class="mr-2">mdi-account-details</v-icon>
                   <span class="text-caption font-weight-medium">User Account Details</span>
                 </div>
 
-                <v-text-field
-                  v-model="dialog.data.username"
-                  label="Username"
-                  :rules="[rules.required]"
-                  required
-                  variant="outlined"
-                  density="compact"
-                  class="mb-3"
-                  hint="Auto-generated from name (can be customized)"
-                  persistent-hint
-                  hide-details="auto"
-                />
+                <v-text-field v-model="dialog.data.username" label="Username" :rules="[rules.required]" required
+                  variant="outlined" density="compact" class="mb-3" hint="Auto-generated from name (can be customized)"
+                  persistent-hint hide-details="auto" />
 
-                <v-text-field
-                  v-model="dialog.data.password"
-                  label="Password"
-                  type="password"
-                  :rules="[rules.passwordMinLength]"
-                  variant="outlined"
-                  density="compact"
-                  class="mb-3"
-                  hint="Leave blank to auto-generate a secure password"
-                  persistent-hint
-                  hide-details="auto"
-                />
+                <v-text-field v-model="dialog.data.password" label="Password" type="password"
+                  :rules="[rules.passwordMinLength]" variant="outlined" density="compact" class="mb-3"
+                  hint="Leave blank to auto-generate a secure password" persistent-hint hide-details="auto" />
 
-                <v-select
-                  v-model="dialog.data.role"
-                  :items="['NURSE', 'ADMIN']"
-                  label="Role"
-                  :rules="[rules.required]"
-                  required
-                  variant="outlined"
-                  density="compact"
-                  class="mb-3"
-                  hide-details="auto"
-                />
+                <v-select v-model="dialog.data.role" :items="['NURSE', 'ADMIN']" label="Role" :rules="[rules.required]"
+                  required variant="outlined" density="compact" class="mb-3" hide-details="auto" />
 
                 <!-- Auto-generated password preview -->
                 <div v-if="!dialog.data.password" class="password-preview mt-2">
@@ -941,23 +583,11 @@
 
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            variant="text" 
-            color="grey-darken-1" 
-            @click="closeDialog"
-            :disabled="dialog.saving"
-            size="small"
-          >
+          <v-btn variant="text" color="grey-darken-1" @click="closeDialog" :disabled="dialog.saving" size="small">
             Cancel
           </v-btn>
-          <v-btn 
-            color="primary" 
-            variant="elevated" 
-            @click="saveRecord"
-            :loading="dialog.saving"
-            :prepend-icon="dialog.mode === 'create' ? 'mdi-plus' : 'mdi-check'"
-            size="small"
-          >
+          <v-btn color="primary" variant="elevated" @click="saveRecord" :loading="dialog.saving"
+            :prepend-icon="dialog.mode === 'create' ? 'mdi-plus' : 'mdi-check'" size="small">
             {{ dialog.mode === 'create' ? 'Create' : 'Save' }}
           </v-btn>
         </v-card-actions>
@@ -971,16 +601,18 @@
           <v-icon color="success" size="small" class="mr-2">mdi-key</v-icon>
           Staff Account Created Successfully
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <div class="text-center mb-3">
             <v-icon size="48" color="success" class="mb-2">mdi-account-check</v-icon>
           </div>
-          
+
           <p class="text-body-2 mb-2">
-            Staff member <span class="font-weight-bold">{{ passwordDisplayDialog.staffName }}</span> has been created with the following credentials:
+            Staff member <span class="font-weight-bold">{{ passwordDisplayDialog.staffName }}</span> has been created
+            with
+            the following credentials:
           </p>
-          
+
           <v-sheet class="pa-3 mb-3 credentials-sheet" rounded>
             <div class="d-flex align-center mb-2">
               <v-icon size="small" color="primary" class="mr-2">mdi-account</v-icon>
@@ -993,13 +625,8 @@
               <code class="text-body-2">{{ passwordDisplayDialog.password }}</code>
             </div>
           </v-sheet>
-          
-          <v-alert
-            type="warning"
-            variant="tonal"
-            density="compact"
-            class="mt-2"
-          >
+
+          <v-alert type="warning" variant="tonal" density="compact" class="mt-2">
             <div class="d-flex align-center">
               <v-icon size="18" class="mr-2">mdi-alert</v-icon>
               <span class="text-caption">
@@ -1008,16 +635,11 @@
             </div>
           </v-alert>
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            color="primary" 
-            variant="elevated" 
-            @click="passwordDisplayDialog.show = false"
-            prepend-icon="mdi-check"
-            size="small"
-          >
+          <v-btn color="primary" variant="elevated" @click="passwordDisplayDialog.show = false" prepend-icon="mdi-check"
+            size="small">
             I've Saved the Credentials
           </v-btn>
         </v-card-actions>
@@ -1031,7 +653,7 @@
           <v-icon color="error" size="small" class="mr-2">mdi-delete</v-icon>
           Delete {{ getDeleteItemTitle() }}
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <p class="text-body-2 mb-2">
             Are you sure you want to delete this {{ getDeleteItemTitle().toLowerCase() }}?
@@ -1039,14 +661,8 @@
           <p class="text-caption text-error">
             This action cannot be undone.
           </p>
-          
-          <v-alert
-            v-if="deleteDialog.table === 'users'"
-            type="warning"
-            variant="tonal"
-            density="compact"
-            class="mt-2"
-          >
+
+          <v-alert v-if="deleteDialog.table === 'users'" type="warning" variant="tonal" density="compact" class="mt-2">
             <div class="d-flex align-center">
               <v-icon size="18" class="mr-2">mdi-alert</v-icon>
               <span class="text-caption">
@@ -1055,26 +671,15 @@
             </div>
           </v-alert>
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            variant="text" 
-            color="grey-darken-1" 
-            @click="deleteDialog.show = false"
-            :disabled="deleteDialog.loading"
-            size="small"
-          >
+          <v-btn variant="text" color="grey-darken-1" @click="deleteDialog.show = false"
+            :disabled="deleteDialog.loading" size="small">
             Cancel
           </v-btn>
-          <v-btn 
-            color="error" 
-            variant="elevated" 
-            @click="executeDelete"
-            :loading="deleteDialog.loading"
-            prepend-icon="mdi-delete"
-            size="small"
-          >
+          <v-btn color="error" variant="elevated" @click="executeDelete" :loading="deleteDialog.loading"
+            prepend-icon="mdi-delete" size="small">
             Delete
           </v-btn>
         </v-card-actions>
@@ -1088,22 +693,18 @@
           <v-icon color="error" size="small" class="mr-2">mdi-delete-sweep</v-icon>
           Delete Multiple Records
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <p class="text-body-2 mb-2">
-            Are you sure you want to delete {{ bulkDeleteDialog.count }} selected {{ bulkDeleteDialog.count === 1 ? 'record' : 'records' }}?
+            Are you sure you want to delete {{ bulkDeleteDialog.count }} selected {{ bulkDeleteDialog.count === 1 ?
+              'record'
+            : 'records' }}?
           </p>
           <p class="text-caption text-error">
             This action cannot be undone.
           </p>
-          
-          <v-alert
-            v-if="bulkDeleteDialog.hasUsers"
-            type="warning"
-            variant="tonal"
-            density="compact"
-            class="mt-2"
-          >
+
+          <v-alert v-if="bulkDeleteDialog.hasUsers" type="warning" variant="tonal" density="compact" class="mt-2">
             <div class="d-flex align-center">
               <v-icon size="18" class="mr-2">mdi-alert</v-icon>
               <span class="text-caption">
@@ -1118,33 +719,19 @@
               Processing: {{ bulkDeleteDialog.progress.current }} of {{ bulkDeleteDialog.progress.total }}
             </div>
             <v-progress-linear
-              :model-value="(bulkDeleteDialog.progress.current / bulkDeleteDialog.progress.total) * 100"
-              color="primary"
-              height="6"
-              rounded
-            />
+              :model-value="(bulkDeleteDialog.progress.current / bulkDeleteDialog.progress.total) * 100" color="primary"
+              height="6" rounded />
           </div>
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            variant="text" 
-            color="grey-darken-1" 
-            @click="bulkDeleteDialog.show = false"
-            :disabled="bulkDeleteDialog.loading"
-            size="small"
-          >
+          <v-btn variant="text" color="grey-darken-1" @click="bulkDeleteDialog.show = false"
+            :disabled="bulkDeleteDialog.loading" size="small">
             Cancel
           </v-btn>
-          <v-btn 
-            color="error" 
-            variant="elevated" 
-            @click="executeBulkDelete"
-            :loading="bulkDeleteDialog.loading"
-            prepend-icon="mdi-delete-sweep"
-            size="small"
-          >
+          <v-btn color="error" variant="elevated" @click="executeBulkDelete" :loading="bulkDeleteDialog.loading"
+            prepend-icon="mdi-delete-sweep" size="small">
             Delete All
           </v-btn>
         </v-card-actions>
@@ -1158,67 +745,31 @@
           <v-icon color="success" size="small" class="mr-2">mdi-account-plus</v-icon>
           Create User for Staff
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <p class="text-body-2 mb-3">
             Create user account for <span class="font-weight-bold">{{ createUserDialog.staffName }}</span>
           </p>
-          
-          <v-text-field
-            v-model="createUserDialog.username"
-            label="Username"
-            :rules="[rules.required]"
-            required
-            variant="outlined"
-            density="compact"
-            class="mb-3"
-            hide-details="auto"
-          />
-          
-          <v-text-field
-            v-model="createUserDialog.password"
-            label="Password"
-            type="password"
-            :rules="[rules.required, rules.passwordMinLength]"
-            required
-            variant="outlined"
-            density="compact"
-            class="mb-3"
-            hide-details="auto"
-          />
-          
-          <v-select
-            v-model="createUserDialog.role"
-            :items="['NURSE', 'ADMIN']"
-            label="Role"
-            :rules="[rules.required]"
-            required
-            variant="outlined"
-            density="compact"
-            class="mb-3"
-            hide-details="auto"
-          />
+
+          <v-text-field v-model="createUserDialog.username" label="Username" :rules="[rules.required]" required
+            variant="outlined" density="compact" class="mb-3" hide-details="auto" />
+
+          <v-text-field v-model="createUserDialog.password" label="Password" type="password"
+            :rules="[rules.required, rules.passwordMinLength]" required variant="outlined" density="compact"
+            class="mb-3" hide-details="auto" />
+
+          <v-select v-model="createUserDialog.role" :items="['NURSE', 'ADMIN']" label="Role" :rules="[rules.required]"
+            required variant="outlined" density="compact" class="mb-3" hide-details="auto" />
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            variant="text" 
-            color="grey-darken-1" 
-            @click="createUserDialog.show = false"
-            :disabled="createUserDialog.loading"
-            size="small"
-          >
+          <v-btn variant="text" color="grey-darken-1" @click="createUserDialog.show = false"
+            :disabled="createUserDialog.loading" size="small">
             Cancel
           </v-btn>
-          <v-btn 
-            color="success" 
-            variant="elevated" 
-            @click="executeCreateUserForStaff"
-            :loading="createUserDialog.loading"
-            prepend-icon="mdi-account-plus"
-            size="small"
-          >
+          <v-btn color="success" variant="elevated" @click="executeCreateUserForStaff"
+            :loading="createUserDialog.loading" prepend-icon="mdi-account-plus" size="small">
             Create
           </v-btn>
         </v-card-actions>
@@ -1232,55 +783,29 @@
           <v-icon color="warning" size="small" class="mr-2">mdi-lock-reset</v-icon>
           Reset Password
         </v-card-title>
-        
+
         <v-card-text class="pa-3">
           <p class="text-body-2 mb-3">
             Reset password for <span class="font-weight-bold">{{ passwordDialog.username }}</span>
           </p>
-          
-          <v-text-field
-            v-model="passwordDialog.newPassword"
-            label="New Password"
-            type="password"
-            :rules="[rules.required, rules.passwordMinLength]"
-            required
-            variant="outlined"
-            density="compact"
-            hide-details="auto"
-            class="mb-3"
-          />
-          
-          <v-text-field
-            v-model="passwordDialog.confirmPassword"
-            label="Confirm Password"
-            type="password"
-            :rules="[rules.required, rules.passwordMatch]"
-            required
-            variant="outlined"
-            density="compact"
-            hide-details="auto"
-          />
+
+          <v-text-field v-model="passwordDialog.newPassword" label="New Password" type="password"
+            :rules="[rules.required, rules.passwordMinLength]" required variant="outlined" density="compact"
+            hide-details="auto" class="mb-3" />
+
+          <v-text-field v-model="passwordDialog.confirmPassword" label="Confirm Password" type="password"
+            :rules="[rules.required, rules.passwordMatch]" required variant="outlined" density="compact"
+            hide-details="auto" />
         </v-card-text>
-        
+
         <v-card-actions class="pa-3 pt-0">
           <v-spacer />
-          <v-btn 
-            variant="text" 
-            color="grey-darken-1" 
-            @click="passwordDialog.show = false"
-            :disabled="passwordDialog.loading"
-            size="small"
-          >
+          <v-btn variant="text" color="grey-darken-1" @click="passwordDialog.show = false"
+            :disabled="passwordDialog.loading" size="small">
             Cancel
           </v-btn>
-          <v-btn 
-            color="warning" 
-            variant="elevated" 
-            @click="executePasswordReset"
-            :loading="passwordDialog.loading"
-            prepend-icon="mdi-lock-reset"
-            size="small"
-          >
+          <v-btn color="warning" variant="elevated" @click="executePasswordReset" :loading="passwordDialog.loading"
+            prepend-icon="mdi-lock-reset" size="small">
             Reset
           </v-btn>
         </v-card-actions>
@@ -1290,21 +815,13 @@
     <!-- Toast Notifications -->
     <div class="toast-container">
       <transition-group name="toast">
-        <div
-          v-for="toast in toasts"
-          :key="toast.id"
-          class="toast"
-          :class="`toast-${toast.type}`"
-          @click="removeToast(toast.id)"
-        >
+        <div v-for="toast in toasts" :key="toast.id" class="toast" :class="`toast-${toast.type}`"
+          @click="removeToast(toast.id)">
           <div class="toast-content">
             <v-icon :icon="toast.icon" size="20" class="mr-2" />
             <span>{{ toast.message }}</span>
           </div>
-          <div 
-            class="toast-progress" 
-            :style="{ animationDuration: `${toast.duration}ms` }" 
-          />
+          <div class="toast-progress" :style="{ animationDuration: `${toast.duration}ms` }" />
         </div>
       </transition-group>
     </div>
@@ -1335,7 +852,7 @@ export default {
         warning: 'mdi-alert',
         info: 'mdi-information'
       }[type] || 'mdi-information'
-      
+
       toasts.value.push({
         id,
         message,
@@ -1343,7 +860,7 @@ export default {
         icon,
         duration
       })
-      
+
       setTimeout(() => {
         removeToast(id)
       }, duration)
@@ -1539,39 +1056,39 @@ export default {
     // Filtered Data
     const filteredAppointmentTypes = computed(() => {
       let filtered = [...appointmentTypes.value]
-      
+
       if (search.value) {
         const term = search.value.toLowerCase()
-        filtered = filtered.filter(item => 
+        filtered = filtered.filter(item =>
           item.type_name?.toLowerCase().includes(term) ||
           item.description?.toLowerCase().includes(term)
         )
       }
-      
+
       const [sortField, sortDir] = sortBy.value.split('_')
       filtered.sort((a, b) => {
         let aVal = a[sortField]
         let bVal = b[sortField]
-        
+
         if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
         if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
         return 0
       })
-      
+
       return filtered
     })
 
     const filteredUsers = computed(() => {
       let filtered = [...users.value]
-      
+
       if (search.value) {
         const term = search.value.toLowerCase()
-        filtered = filtered.filter(item => 
+        filtered = filtered.filter(item =>
           item.username?.toLowerCase().includes(term) ||
           item.email?.toLowerCase().includes(term)
         )
       }
-      
+
       if (filters.value.role) {
         if (filters.value.role === 'STAFF') {
           filtered = filtered.filter(item => ['ADMIN', 'NURSE'].includes(item.role))
@@ -1579,82 +1096,82 @@ export default {
           filtered = filtered.filter(item => item.role === 'PATIENT')
         }
       }
-      
+
       if (filters.value.status) {
-        filtered = filtered.filter(item => 
+        filtered = filtered.filter(item =>
           filters.value.status === 'active' ? item.is_active : !item.is_active
         )
       }
-      
+
       const [sortField, sortDir] = sortBy.value.split('_')
       filtered.sort((a, b) => {
         let aVal = a[sortField]
         let bVal = b[sortField]
-        
+
         if (sortField === 'last_login') {
           aVal = a.last_login ? new Date(a.last_login) : new Date(0)
           bVal = b.last_login ? new Date(b.last_login) : new Date(0)
         }
-        
+
         if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
         if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
         return 0
       })
-      
+
       return filtered
     })
 
     const filteredStaff = computed(() => {
       let filtered = [...staff.value]
-      
+
       if (search.value) {
         const term = search.value.toLowerCase()
-        filtered = filtered.filter(item => 
+        filtered = filtered.filter(item =>
           item.first_name?.toLowerCase().includes(term) ||
           item.last_name?.toLowerCase().includes(term) ||
           item.position?.toLowerCase().includes(term)
         )
       }
-      
+
       const [sortField, sortDir] = sortBy.value.split('_')
       filtered.sort((a, b) => {
         let aVal = a[sortField]
         let bVal = b[sortField]
-        
+
         if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
         if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
         return 0
       })
-      
+
       return filtered
     })
 
     const filteredKioskDevices = computed(() => {
       let filtered = [...kioskDevices.value]
-      
+
       if (search.value) {
         const term = search.value.toLowerCase()
-        filtered = filtered.filter(item => 
+        filtered = filtered.filter(item =>
           item.device_id?.toLowerCase().includes(term) ||
           item.device_name?.toLowerCase().includes(term)
         )
       }
-      
+
       const [sortField, sortDir] = sortBy.value.split('_')
       filtered.sort((a, b) => {
         let aVal = a[sortField]
         let bVal = b[sortField]
-        
+
         if (sortField === 'last_seen') {
           aVal = a.last_seen ? new Date(a.last_seen) : new Date(0)
           bVal = b.last_seen ? new Date(b.last_seen) : new Date(0)
         }
-        
+
         if (aVal < bVal) return sortDir === 'asc' ? -1 : 1
         if (aVal > bVal) return sortDir === 'asc' ? 1 : -1
         return 0
       })
-      
+
       return filtered
     })
 
@@ -1698,10 +1215,10 @@ export default {
     })
 
     // Pagination helpers
-    const paginationStart = computed(() => 
+    const paginationStart = computed(() =>
       filteredItems.value.length ? (page.value - 1) * perPage.value + 1 : 0
     )
-    const paginationEnd = computed(() => 
+    const paginationEnd = computed(() =>
       Math.min(page.value * perPage.value, filteredItems.value.length)
     )
 
@@ -1775,7 +1292,7 @@ export default {
       if (dialog.data.first_name && dialog.data.last_name) {
         const firstName = dialog.data.first_name.toLowerCase().replace(/[^a-z0-9]/g, '');
         const lastName = dialog.data.last_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        
+
         let baseUsername = `${firstName}.${lastName}`;
         const randomNum = Math.floor(Math.random() * 900) + 100;
         return `${baseUsername}${randomNum}`;
@@ -2073,7 +1590,7 @@ export default {
               response = await appointmentsApi.updateType(dialog.data.id, dialog.data)
             }
             break
-            
+
           case 'staff':
             if (dialog.mode === 'create') {
               const staffData = {
@@ -2086,9 +1603,9 @@ export default {
                 password: dialog.data.password || generateRandomPassword(),
                 role: dialog.data.role || 'NURSE'
               }
-              
+
               response = await staffApi.createWithUser(staffData)
-              
+
               if (response.data.success && response.data.generated_password) {
                 passwordDisplayDialog.staffName = `${staffData.first_name} ${staffData.last_name}`
                 passwordDisplayDialog.username = response.data.data.username
@@ -2195,7 +1712,7 @@ export default {
 
         for (const item of selectedItems.value) {
           bulkDeleteDialog.progress.current++
-          
+
           try {
             let response
 
@@ -2343,11 +1860,11 @@ export default {
 
     const timeAgo = (dateString) => {
       if (!dateString) return ''
-      
+
       const date = new Date(dateString)
       const now = new Date()
       const seconds = Math.floor((now - date) / 1000)
-      
+
       if (seconds < 60) return 'just now'
       if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
       if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
@@ -2403,31 +1920,31 @@ export default {
       sortOrder,
       sortFields,
       selectedItems,
-      
+
       // Headers
       appointmentTypeHeaders,
       userHeaders,
       staffHeaders,
       kioskHeaders,
-      
+
       // Data
       appointmentTypes,
       users,
       staff,
       kioskDevices,
-      
+
       // Filtered data
       filteredAppointmentTypes,
       filteredUsers,
       filteredStaff,
       filteredKioskDevices,
-      
+
       // Paginated data
       paginatedAppointmentTypes,
       paginatedUsers,
       paginatedStaff,
       paginatedKioskDevices,
-      
+
       // Computed
       currentTableTitle,
       getTableIcon,
@@ -2437,7 +1954,7 @@ export default {
       paginationEnd,
       userOptions,
       hasActiveFilters,
-      
+
       // Dialog state
       dialog,
       passwordDisplayDialog,
@@ -2448,10 +1965,10 @@ export default {
       bulkDeleteDialog,
       createUserDialog,
       passwordDialog,
-      
+
       // Rules
       rules,
-      
+
       // Methods
       handleTableSort,
       handleSortChange,
@@ -2486,14 +2003,14 @@ export default {
       timeAgo,
       goToPatientManagement,
       goToStaffTab,
-      
+
       // Toast
       toasts,
       removeToast,
-      
+
       // Debounced search
       debouncedSearch,
-      
+
       // Helper functions
       generateUsernameFromName,
       generateRandomPassword,
@@ -2511,9 +2028,17 @@ export default {
    Border: rgba(26, 77, 58, 0.12)
 */
 
-.gap-2 { gap: 8px; }
-.gap-1 { gap: 4px; }
-.ga-3 { gap: 16px; }
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-1 {
+  gap: 4px;
+}
+
+.ga-3 {
+  gap: 16px;
+}
 
 /* Header & Typography */
 h1 {
@@ -2564,7 +2089,8 @@ h1 {
 }
 
 :deep(.v-data-table__tr:hover) {
-  background-color: #F0F4F2 !important; /* Very subtle forest hover */
+  background-color: #F0F4F2 !important;
+  /* Very subtle forest hover */
 }
 
 /* Form Fields */
@@ -2586,9 +2112,17 @@ h1 {
 }
 
 /* Specialized Dialog Backgrounds (Alerts) */
-.bg-error-lighten-5 { background-color: #FFF5F5 !important; }
-.bg-success-lighten-5 { background-color: #F1F8F5 !important; }
-.bg-info-lighten-5 { background-color: #F0F7F9 !important; }
+.bg-error-lighten-5 {
+  background-color: #FFF5F5 !important;
+}
+
+.bg-success-lighten-5 {
+  background-color: #F1F8F5 !important;
+}
+
+.bg-info-lighten-5 {
+  background-color: #F0F7F9 !important;
+}
 
 /* Status Chips */
 :deep(.v-chip.bg-success) {
@@ -2622,9 +2156,11 @@ h1 {
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: #F8FAF9;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #1A4D3A;
   border-radius: 4px;
@@ -2632,7 +2168,8 @@ h1 {
 
 /* Dark theme specific adjustments */
 :root.dark-theme {
-  --color-primary: #2D634F; /* Lighter forest for dark mode */
+  --color-primary: #2D634F;
+  /* Lighter forest for dark mode */
 }
 
 :root.dark-theme :deep(.v-card) {
