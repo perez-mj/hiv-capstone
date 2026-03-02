@@ -98,7 +98,7 @@ export const appointmentsApi = {
 // Queue API - ALIGNED WITH YOUR BACKEND ROUTES
 export const queueApi = {
   // Public routes
-  getDisplayBoard: () => http.get('/queue/display'),
+  getPublicQueue: () => http.get('/queue/public'), // Updated from getDisplayBoard
 
   // Current queue status
   getCurrent: () => http.get('/queue/current'),
@@ -207,10 +207,22 @@ export const staffApi = {
   delete: (id) => http.delete(`/staff/${id}`)
 }
 
-// Dashboard API
+// ==========================================================================================================
+// DASHBOARD API - UPDATED TO MATCH YOUR BACKEND ROUTES
+// ==========================================================================================================
 export const dashboardApi = {
-  getStats: () => http.get('/dashboard/stats'),
-  getCharts: () => http.get('/dashboard/charts')
+  // Admin dashboard
+  getAdminDashboard: () => http.get('/dashboard/admin'),
+  
+  // Nurse dashboard
+  getNurseDashboard: () => http.get('/dashboard/nurse'),
+  getNurseSchedule: (params) => http.get('/dashboard/nurse/schedule', { params }),
+  
+  // Patient dashboard (though this is also covered by patientApi.getDashboard)
+  getPatientDashboard: () => http.get('/dashboard/patient'),
+  
+  // Public queue display (kiosk/tv screen)
+  getPublicQueueDisplay: () => http.get('/dashboard/queue/public')
 }
 
 // ==========================================================================================================
