@@ -242,3 +242,9 @@ export default {
   staff: staffApi,
   dashboard: dashboardApi
 }
+// Blockchain API
+export const blockchainApi = {
+  getInfo: () => http.get('/blockchain/info'),
+  verify: () => http.get('/blockchain/verify'),
+  export: () => http.get('/blockchain/export')
+}

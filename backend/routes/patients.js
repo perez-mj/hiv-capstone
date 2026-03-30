@@ -715,7 +715,7 @@ router.post('/',
       await connection.beginTransaction();
 
       const {
-        patient_facility_code, // Add this field
+        patient_facility_code,
         first_name,
         last_name,
         middle_name,
@@ -770,7 +770,6 @@ router.post('/',
         );
         
         if (existingPatient.length > 0) {
-          // If code exists, generate a new one with a suffix
           const baseCode = finalPatientCode;
           let counter = 1;
           let newCode = `${baseCode}${counter}`;
@@ -794,7 +793,6 @@ router.post('/',
 
       // Create user account if requested
       if (create_user_account) {
-        // Check if username exists
         const [existingUser] = await connection.execute(
           'SELECT id FROM users WHERE username = ?',
           [username]
@@ -808,7 +806,6 @@ router.post('/',
           });
         }
 
-        // Check if email exists
         if (email) {
           const [existingEmail] = await connection.execute(
             'SELECT id FROM users WHERE email = ?',
@@ -824,13 +821,11 @@ router.post('/',
           }
         }
 
-        // Hash password if provided as plain text
         let hashedPassword = password_hash;
         if (password_hash && !password_hash.startsWith('$2b$')) {
           hashedPassword = await hashPassword(password_hash);
         }
 
-        // Create user
         const [userResult] = await connection.execute(
           `INSERT INTO users (username, password_hash, email, role, is_active, created_at, updated_at) 
            VALUES (?, ?, ?, 'PATIENT', 1, NOW(), NOW())`,
@@ -894,6 +889,17 @@ router.post('/',
 
       await connection.commit();
 
+      // ==================== ADD BLOCKCHAIN RECORDING ====================
+      try {
+        const blockchainService = require('../blockchain/blockchainService');
+        await blockchainService.recordPatient(newPatient[0]);
+        console.log(`📦 Patient ${newPatient[0].id} recorded to blockchain (Block index: ${newPatient[0].id})`);
+      } catch (blockchainError) {
+        console.error('⚠️ Blockchain record failed:', blockchainError.message);
+        // Don't fail the main operation
+      }
+      // ==================== END BLOCKCHAIN RECORDING ====================
+
       res.status(201).json({
         success: true,
         message: 'Patient created successfully',
@@ -941,7 +947,7 @@ router.put('/:id',
       const oldValues = existingPatient[0];
 
       const {
-        patient_facility_code, // Add this field
+        patient_facility_code,
         first_name,
         last_name,
         middle_name,
@@ -979,7 +985,6 @@ router.put('/:id',
       const updateValues = [];
 
       if (patient_facility_code !== undefined && patient_facility_code !== oldValues.patient_facility_code) {
-        // Check if the new code already exists (excluding current patient)
         const [existingPatientWithCode] = await connection.execute(
           'SELECT id FROM patients WHERE patient_facility_code = ? AND id != ?',
           [patient_facility_code, req.patientId]
@@ -1054,7 +1059,7 @@ router.put('/:id',
       updateValues.push(req.user.id);
       updateFields.push('updated_at = NOW()');
 
-      if (updateFields.length === 2) { // Only updated_by and updated_at
+      if (updateFields.length === 2) {
         await connection.rollback();
         return res.status(400).json({ 
           success: false,
@@ -1062,7 +1067,6 @@ router.put('/:id',
         });
       }
 
-      // Add patient ID to values array
       updateValues.push(req.patientId);
 
       const query = `UPDATE patients SET ${updateFields.join(', ')} WHERE id = ?`;
@@ -1091,6 +1095,16 @@ router.put('/:id',
       );
 
       await connection.commit();
+
+      // ==================== ADD BLOCKCHAIN RECORDING FOR UPDATE ====================
+      try {
+        const blockchainService = require('../blockchain/blockchainService');
+        await blockchainService.recordPatient(updatedPatient[0]);
+        console.log(`📦 Patient ${updatedPatient[0].id} updated on blockchain`);
+      } catch (blockchainError) {
+        console.error('⚠️ Blockchain record failed:', blockchainError.message);
+      }
+      // ==================== END BLOCKCHAIN RECORDING ====================
 
       res.json({
         success: true,
@@ -1121,7 +1135,6 @@ router.delete('/:id',
     try {
       await connection.beginTransaction();
 
-      // Check if patient exists
       const [patient] = await connection.execute(
         'SELECT * FROM patients WHERE id = ?',
         [req.patientId]
@@ -1135,7 +1148,6 @@ router.delete('/:id',
         });
       }
 
-      // Check if patient has any future appointments
       const [futureAppointments] = await connection.execute(
         `SELECT id FROM appointments 
          WHERE patient_id = ? AND scheduled_at > NOW() 
@@ -1151,7 +1163,6 @@ router.delete('/:id',
         });
       }
 
-      // If patient has a user account, deactivate it
       if (patient[0].user_id) {
         await connection.execute(
           'UPDATE users SET is_active = 0, updated_at = NOW() WHERE id = ?',
@@ -1159,7 +1170,6 @@ router.delete('/:id',
         );
       }
 
-      // Log audit before deletion
       await logAudit(
         req.user.id,
         'DELETE',
@@ -1172,7 +1182,6 @@ router.delete('/:id',
         req
       );
 
-      // Delete patient
       await connection.execute(
         'DELETE FROM patients WHERE id = ?',
         [req.patientId]
@@ -1666,14 +1675,12 @@ router.post('/import',
 
       for (const patientData of patients) {
         try {
-          // Auto-set diagnosis date for reactive patients if not provided
           if (patientData.hiv_status === 'REACTIVE' && !patientData.diagnosis_date) {
             patientData.diagnosis_date = new Date().toISOString().split('T')[0];
           }
 
           let patient_facility_code = patientData.patient_facility_code;
           
-          // If no facility code provided, generate one
           if (!patient_facility_code) {
             const registrationYear = new Date().getFullYear();
             patient_facility_code = await generatePatientCode(
@@ -1685,14 +1692,12 @@ router.post('/import',
               registrationYear
             );
           } else {
-            // Check if the provided code already exists
             const [existingPatient] = await connection.execute(
               'SELECT id FROM patients WHERE patient_facility_code = ?',
               [patient_facility_code]
             );
             
             if (existingPatient.length > 0) {
-              // If code exists, generate a new one with a suffix
               const baseCode = patient_facility_code;
               let counter = 2;
               let newCode = `${baseCode}${counter}`;

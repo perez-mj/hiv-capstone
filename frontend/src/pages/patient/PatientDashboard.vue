@@ -6,7 +6,6 @@
       <div>
         <h1 class="text-h4 font-weight-bold text-primary">Welcome, {{ patient.first_name || 'Patient' }}</h1>
         <p class="text-body-1 text-medium-emphasis mt-2">
-          <!-- CHANGED: from "Patient ID" to "Facility ID" -->
           Facility ID: {{ patient.patient_facility_code || patient.patient_id }}
         </p>
       </div>
@@ -108,6 +107,13 @@
               </v-row>
             </v-card-text>
           </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Blockchain Status Card -->
+      <v-row class="mb-6">
+        <v-col cols="12">
+          <BlockchainStatus />
         </v-col>
       </v-row>
 
@@ -233,6 +239,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { patientApi } from '@/api'
+import BlockchainStatus from '@/components/BlockchainStatus.vue'
 
 const router = useRouter()
 
@@ -415,7 +422,7 @@ function formatDateTime(dateString) {
   })
 }
 
-// FIXED: Logout function
+// Logout function
 async function logout() {
   if (loggingOut.value) return
   
@@ -428,13 +435,9 @@ async function logout() {
     localStorage.removeItem('authToken')
     localStorage.removeItem('authUser')
     localStorage.removeItem('userRole')
-    
     sessionStorage.clear()
-    
     console.log('Storage cleared, redirecting to login...')
-    
     window.location.href = '/patient/login'
-    
   } catch (error) {
     console.error('Logout error:', error)
     window.location.href = '/patient/login'
@@ -447,30 +450,24 @@ async function logout() {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
 }
-
 .cursor-pointer:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
 }
-
 .appointment-item, .lab-item {
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   transition: background-color 0.2s;
 }
-
 .appointment-item:hover, .lab-item:hover {
   background-color: rgba(0, 0, 0, 0.02);
 }
-
 .appointment-item:last-child, .lab-item:last-child {
   border-bottom: none;
 }
-
 @media (max-width: 600px) {
   .v-container {
     padding: 12px !important;
   }
-  
   .text-h4 {
     font-size: 1.5rem !important;
   }
