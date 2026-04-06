@@ -4,7 +4,14 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "blockchain:start": "node scripts/start-blockchain.js",
+    "blockchain:stop": "node scripts/stop-blockchain.js",
+    "blockchain:restart": "node scripts/restart-blockchain.js",
+    "blockchain:status": "node scripts/blockchain-status.js",
+    "blockchain:setup": "node scripts/setup-multichain.js",
+    "blockchain:reset": "node scripts/reset-multichain.js",
+    "blockchain:logs": "tail -f ~/.multichain/omph_hiv_chain/debug.log"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +28,7 @@
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "multichain-node": "^2.2.0-version1.0.4",
     "mysql2": "^3.15.3",
     "node-cron": "^4.2.1",
     "xlsx": "^0.18.5"
