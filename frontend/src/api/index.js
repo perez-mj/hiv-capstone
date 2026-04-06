@@ -68,32 +68,76 @@ export const patientsApi = {
 
 // Appointments API - ALIGNED WITH YOUR BACKEND ROUTES
 export const appointmentsApi = {
-  // types
-  getTypes: () => http.get('/appointments/types'),
-  createType: (data) => http.post('/appointments/types', data),
-  updateType: (id, data) => http.put(`/appointments/types/${id}`, data),
-  deleteType: (id) => http.delete(`/appointments/types/${id}`),
-
-  // appointments
+  // Get all appointments
   getAll: (params) => http.get('/appointments', { params }),
-  getToday: () => http.get('/appointments/today'),
-  getUpcoming: (params) => http.get('/appointments/upcoming', { params }),
-  getCalendar: (params) => http.get('/appointments/calendar', { params }),
-  getByPatientId: (patientId, params) => http.get(`/appointments/patient/${patientId}`, { params }),
-  getNextPatientAppointment: (patientId) => http.get(`/appointments/patient/${patientId}/next`),
-  getPatientHistory: (patientId, params) => http.get(`/appointments/patient/${patientId}/history`, { params }),
+  
+  // Get single appointment
   getById: (id) => http.get(`/appointments/${id}`),
-  create: (data) => http.post('/appointments', data),
-  update: (id, data) => http.put(`/appointments/${id}`, data),
-  updateStatus: (id, data) => http.patch(`/appointments/${id}/status`, data),
-  delete: (id) => http.delete(`/appointments/${id}`),
-
-  // utility
+  
+  // Get today's appointments
+  getToday: () => http.get('/appointments/today'),
+  
+  // Get statistics
+  getStatistics: (params) => http.get('/appointments/stats/overview', { params }),
+  
+  // Check availability
   checkAvailability: (params) => http.get('/appointments/check-availability', { params }),
-
-  // statistics
-  getStats: (params) => http.get('/appointments/stats/summary', { params })
-}
+  
+  // Get appointments by patient
+  getByPatientId: (patientId, params) => http.get(`/appointments/patient/${patientId}`, { params }),
+  
+  // CREATE appointment - includes patient_id
+  create: (data) => {
+    // Ensure required fields are present
+    if (!data.patient_id || !data.appointment_type_id || !data.scheduled_at) {
+      throw new Error('Missing required fields for appointment creation');
+    }
+    return http.post('/appointments', data);
+  },
+  
+  // UPDATE appointment - EXCLUDES patient_id
+  update: (id, data) => {
+    // Create a clean update object without patient_id
+    const updateData = {};
+    
+    // Only include allowed fields
+    if (data.appointment_type_id !== undefined) {
+      updateData.appointment_type_id = data.appointment_type_id;
+    }
+    if (data.scheduled_at !== undefined) {
+      updateData.scheduled_at = data.scheduled_at;
+    }
+    if (data.notes !== undefined) {
+      updateData.notes = data.notes;
+    }
+    if (data.status !== undefined) {
+      updateData.status = data.status;
+    }
+    
+    // Don't send patient_id, created_by, or other non-updatable fields
+    
+    console.log('Sending update data:', updateData); // Debug log
+    return http.put(`/appointments/${id}`, updateData);
+  },
+  
+  // Update status
+  updateStatus: (id, status) => http.patch(`/appointments/${id}/status`, { status }),
+  
+  // Delete appointment
+  delete: (id) => http.delete(`/appointments/${id}`),
+  
+  // Get appointment types
+  getTypes: () => http.get('/appointments/types'),
+  
+  // Create appointment type (admin only)
+  createType: (data) => http.post('/appointments/types', data),
+  
+  // Update appointment type (admin only)
+  updateType: (id, data) => http.put(`/appointments/types/${id}`, data),
+  
+  // Delete appointment type (admin only)
+  deleteType: (id) => http.delete(`/appointments/types/${id}`)
+};
 
 // Queue API - ALIGNED WITH YOUR BACKEND ROUTES
 export const queueApi = {

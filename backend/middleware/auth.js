@@ -1,181 +1,225 @@
 // backend/middleware/auth.js
 const jwt = require('jsonwebtoken');
-const pool = require('../db');
 
-/**
- * Authentication middleware - verifies JWT token and attaches user to request
- */
-const authenticateToken = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ 
-        success: false,
-        error: 'Authentication required' 
-      });
-    }
+// Validate secrets exist in production
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production'
-    );
-
-    // Get user from database with role and active status
-    const [rows] = await pool.execute(
-      `SELECT 
-        id, 
-        username, 
-        email, 
-        role,
-        is_active,
-        last_login
-      FROM users 
-      WHERE id = ?`,
-      [decoded.userId]
-    );
-
-    if (rows.length === 0) {
-      return res.status(401).json({ 
-        success: false,
-        error: 'User not found' 
-      });
-    }
-
-    const user = rows[0];
-
-    // Check if account is active
-    if (user.is_active !== 1) {
-      return res.status(401).json({ 
-        success: false,
-        error: 'User account is inactive. Please contact administrator.' 
-      });
-    }
-
-    // Attach user to request object
-    req.user = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      last_login: user.last_login
-    };
-
-    // Optional: Update last activity timestamp in a separate table if needed
-    // await pool.execute('UPDATE users SET last_activity = NOW() WHERE id = ?', [user.id]);
-
-    next();
-  } catch (err) {
-    console.error('Auth middleware error:', err.message);
-    
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        success: false,
-        error: 'Token expired. Please login again.' 
-      });
-    }
-    
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
-        success: false,
-        error: 'Invalid token. Please login again.' 
-      });
-    }
-    
-    return res.status(500).json({ 
-      success: false,
-      error: 'Authentication error' 
-    });
+// Check for required secrets
+if (process.env.NODE_ENV === 'production') {
+  if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+    throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be set in production environment');
   }
-};
-
-/**
- * Optional authentication - doesn't require token but attaches user if present
- */
-const optionalAuthenticateToken = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+} else {
+  // Development warning for missing secrets
+  if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+    console.warn('⚠️  WARNING: Using default JWT secrets. This is insecure for production!');
+    console.warn('⚠️  Set JWT_SECRET and JWT_REFRESH_SECRET in your .env file');
     
-    if (!token) {
-      return next();
+    // Only use defaults if explicitly allowed (for quick testing)
+    if (process.env.USE_DEFAULT_JWT === 'true') {
+      console.warn('⚠️  Using default secrets as ALLOWED by USE_DEFAULT_JWT flag');
+      // These defaults are ONLY for development/testing
+      if (!JWT_SECRET) process.env.JWT_SECRET = 'dev-default-secret-do-not-use-in-production';
+      if (!JWT_REFRESH_SECRET) process.env.JWT_REFRESH_SECRET = 'dev-default-refresh-secret-do-not-use-in-production';
     }
-
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production'
-    );
-
-    const [rows] = await pool.execute(
-      'SELECT id, username, email, role, is_active FROM users WHERE id = ?',
-      [decoded.userId]
-    );
-
-    if (rows.length > 0 && rows[0].is_active === 1) {
-      req.user = rows[0];
-    }
-    
-    next();
-  } catch (err) {
-    // Just continue without user
-    next();
   }
-};
+}
 
-/**
- * Generate JWT token for authenticated user
- */
+// Token blacklist for logout functionality
+// In production, replace this with Redis or a database
+const tokenBlacklist = new Set();
+
+// Clean up blacklist every hour (remove expired tokens)
+setInterval(() => {
+  for (const token of tokenBlacklist) {
+    try {
+      const decoded = jwt.decode(token);
+      if (decoded && decoded.exp && decoded.exp * 1000 < Date.now()) {
+        tokenBlacklist.delete(token);
+      }
+    } catch (error) {
+      // Invalid token, remove it
+      tokenBlacklist.delete(token);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 const generateToken = (user) => {
   return jwt.sign(
     { 
-      userId: user.id,
-      username: user.username,
+      id: user.id, 
+      username: user.username, 
       role: user.role 
     },
-    process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
-    { expiresIn: process.env.JWT_EXPIRY || '24h' }
+    process.env.JWT_SECRET || JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
   );
 };
 
-/**
- * Generate refresh token (longer expiry)
- */
 const generateRefreshToken = (user) => {
   return jwt.sign(
-    { userId: user.id },
-    process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-change-in-production',
-    { expiresIn: process.env.JWT_REFRESH_EXPIRY || '7d' }
+    { 
+      id: user.id, 
+      username: user.username, 
+      role: user.role,
+      type: 'refresh'
+    },
+    process.env.JWT_REFRESH_SECRET || JWT_REFRESH_SECRET,
+    { expiresIn: JWT_REFRESH_EXPIRES_IN }
   );
 };
 
-/**
- * Verify refresh token and generate new access token
- */
-const verifyRefreshToken = async (refreshToken) => {
+const verifyRefreshToken = async (token) => {
   try {
-    const decoded = jwt.verify(
-      refreshToken,
-      process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-change-in-production'
-    );
-
-    const [rows] = await pool.execute(
-      'SELECT id, username, role, is_active FROM users WHERE id = ?',
-      [decoded.userId]
-    );
-
-    if (rows.length === 0 || rows[0].is_active !== 1) {
+    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET || JWT_REFRESH_SECRET);
+    if (decoded.type !== 'refresh') {
       return null;
     }
-
-    return rows[0];
-  } catch (err) {
+    return decoded;
+  } catch (error) {
     return null;
   }
 };
 
+const blacklistToken = (token) => {
+  try {
+    const decoded = jwt.decode(token);
+    if (decoded && decoded.exp) {
+      tokenBlacklist.add(token);
+      // Auto-remove token from blacklist when it would have expired
+      const timeToExpiry = (decoded.exp * 1000) - Date.now();
+      if (timeToExpiry > 0) {
+        setTimeout(() => {
+          tokenBlacklist.delete(token);
+        }, timeToExpiry);
+      }
+      return true;
+    }
+    return false;
+  } catch (error) {
+    return false;
+  }
+};
+
+const isTokenBlacklisted = (token) => {
+  return tokenBlacklist.has(token);
+};
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ 
+      success: false,
+      error: 'Access token required' 
+    });
+  }
+
+  // Check if token is blacklisted
+  if (isTokenBlacklisted(token)) {
+    return res.status(401).json({
+      success: false,
+      error: 'Token has been revoked. Please login again.'
+    });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || JWT_SECRET, (err, user) => {
+    if (err) {
+      // Provide more specific error messages
+      let errorMessage = 'Invalid or expired token';
+      if (err.name === 'TokenExpiredError') {
+        errorMessage = 'Token expired. Please refresh your token.';
+      } else if (err.name === 'JsonWebTokenError') {
+        errorMessage = 'Invalid token format';
+      }
+      
+      return res.status(403).json({ 
+        success: false,
+        error: errorMessage
+      });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Async version for use with async/await patterns
+const authenticateTokenAsync = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      throw new Error('Access token required');
+    }
+
+    // Check if token is blacklisted
+    if (isTokenBlacklisted(token)) {
+      throw new Error('Token has been revoked');
+    }
+
+    const user = await new Promise((resolve, reject) => {
+      jwt.verify(token, process.env.JWT_SECRET || JWT_SECRET, (err, decoded) => {
+        if (err) reject(err);
+        else resolve(decoded);
+      });
+    });
+
+    req.user = user;
+    next();
+  } catch (error) {
+    const status = error.message === 'Access token required' ? 401 : 403;
+    let errorMessage = error.message;
+    
+    if (error.name === 'TokenExpiredError') {
+      errorMessage = 'Token expired. Please refresh your token.';
+    } else if (error.name === 'JsonWebTokenError') {
+      errorMessage = 'Invalid token format';
+    }
+    
+    res.status(status).json({
+      success: false,
+      error: errorMessage
+    });
+  }
+};
+
+// Role-based authorization middleware
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Authentication required' 
+      });
+    }
+    
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: `Access denied. Required roles: ${roles.join(', ')}` 
+      });
+    }
+    
+    next();
+  };
+};
+
+// Alias for backward compatibility and cleaner route definitions
+const protect = authenticateToken;
+
 module.exports = {
   authenticateToken,
-  optionalAuthenticateToken,
+  authenticateTokenAsync,
+  protect,
+  authorize,
   generateToken,
   generateRefreshToken,
-  verifyRefreshToken
+  verifyRefreshToken,
+  blacklistToken,
+  isTokenBlacklisted
 };

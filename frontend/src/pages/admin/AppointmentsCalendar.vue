@@ -499,7 +499,6 @@ export default {
     const selectedAppointment = ref(null)
     const appointmentForm = ref(null)
     const formValid = ref(false)
-    const patientSearch = ref('')
     const availableTimeSlots = ref([])
     const currentQueue = ref({
       waiting: [],
@@ -529,7 +528,6 @@ export default {
       color: 'info'
     })
 
-    // Constants
     const MAX_DAILY_APPOINTMENTS = 16
     const workingHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -543,9 +541,7 @@ export default {
       { title: 'No Show', value: 'NO_SHOW' }
     ]
 
-    const minDate = computed(() => {
-      return format(new Date(), 'yyyy-MM-dd')
-    })
+    const minDate = computed(() => format(new Date(), 'yyyy-MM-dd'))
 
     // Computed
     const calendarTitle = computed(() => {
@@ -579,10 +575,7 @@ export default {
       }
     })
 
-    const getWaitingCount = computed(() => {
-      return currentQueue.value.waiting?.length || 0
-    })
-
+    const getWaitingCount = computed(() => currentQueue.value.waiting?.length || 0)
     const getTotalInQueue = computed(() => {
       return (currentQueue.value.waiting?.length || 0) +
         (currentQueue.value.called?.length || 0) +
@@ -591,8 +584,7 @@ export default {
 
     const isSelectedDateAtCapacity = computed(() => {
       if (!formData.scheduled_date) return false
-      const count = getAppointmentsCountForDay(formData.scheduled_date)
-      return count >= MAX_DAILY_APPOINTMENTS
+      return getAppointmentsCountForDay(formData.scheduled_date) >= MAX_DAILY_APPOINTMENTS
     })
 
     const weekDays = computed(() => {
@@ -627,14 +619,14 @@ export default {
     const fetchAppointmentTypes = async () => {
       try {
         const response = await appointmentsApi.getTypes()
-        if (response.data?.success) {
-          appointmentTypes.value = response.data.data
-        } else {
-          appointmentTypes.value = response.data || []
-        }
+        // response is already response.data from interceptor
+        appointmentTypes.value = Array.isArray(response) ? response : 
+                                  (response?.data ? (Array.isArray(response.data) ? response.data : []) : [])
+        console.log('Appointment types loaded:', appointmentTypes.value.length)
       } catch (error) {
         console.error('Error fetching appointment types:', error)
         showSnackbar('Failed to load appointment types', 'error')
+        appointmentTypes.value = []
       }
     }
 
@@ -651,33 +643,36 @@ export default {
         if (filters.search) params.search = filters.search
 
         const response = await appointmentsApi.getAll(params)
-
+        
+        // SAFE: Extract appointments array from response
         let appointmentsData = []
-        if (response.data?.success) {
-          appointmentsData = response.data.data || []
+        
+        if (Array.isArray(response)) {
+          appointmentsData = response
+        } else if (response?.data && Array.isArray(response.data)) {
+          appointmentsData = response.data
+        } else if (response?.items && Array.isArray(response.items)) {
+          appointmentsData = response.items
         } else {
-          appointmentsData = response.data || []
+          appointmentsData = []
         }
-
+        
+        console.log('Appointments loaded:', appointmentsData.length)
+        
         // Check queue status for each appointment
         appointments.value = await Promise.all(
           appointmentsData.map(async (app) => {
             try {
               const queueCheck = await queueApi.checkAppointmentInQueue(app.id)
-              const inQueue = queueCheck.data?.in_queue || false
-              const queueData = queueCheck.data?.data
-
+              // queueCheck is already response.data from interceptor
               return {
                 ...app,
-                in_queue: inQueue,
-                queue_number: queueData?.queue_number,
-                queue_status: queueData?.status
+                in_queue: queueCheck?.in_queue || false,
+                queue_number: queueCheck?.queue_number,
+                queue_status: queueCheck?.status
               }
             } catch (error) {
-              return {
-                ...app,
-                in_queue: false
-              }
+              return { ...app, in_queue: false }
             }
           })
         )
@@ -690,60 +685,6 @@ export default {
       }
     }
 
-    const fetchQueueData = async () => {
-      try {
-        const response = await queueApi.getCurrent()
-        if (response.data?.success) {
-          currentQueue.value = response.data.data || {
-            waiting: [],
-            called: [],
-            serving: []
-          }
-        } else {
-          currentQueue.value = {
-            waiting: response.data?.waiting || [],
-            called: response.data?.called || [],
-            serving: response.data?.serving || []
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching queue:', error)
-        currentQueue.value = {
-          waiting: [],
-          called: [],
-          serving: []
-        }
-      }
-    }
-
-    const checkIfInQueue = (appointmentId) => {
-      const allQueueItems = [
-        ...(currentQueue.value.waiting || []),
-        ...(currentQueue.value.called || []),
-        ...(currentQueue.value.serving || [])
-      ]
-      return allQueueItems.some(item => item.appointment_id === appointmentId)
-    }
-
-    const searchPatients = debounce(async (search) => {
-      if (!search || search.length < 3) {
-        patients.value = []
-        return
-      }
-
-      searchingPatients.value = true
-      try {
-        const response = await patientsApi.search(search, 10)
-        patients.value = response.data || []
-      } catch (error) {
-        console.error('Error searching patients:', error)
-        showSnackbar('Failed to search patients', 'error')
-        patients.value = []
-      } finally {
-        searchingPatients.value = false
-      }
-    }, 500)
-
     const checkAvailability = async () => {
       if (!formData.scheduled_date || !formData.appointment_type_id) return
 
@@ -754,13 +695,16 @@ export default {
           type_id: parseInt(formData.appointment_type_id)
         })
 
+        // SAFE: Extract slots from response
         let slots = []
-        if (response.data?.success) {
-          slots = response.data.data?.slots || []
-        } else {
-          slots = response.data?.slots || []
+        if (response?.slots && Array.isArray(response.slots)) {
+          slots = response.slots
+        } else if (Array.isArray(response)) {
+          slots = response
+        } else if (response?.data?.slots && Array.isArray(response.data.slots)) {
+          slots = response.data.slots
         }
-
+        
         const now = new Date()
         const today = new Date().toISOString().split('T')[0]
         const isToday = formData.scheduled_date === today
@@ -788,6 +732,48 @@ export default {
         checkingAvailability.value = false
       }
     }
+
+    const fetchQueueData = async () => {
+      try {
+        const response = await queueApi.getCurrent()
+        // response is already response.data from interceptor
+        const data = response || {}
+        currentQueue.value = {
+          waiting: data.waiting || [],
+          called: data.called || [],
+          serving: data.serving || []
+        }
+      } catch (error) {
+        console.error('Error fetching queue:', error)
+        currentQueue.value = {
+          waiting: [],
+          called: [],
+          serving: []
+        }
+      }
+    }
+
+    const searchPatients = debounce(async (search) => {
+      if (!search || search.length < 3) {
+        patients.value = []
+        return
+      }
+
+      searchingPatients.value = true
+      try {
+        const response = await patientsApi.search(search, 10)
+        // response is already response.data from interceptor
+        patients.value = Array.isArray(response) ? response : 
+                        (response?.data ? (Array.isArray(response.data) ? response.data : []) : [])
+        console.log('Patients found:', patients.value.length)
+      } catch (error) {
+        console.error('Error searching patients:', error)
+        showSnackbar('Failed to search patients', 'error')
+        patients.value = []
+      } finally {
+        searchingPatients.value = false
+      }
+    }, 500)
 
     const getAppointmentsForDay = (date) => {
       return appointments.value.filter(a =>
@@ -823,9 +809,8 @@ export default {
       try {
         const response = await queueApi.confirmAppointment(appointment.id)
 
-        if (response.data?.success) {
-          // Fix: Access queue_number from the correct path
-          const queueNumber = response.data.data?.queue?.queue_number
+        if (response?.success !== false) {
+          const queueNumber = response?.queue?.queue_number || response?.queue_number
           showSnackbar(
             `Appointment confirmed and added to queue as #${queueNumber || 'N/A'}`,
             'success'
@@ -836,7 +821,7 @@ export default {
         }
       } catch (error) {
         console.error('Error confirming appointment:', error)
-        showSnackbar(error.response?.data?.error || 'Failed to confirm appointment', 'error')
+        showSnackbar(error.response?.data?.message || 'Failed to confirm appointment', 'error')
       } finally {
         confirmingId.value = null
       }
@@ -899,7 +884,6 @@ export default {
       formData.scheduled_time = ''
       formData.duration = 30
       formData.notes = ''
-      patientSearch.value = ''
       patients.value = []
       availableTimeSlots.value = []
     }
@@ -939,43 +923,43 @@ export default {
     }
 
     const saveAppointment = async () => {
-      if (!appointmentForm.value?.validate()) return
-      if (!formData.patient) {
-        showSnackbar('Please select a patient', 'error')
-        return
-      }
+  if (!appointmentForm.value?.validate()) return
+  if (!formData.patient) {
+    showSnackbar('Please select a patient', 'error')
+    return
+  }
 
-      saving.value = true
-      try {
-        const scheduledAt = `${formData.scheduled_date}T${formData.scheduled_time}:00`
-
-        const appointmentData = {
-          patient_id: formData.patient.id,
-          appointment_type_id: parseInt(formData.appointment_type_id),
-          scheduled_at: scheduledAt,
-          notes: formData.notes || null
-        }
-
-        let response
-        if (editingAppointment.value && selectedAppointment.value) {
-          response = await appointmentsApi.update(selectedAppointment.value.id, appointmentData)
-          showSnackbar('Appointment updated successfully', 'success')
-        } else {
-          response = await appointmentsApi.create(appointmentData)
-          showSnackbar('Appointment created successfully', 'success')
-        }
-
-        if (response.data?.success || response.status === 201) {
-          closeAppointmentDialog()
-          await fetchAppointments()
-        }
-      } catch (error) {
-        console.error('Error saving appointment:', error)
-        showSnackbar(error.response?.data?.error || 'Failed to save appointment', 'error')
-      } finally {
-        saving.value = false
-      }
+  saving.value = true
+  try {
+    // Ensure scheduled_at is a proper ISO string
+    const scheduledDateTime = `${formData.scheduled_date}T${formData.scheduled_time}:00`
+    
+    const appointmentData = {
+      patient_id: parseInt(formData.patient.id),
+      appointment_type_id: parseInt(formData.appointment_type_id),
+      scheduled_at: scheduledDateTime, // This is a string like "2024-01-15T14:30:00"
+      notes: formData.notes || null
     }
+
+    console.log('Saving appointment:', appointmentData) // Debug log
+
+    if (editingAppointment.value && selectedAppointment.value) {
+      await appointmentsApi.update(selectedAppointment.value.id, appointmentData)
+      showSnackbar('Appointment updated successfully', 'success')
+    } else {
+      await appointmentsApi.create(appointmentData)
+      showSnackbar('Appointment created successfully', 'success')
+    }
+
+    closeAppointmentDialog()
+    await fetchAppointments()
+  } catch (error) {
+    console.error('Error saving appointment:', error)
+    showSnackbar(error.response?.data?.message || 'Failed to save appointment', 'error')
+  } finally {
+    saving.value = false
+  }
+}
 
     const goToQueue = () => {
       router.push('/admin/queue')
@@ -995,17 +979,9 @@ export default {
       return `${hour12}:00 ${ampm}`
     }
 
-    const formatTime = (datetime) => {
-      return format(parseISO(datetime), 'h:mm a')
-    }
-
-    const formatShortTime = (datetime) => {
-      return format(parseISO(datetime), 'h:mm a')
-    }
-
-    const formatFullDate = (datetime) => {
-      return format(parseISO(datetime), 'EEEE, MMMM d, yyyy \'at\' h:mm a')
-    }
+    const formatTime = (datetime) => format(parseISO(datetime), 'h:mm a')
+    const formatShortTime = (datetime) => format(parseISO(datetime), 'h:mm a')
+    const formatFullDate = (datetime) => format(parseISO(datetime), 'EEEE, MMMM d, yyyy \'at\' h:mm a')
 
     const getInitials = (first, last) => {
       return `${first?.charAt(0) || ''}${last?.charAt(0) || ''}`.toUpperCase()
@@ -1040,11 +1016,7 @@ export default {
     }
 
     const showSnackbar = (text, color = 'info') => {
-      snackbar.value = {
-        show: true,
-        text,
-        color
-      }
+      snackbar.value = { show: true, text, color }
     }
 
     const debouncedSearch = debounce(() => {
@@ -1061,11 +1033,7 @@ export default {
     })
 
     watch(() => formData.patient, (newPatient) => {
-      if (newPatient?.id) {
-        formData.patient_id = newPatient.id
-      } else {
-        formData.patient_id = null
-      }
+      formData.patient_id = newPatient?.id || null
     })
 
     // Lifecycle
@@ -1076,78 +1044,19 @@ export default {
     })
 
     return {
-      // State
-      loading,
-      saving,
-      checkingAvailability,
-      searchingPatients,
-      confirmingId,
-      appointments,
-      appointmentTypes,
-      patients,
-      selectedDate,
-      calendarView,
-      detailsDialog,
-      appointmentDialog,
-      editingAppointment,
-      selectedAppointment,
-      appointmentForm,
-      formValid,
-      patientSearch,
-      availableTimeSlots,
-      filters,
-      formData,
-      snackbar,
-
-      // Constants
-      workingHours,
-      dayNames,
-      statusOptions,
-      minDate,
-      MAX_DAILY_APPOINTMENTS,
-
-      // Computed
-      calendarTitle,
-      stats,
-      getWaitingCount,
-      getTotalInQueue,
-      isSelectedDateAtCapacity,
-      weekDays,
-      calendarDays,
-
-      // Methods
-      fetchAppointments,
-      searchPatients,
-      checkAvailability,
-      getAppointmentsForDay,
-      getAppointmentsForTimeSlot,
-      getAppointmentsForDayAndTime,
-      getAppointmentsCountForDay,
-      canConfirm,
-      confirmAndAddToQueue,
-      goToToday,
-      previousPeriod,
-      nextPeriod,
-      selectDate,
-      showDayDetails,
-      openAppointmentDetails,
-      openCreateDialog,
-      editAppointment,
-      closeAppointmentDialog,
-      saveAppointment,
-      goToQueue,
-      updateDuration,
-
-      // Utilities
-      formatHour,
-      formatTime,
-      formatShortTime,
-      formatFullDate,
-      getInitials,
-      getTypeColor,
-      getStatusColor,
-      getDayCapacityClass,
-      debouncedSearch
+      loading, saving, checkingAvailability, searchingPatients, confirmingId,
+      appointments, appointmentTypes, patients, selectedDate, calendarView,
+      detailsDialog, appointmentDialog, editingAppointment, selectedAppointment,
+      appointmentForm, formValid, availableTimeSlots, filters, formData, snackbar,
+      workingHours, dayNames, statusOptions, minDate, MAX_DAILY_APPOINTMENTS,
+      calendarTitle, stats, getWaitingCount, getTotalInQueue, isSelectedDateAtCapacity,
+      weekDays, calendarDays, fetchAppointments, searchPatients, checkAvailability,
+      getAppointmentsForDay, getAppointmentsForTimeSlot, getAppointmentsForDayAndTime,
+      getAppointmentsCountForDay, canConfirm, confirmAndAddToQueue, goToToday,
+      previousPeriod, nextPeriod, selectDate, showDayDetails, openAppointmentDetails,
+      openCreateDialog, editAppointment, closeAppointmentDialog, saveAppointment,
+      goToQueue, updateDuration, formatHour, formatTime, formatShortTime, formatFullDate,
+      getInitials, getTypeColor, getStatusColor, getDayCapacityClass, debouncedSearch
     }
   }
 }

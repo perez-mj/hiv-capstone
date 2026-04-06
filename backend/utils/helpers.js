@@ -111,7 +111,8 @@ const generatePatientCode = async (pool, firstName, middleName, lastName, hivSta
 /**
  * Generate unique appointment number
  */
-const generateAppointmentNumber = async (pool) => {
+const generateAppointmentNumber = async () => {
+  const pool = require('../db'); // Import pool inside the function
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -189,6 +190,23 @@ const calculateAge = (dateOfBirth) => {
     age--;
   }
   
+  return age;
+};
+
+/**
+ * Calculate age at a specific date
+ * @param {Date|string} birthDate - Date of birth
+ * @param {Date|string} targetDate - Target date to calculate age at
+ * @returns {number} - Age in years
+ */
+const calculateAgeAtDate = (birthDate, targetDate) => {
+  const birth = new Date(birthDate);
+  const target = new Date(targetDate);
+  let age = target.getFullYear() - birth.getFullYear();
+  const monthDiff = target.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && target.getDate() < birth.getDate())) {
+    age--;
+  }
   return age;
 };
 
@@ -390,6 +408,7 @@ module.exports = {
   generateQueueNumber,
   formatDate,
   calculateAge,
+  calculateAgeAtDate,
   paginate,
   buildWhereClause,
   parseCSV,

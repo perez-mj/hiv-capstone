@@ -20,7 +20,9 @@ export const useAuthStore = defineStore('auth', () => {
   const userRole = computed(() => user.value?.role || null)
   
   const userName = computed(() => {
-    return user.value?.fullName || user.value?.username || 'User'
+    return user.value?.fullName || user.value?.first_name && user.value?.last_name 
+      ? `${user.value.first_name} ${user.value.last_name}`
+      : user.value?.username || 'User'
   })
 
   const isAdmin = computed(() => userRole.value === 'ADMIN')
@@ -29,7 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isStaff = computed(() => isAdmin.value || isNurse.value)
 
   // Patient-specific getters
-  const patientId = computed(() => user.value?.patient_facility_code || null)
+  const patientId = computed(() => user.value?.patient_facility_code || user.value?.id || null)
   const patientName = computed(() => {
     if (user.value?.first_name && user.value?.last_name) {
       return `${user.value.first_name} ${user.value.last_name}`
@@ -44,13 +46,37 @@ export const useAuthStore = defineStore('auth', () => {
       console.log('🔐 Login attempt:', credentials.username)
 
       const response = await http.post('/auth/login', credentials)
-      console.log('✅ Login response:', response.data)
+      console.log('✅ Full login response:', response.data)
 
-      const { token: newToken, user: userData } = response.data
+      // FIX: Extract token from the nested data structure
+      // Your response structure: { success, message, timestamp, data: { user, token, refreshToken } }
+      const responseData = response.data
+      
+      // Check if the response has the expected structure
+      let newToken = null
+      let userData = null
+      let refreshToken = null
+
+      if (responseData.data && responseData.data.token) {
+        // Format: { success, data: { token, user, refreshToken } }
+        newToken = responseData.data.token
+        userData = responseData.data.user
+        refreshToken = responseData.data.refreshToken
+      } else if (responseData.token) {
+        // Format: { token, user } (direct)
+        newToken = responseData.token
+        userData = responseData.user
+        refreshToken = responseData.refreshToken
+      } else {
+        throw new Error('No token received from server')
+      }
 
       if (!newToken) {
         throw new Error('No token received from server')
       }
+
+      console.log('✅ Token extracted successfully')
+      console.log('👤 User role:', userData?.role)
 
       // Update state
       token.value = newToken
@@ -59,6 +85,9 @@ export const useAuthStore = defineStore('auth', () => {
       // Persist to localStorage
       localStorage.setItem('authToken', newToken)
       localStorage.setItem('authUser', JSON.stringify(userData))
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken)
+      }
 
       console.log('💾 Auth stored in localStorage, role:', userData.role)
 
@@ -67,6 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
         if (userData.role === 'PATIENT') {
           await router.push('/patient/dashboard')
         } else {
+          // For ADMIN, NURSE, or any other role
           await router.push('/admin/dashboard')
         }
       }
@@ -78,6 +108,8 @@ export const useAuthStore = defineStore('auth', () => {
       let errorMessage = 'Login failed'
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
       } else if (error.message.includes('Network Error')) {
         errorMessage = 'Cannot connect to server. Please check your connection.'
       }
@@ -92,17 +124,21 @@ export const useAuthStore = defineStore('auth', () => {
     console.log('🚪 Logging out...')
     
     try {
+      // Call logout endpoint if it exists
       await http.post('/auth/logout').catch(() => {})
+    } catch (error) {
+      console.log('Logout endpoint error (ignored):', error.message)
     } finally {
       // Clear local state
       token.value = null
       user.value = null
       localStorage.removeItem('authToken')
       localStorage.removeItem('authUser')
+      localStorage.removeItem('refreshToken')
       
       // Redirect to login
       if (router) {
-        router.push('/login')
+        await router.push('/login')
       } else {
         window.location.href = '/login'
       }
@@ -120,11 +156,14 @@ export const useAuthStore = defineStore('auth', () => {
 
       const response = await http.get('/auth/check')
       
-      if (response.data && response.data.user) {
-        console.log('✅ Auth check successful, role:', response.data.user.role)
+      // Handle nested response structure
+      const userData = response.data?.data?.user || response.data?.user
+      
+      if (userData) {
+        console.log('✅ Auth check successful, role:', userData.role)
         // Update user data in case it changed
-        user.value = response.data.user
-        localStorage.setItem('authUser', JSON.stringify(response.data.user))
+        user.value = userData
+        localStorage.setItem('authUser', JSON.stringify(userData))
         return true
       }
       
@@ -133,7 +172,7 @@ export const useAuthStore = defineStore('auth', () => {
       console.error('❌ Auth check failed:', error.message)
       
       if (error.response?.status === 401) {
-        logout()
+        await logout()
       }
       
       return false

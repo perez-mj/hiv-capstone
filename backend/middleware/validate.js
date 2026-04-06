@@ -1,37 +1,21 @@
 // backend/middleware/validate.js
-const { validationSchemas } = require('../utils/validators');
 
 /**
  * General validation middleware factory
- * @param {string} schemaName - Name of the validation schema
+ * Supports validation functions directly
+ * @param {function} validationFunction - Validation function that returns Joi result
  * @param {string} property - Request property to validate ('body', 'query', 'params')
  */
-const validate = (schemaName, property = 'body') => {
+const validate = (validationFunction, property = 'body') => {
   return async (req, res, next) => {
     try {
-      // Get validation schema
-      const schema = validationSchemas[schemaName];
-      
-      if (!schema) {
-        console.error(`Validation schema '${schemaName}' not found`);
-        return res.status(500).json({ 
-          success: false,
-          error: 'Validation configuration error' 
-        });
-      }
+      // Call the validation function with request data
+      const validationResult = validationFunction(req[property]);
 
-      // Log what we're validating
-      console.log(`Validating ${schemaName}:`, req[property]);
-
-      // Validate the request data
-      const { error, value } = schema.validate(req[property], {
-        abortEarly: false,
-        stripUnknown: true
-      });
-
-      if (error) {
-        console.log('Validation errors:', error.details);
-        const errors = error.details.map(detail => ({
+      // Handle validation errors
+      if (validationResult.error) {
+        console.log('Validation errors:', validationResult.error.details);
+        const errors = validationResult.error.details.map(detail => ({
           field: detail.path.join('.'),
           message: detail.message
         }));
@@ -44,7 +28,7 @@ const validate = (schemaName, property = 'body') => {
       }
 
       // Replace request data with validated and sanitized value
-      req[property] = value;
+      req[property] = validationResult.value;
       next();
     } catch (err) {
       console.error('Validation middleware error:', err);
