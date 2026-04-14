@@ -2,34 +2,34 @@
 const User = require('../models/User');
 const Patient = require('../models/Patient');
 const Staff = require('../models/Staff');
-const AuditLog = require('../models/AuditLog');
 const { sendResponse } = require('../utils/responseHandler');
 const bcrypt = require('bcryptjs');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const userController = {
   // Get all users
-async getAllUsers(req, res, next) {
-  try {
-    const { page = 1, limit = 100, role, is_active, search } = req.query;
-    const offset = (page - 1) * limit;
-    
-    const filters = { role, is_active, search };
-    const users = await User.getAll(filters, { limit, offset });
-    const total = await User.count(filters);
-    
-    // Return data directly, not nested
-    sendResponse(res, 200, 'Users retrieved successfully', users, {
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        total_pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-},
+  async getAllUsers(req, res, next) {
+    try {
+      const { page = 1, limit = 100, role, is_active, search } = req.query;
+      const offset = (page - 1) * limit;
+      
+      const filters = { role, is_active, search };
+      const users = await User.getAll(filters, { limit, offset });
+      const total = await User.count(filters);
+      
+      // Return data directly, not nested
+      sendResponse(res, 200, 'Users retrieved successfully', users, {
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          total_pages: Math.ceil(total / limit)
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
   
   // Get user by ID
   async getUserById(req, res, next) {
@@ -71,17 +71,17 @@ async getAllUsers(req, res, next) {
       
       const newUser = await User.findById(userId);
       
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'INSERT',
-        table_name: 'users',
-        record_id: userId,
-        new_values: newUser,
-        description: `Created user: ${username}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CREATE',
+        'users',
+        userId,
+        null, // No patient_id for user accounts
+        null,
+        newUser,
+        `Created user account: ${username} (Role: ${role})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 201, 'User created successfully', newUser);
     } catch (error) {
@@ -108,18 +108,29 @@ async getAllUsers(req, res, next) {
       
       const updatedUser = await User.findById(userId);
       
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE',
-        table_name: 'users',
-        record_id: userId,
-        old_values: existingUser,
-        new_values: updatedUser,
-        description: `Updated user: ${existingUser.username}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Track changes for blockchain
+      const changedFields = {};
+      if (email !== undefined && email !== existingUser.email) {
+        changedFields.email = { old: existingUser.email, new: email };
+      }
+      if (role !== undefined && role !== existingUser.role) {
+        changedFields.role = { old: existingUser.role, new: role };
+      }
+      if (is_active !== undefined && is_active !== existingUser.is_active) {
+        changedFields.is_active = { old: existingUser.is_active, new: is_active };
+      }
+      
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE',
+        'users',
+        userId,
+        null,
+        existingUser,
+        updatedUser,
+        `Updated user account: ${existingUser.username} - Changes: ${Object.keys(changedFields).join(', ')}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'User updated successfully', updatedUser);
     } catch (error) {
@@ -150,17 +161,17 @@ async getAllUsers(req, res, next) {
         return sendResponse(res, 400, 'Cannot delete user with associated patient or staff records');
       }
       
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'DELETE',
-        table_name: 'users',
-        record_id: userId,
-        old_values: user,
-        description: `Deleted user: ${user.username}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'DELETE',
+        'users',
+        userId,
+        null,
+        user,
+        null,
+        `Deleted user account: ${user.username} (Role: ${user.role})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       await User.delete(userId);
       

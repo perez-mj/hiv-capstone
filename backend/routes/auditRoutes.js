@@ -5,7 +5,7 @@ const { authorize } = require('../middleware/authorize');
 const blockchainAuditService = require('../services/blockchainAuditService');
 
 // Get audit trail with filters
-router.get('/audit-trail', protect, authorize(['ADMIN']), async (req, res) => {
+router.get('/audit-trail', async (req, res) => {
   try {
     const { table, recordId, patientId, limit, offset } = req.query;
     

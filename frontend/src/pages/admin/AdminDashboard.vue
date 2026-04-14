@@ -1,4 +1,3 @@
-<!-- frontend/src/pages/admin/AdminDashboard.vue -->
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- Welcome Header -->
@@ -13,7 +12,7 @@
       </v-col>
       <v-col cols="12" md="4" class="text-md-right">
         <v-chip
-          :color="'primary'"
+          color="primary"
           variant="flat"
           size="large"
           prepend-icon="mdi-calendar"
@@ -22,7 +21,7 @@
           {{ currentDate }}
         </v-chip>
         <v-chip
-          :color="'secondary'"
+          color="secondary"
           variant="flat"
           size="large"
           prepend-icon="mdi-clock-outline"
@@ -43,14 +42,14 @@
     <v-row v-else-if="error">
       <v-col cols="12">
         <v-alert
-          :color="'error'"
+          color="error"
           variant="tonal"
           icon="mdi-alert-circle"
           class="mb-4"
         >
           {{ error }}
           <template v-slot:append>
-            <v-btn :color="'error'" variant="text" @click="fetchDashboardData">
+            <v-btn color="error" variant="text" @click="fetchDashboardData">
               <v-icon left>mdi-refresh</v-icon> Retry
             </v-btn>
           </template>
@@ -97,8 +96,8 @@
           <v-card class="h-100">
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'primary'" variant="tonal" size="40">
-                  <v-icon :color="'primary'">mdi-format-list-group</v-icon>
+                <v-avatar color="primary" variant="tonal" size="40">
+                  <v-icon color="primary">mdi-format-list-group</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Current Queue Status</v-card-title>
@@ -182,7 +181,7 @@
 
             <v-card-actions>
               <v-btn
-                :color="'primary'"
+                color="primary"
                 variant="text"
                 block
                 @click="viewFullQueue"
@@ -199,8 +198,8 @@
           <v-card class="h-100">
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'secondary'" variant="tonal" size="40">
-                  <v-icon :color="'secondary'">mdi-calendar-check</v-icon>
+                <v-avatar color="secondary" variant="tonal" size="40">
+                  <v-icon color="secondary">mdi-calendar-check</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Today's Appointments</v-card-title>
@@ -208,7 +207,7 @@
               
               <template v-slot:append>
                 <v-btn
-                  :color="'primary'"
+                  color="primary"
                   variant="text"
                   size="small"
                   @click="viewAllAppointments"
@@ -265,7 +264,7 @@
 
                 <template v-slot:item.actions="{ item }">
                   <v-btn
-                    :color="'primary'"
+                    color="primary"
                     variant="text"
                     size="x-small"
                     icon
@@ -294,8 +293,8 @@
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'accent'" variant="tonal" size="40">
-                  <v-icon :color="'accent'">mdi-chart-line</v-icon>
+                <v-avatar color="accent" variant="tonal" size="40">
+                  <v-icon color="accent">mdi-chart-line</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Monthly Statistics</v-card-title>
@@ -326,8 +325,8 @@
           <v-card class="h-100">
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'info'" variant="tonal" size="40">
-                  <v-icon :color="'info'">mdi-account-group</v-icon>
+                <v-avatar color="info" variant="tonal" size="40">
+                  <v-icon color="info">mdi-account-group</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Patient Demographics</v-card-title>
@@ -388,8 +387,8 @@
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'success'" variant="tonal" size="40">
-                  <v-icon :color="'success'">mdi-lightning-bolt</v-icon>
+                <v-avatar color="success" variant="tonal" size="40">
+                  <v-icon color="success">mdi-lightning-bolt</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Quick Actions</v-card-title>
@@ -421,8 +420,8 @@
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'warning'" variant="tonal" size="40">
-                  <v-icon :color="'warning'">mdi-account-tie</v-icon>
+                <v-avatar color="warning" variant="tonal" size="40">
+                  <v-icon color="warning">mdi-account-tie</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Staff Overview</v-card-title>
@@ -442,7 +441,7 @@
               </div>
 
               <v-progress-linear
-                :color="'primary'"
+                color="primary"
                 height="8"
                 :model-value="staffAvailability"
                 rounded
@@ -453,7 +452,7 @@
 
             <v-card-actions>
               <v-btn
-                :color="'primary'"
+                color="primary"
                 variant="text"
                 block
                 @click="manageStaff"
@@ -470,8 +469,8 @@
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'error'" variant="tonal" size="40">
-                  <v-icon :color="'error'">mdi-history</v-icon>
+                <v-avatar color="error" variant="tonal" size="40">
+                  <v-icon color="error">mdi-history</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Recent Activity</v-card-title>
@@ -502,7 +501,7 @@
 
     <!-- Refresh Button -->
     <v-btn
-      :color="'primary'"
+      color="primary"
       variant="flat"
       fab
       fixed
@@ -520,7 +519,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useDisplay } from 'vuetify'
 import { format, formatDistanceToNow } from 'date-fns'
 import Chart from 'chart.js/auto'
 import { dashboardApi } from '@/api'
@@ -528,7 +526,6 @@ import { useAuthStore } from '@/stores/auth'
 
 // Router and stores
 const router = useRouter()
-const { mobile } = useDisplay()
 const authStore = useAuthStore()
 
 // Refs
@@ -538,18 +535,66 @@ const adminName = ref('')
 const currentFacility = ref('OMPH HIV Clinic')
 const currentTime = ref('')
 const currentDate = ref('')
-const dashboardData = ref(null)
 const chartType = ref('line')
 const monthlyChart = ref(null)
 const hivChart = ref(null)
 let monthlyChartInstance = null
 let hivChartInstance = null
+let timeInterval = null
 
-// Computed properties from dashboard data
-const keyMetrics = computed(() => {
-  if (!dashboardData.value) return []
+// Default empty data structure
+const defaultDashboardData = {
+  overview: {
+    total_patients: 0,
+    total_staff: 0,
+    patients_by_status: [],
+    today_appointments: {
+      count: 0,
+      completed: '0',
+      scheduled: '0',
+      confirmed: '0',
+      cancelled: '0',
+      no_show: '0'
+    },
+    current_queue: {
+      total_in_queue: 0,
+      waiting: 0,
+      called: 0,
+      serving: 0,
+      completed: 0
+    }
+  },
+  recent_appointments: [],
+  monthly_statistics: [],
+  today_queue: []
+}
+
+const dashboardData = ref({
+  data: { ...defaultDashboardData }
+})
+
+// Helper function to safely extract data
+const safeGetData = () => {
+  if (!dashboardData.value) {
+    return { ...defaultDashboardData }
+  }
   
-  const overview = dashboardData.value.data.overview
+  // Handle different response structures
+  if (dashboardData.value.data && dashboardData.value.data.overview) {
+    return dashboardData.value.data
+  }
+  
+  if (dashboardData.value.overview) {
+    return dashboardData.value
+  }
+  
+  return { ...defaultDashboardData }
+}
+
+// Computed properties from dashboard data with safe access
+const keyMetrics = computed(() => {
+  const data = safeGetData()
+  const overview = data.overview || {}
   const todayAppointments = overview.today_appointments || {}
   
   return [
@@ -593,22 +638,23 @@ const keyMetrics = computed(() => {
 })
 
 const queueStats = computed(() => {
-  if (!dashboardData.value) return { total_in_queue: 0, waiting: 0, called: 0, serving: 0, completed: 0 }
-  return dashboardData.value.data.overview.current_queue || { total_in_queue: 0, waiting: 0, called: 0, serving: 0, completed: 0 }
+  const data = safeGetData()
+  return data.overview?.current_queue || { total_in_queue: 0, waiting: 0, called: 0, serving: 0, completed: 0 }
 })
 
 const currentQueue = computed(() => {
-  return dashboardData.value?.data.today_queue || []
+  const data = safeGetData()
+  return data.today_queue || []
 })
 
 const recentAppointments = computed(() => {
-  return dashboardData.value?.data.recent_appointments || []
+  const data = safeGetData()
+  return data.recent_appointments || []
 })
 
 const appointmentStats = computed(() => {
-  if (!dashboardData.value) return []
-  
-  const today = dashboardData.value.data.overview.today_appointments || {}
+  const data = safeGetData()
+  const today = data.overview?.today_appointments || {}
   const total = today.count || 1
   
   return [
@@ -619,11 +665,13 @@ const appointmentStats = computed(() => {
 })
 
 const totalPatients = computed(() => {
-  return dashboardData.value?.data.overview.total_patients || 0
+  const data = safeGetData()
+  return data.overview?.total_patients || 0
 })
 
 const patientStatusList = computed(() => {
-  const statuses = dashboardData.value?.data.overview.patients_by_status || []
+  const data = safeGetData()
+  const statuses = data.overview?.patients_by_status || []
   const total = totalPatients.value || 1
   
   const statusMap = {
@@ -640,7 +688,8 @@ const patientStatusList = computed(() => {
 })
 
 const totalStaff = computed(() => {
-  return dashboardData.value?.data.overview.total_staff || 0
+  const data = safeGetData()
+  return data.overview?.total_staff || 0
 })
 
 const staffAvailability = computed(() => {
@@ -676,10 +725,29 @@ const fetchDashboardData = async () => {
   
   try {
     const response = await dashboardApi.getAdminDashboard()
-    dashboardData.value = response.data
+    
+    // Handle different response structures
+    let dashboardContent = { ...defaultDashboardData }
+    
+    if (response && response.data) {
+      if (response.data.data && response.data.data.overview) {
+        // Response has nested data property
+        dashboardContent = response.data.data
+      } else if (response.data.overview) {
+        // Response data is directly the dashboard content
+        dashboardContent = response.data
+      } else if (response.data.success && response.data.data) {
+        // Another common pattern
+        dashboardContent = response.data.data
+      }
+    }
+    
+    dashboardData.value = {
+      data: dashboardContent
+    }
     
     // Extract admin name from auth store or response
-    adminName.value = authStore.user?.username || 'Head Nurse'
+    adminName.value = authStore.user?.username || authStore.user?.name || 'Head Nurse'
     
     // Initialize charts after data is loaded
     setTimeout(() => {
@@ -689,15 +757,21 @@ const fetchDashboardData = async () => {
   } catch (err) {
     console.error('Failed to fetch dashboard data:', err)
     error.value = 'Failed to load dashboard data. Please try again.'
+    
+    // Set default data on error
+    dashboardData.value = {
+      data: { ...defaultDashboardData }
+    }
   } finally {
     loading.value = false
   }
 }
 
 const initMonthlyChart = () => {
-  if (!monthlyChart.value || !dashboardData.value) return
+  if (!monthlyChart.value) return
   
-  const monthlyStats = dashboardData.value.data.monthly_statistics || []
+  const data = safeGetData()
+  const monthlyStats = data.monthly_statistics || []
   
   // Destroy existing chart instance
   if (monthlyChartInstance) {
@@ -712,7 +786,7 @@ const initMonthlyChart = () => {
       datasets: [
         {
           label: 'Completed',
-          data: monthlyStats.map(s => s.completed).reverse(),
+          data: monthlyStats.map(s => parseInt(s.completed) || 0).reverse(),
           backgroundColor: 'rgba(76, 175, 80, 0.2)',
           borderColor: '#4caf50',
           borderWidth: 2,
@@ -720,7 +794,7 @@ const initMonthlyChart = () => {
         },
         {
           label: 'Cancelled',
-          data: monthlyStats.map(s => s.cancelled).reverse(),
+          data: monthlyStats.map(s => parseInt(s.cancelled) || 0).reverse(),
           backgroundColor: 'rgba(244, 67, 54, 0.2)',
           borderColor: '#f44336',
           borderWidth: 2,
@@ -728,7 +802,7 @@ const initMonthlyChart = () => {
         },
         {
           label: 'No Show',
-          data: monthlyStats.map(s => s.no_show).reverse(),
+          data: monthlyStats.map(s => parseInt(s.no_show) || 0).reverse(),
           backgroundColor: 'rgba(255, 152, 0, 0.2)',
           borderColor: '#ff9800',
           borderWidth: 2,
@@ -757,9 +831,10 @@ const initMonthlyChart = () => {
 }
 
 const initHivChart = () => {
-  if (!hivChart.value || !dashboardData.value) return
+  if (!hivChart.value) return
   
-  const statuses = dashboardData.value.data.overview.patients_by_status || []
+  const data = safeGetData()
+  const statuses = data.overview?.patients_by_status || []
   
   // Destroy existing chart instance
   if (hivChartInstance) {
@@ -832,10 +907,12 @@ const formatWaitingTime = (minutes) => {
 }
 
 const formatTime = (datetime) => {
+  if (!datetime) return 'N/A'
   return format(new Date(datetime), 'hh:mm a')
 }
 
 const formatRelativeTime = (date) => {
+  if (!date) return 'Unknown'
   return formatDistanceToNow(new Date(date), { addSuffix: true })
 }
 
@@ -880,14 +957,19 @@ watch(chartType, () => {
 onMounted(() => {
   fetchDashboardData()
   updateTime()
-  const timer = setInterval(updateTime, 1000)
-  
-  // Cleanup on unmount
-  onBeforeUnmount(() => {
-    clearInterval(timer)
-    if (monthlyChartInstance) monthlyChartInstance.destroy()
-    if (hivChartInstance) hivChartInstance.destroy()
-  })
+  timeInterval = setInterval(updateTime, 1000)
+})
+
+onBeforeUnmount(() => {
+  if (timeInterval) {
+    clearInterval(timeInterval)
+  }
+  if (monthlyChartInstance) {
+    monthlyChartInstance.destroy()
+  }
+  if (hivChartInstance) {
+    hivChartInstance.destroy()
+  }
 })
 </script>
 

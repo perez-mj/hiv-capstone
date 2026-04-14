@@ -1,8 +1,8 @@
+// backend/controllers/appointmentController.js
 const Appointment = require('../models/Appointment');
 const AppointmentType = require('../models/AppointmentType');
 const Patient = require('../models/Patient');
 const Queue = require('../models/Queue');
-const AuditLog = require('../models/AuditLog');
 const { generateAppointmentNumber } = require('../utils/helpers');
 const { 
   sendSuccess, 
@@ -12,6 +12,7 @@ const {
   sendPaginated,
   sendServerError 
 } = require('../utils/responseHandler');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 /**
  * Convert UTC datetime to Philippines timezone (UTC+8)
@@ -262,18 +263,24 @@ const appointmentController = {
       // Get created appointment
       const newAppointment = await Appointment.findById(appointmentId);
 
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'INSERT',
-        table_name: 'appointments',
-        record_id: appointmentId,
-        patient_id: patient_id,
-        new_values: newAppointment,
-        description: `Created appointment for ${patient.first_name} ${patient.last_name} at ${phDateTime}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CREATE',
+        'appointments',
+        appointmentId,
+        patient_id,
+        null,
+        newAppointment,
+        `Created appointment ${appointmentNumber} for patient ${patient.first_name} ${patient.last_name} at ${phDateTime}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store appointment snapshot on blockchain
+      blockchainAuditService.storeAppointmentSnapshot(
+        newAppointment,
+        'CREATE',
+        req
+      ).catch(err => console.error('Appointment snapshot storage failed:', err));
 
       return sendCreated(res, 'Appointment created successfully', newAppointment);
     } catch (error) {
@@ -283,96 +290,121 @@ const appointmentController = {
   },
 
   // Update appointment
-async updateAppointment(req, res, next) {
-  try {
-    const existing = await Appointment.findById(req.params.id);
-    if (!existing) {
-      return sendNotFound(res, 'Appointment not found');
-    }
-
-    // Extract only allowed fields for update (exclude patient_id)
-    const {
-      appointment_type_id,
-      scheduled_at,
-      notes,
-      status
-    } = req.body;
-
-    // Remove patient_id if it exists in the request body
-    // This prevents changing the patient for an existing appointment
-    let updateData = {};
-    
-    if (appointment_type_id !== undefined) {
-      updateData.appointment_type_id = appointment_type_id;
-    }
-    
-    if (scheduled_at !== undefined) {
-      // Convert to PH time if provided
-      let phDateTime = scheduled_at;
-      if (scheduled_at && typeof scheduled_at === 'string') {
-        // Check if it's UTC format
-        if (scheduled_at.includes('Z') || scheduled_at.includes('T')) {
-          phDateTime = convertUTCToPH(scheduled_at);
-          console.log('Update - Original UTC:', scheduled_at, '-> PH:', phDateTime);
-        } else {
-          phDateTime = scheduled_at;
-        }
+  async updateAppointment(req, res, next) {
+    try {
+      const existing = await Appointment.findById(req.params.id);
+      if (!existing) {
+        return sendNotFound(res, 'Appointment not found');
       }
-      updateData.scheduled_at = phDateTime;
+
+      // Extract only allowed fields for update (exclude patient_id)
+      const {
+        appointment_type_id,
+        scheduled_at,
+        notes,
+        status
+      } = req.body;
+
+      // Remove patient_id if it exists in the request body
+      // This prevents changing the patient for an existing appointment
+      let updateData = {};
+      
+      if (appointment_type_id !== undefined) {
+        updateData.appointment_type_id = appointment_type_id;
+      }
+      
+      if (scheduled_at !== undefined) {
+        // Convert to PH time if provided
+        let phDateTime = scheduled_at;
+        if (scheduled_at && typeof scheduled_at === 'string') {
+          // Check if it's UTC format
+          if (scheduled_at.includes('Z') || scheduled_at.includes('T')) {
+            phDateTime = convertUTCToPH(scheduled_at);
+            console.log('Update - Original UTC:', scheduled_at, '-> PH:', phDateTime);
+          } else {
+            phDateTime = scheduled_at;
+          }
+        }
+        updateData.scheduled_at = phDateTime;
+      }
+      
+      if (notes !== undefined) {
+        updateData.notes = notes;
+      }
+      
+      if (status !== undefined) {
+        updateData.status = status;
+      }
+
+      // If no valid fields to update
+      if (Object.keys(updateData).length === 0) {
+        return sendBadRequest(res, 'No valid fields to update');
+      }
+
+      // If status is being changed to cancelled/no-show and there's a queue entry, update it
+      if (status && ['CANCELLED', 'NO_SHOW'].includes(status)) {
+        await Queue.updateStatusByAppointment(req.params.id, 'SKIPPED');
+      }
+
+      // If status is being changed to completed, update queue
+      if (status === 'COMPLETED') {
+        await Queue.updateStatusByAppointment(req.params.id, 'COMPLETED', { completed_at: new Date() });
+      }
+
+      // Update appointment
+      const updated = await Appointment.update(req.params.id, updateData);
+
+      if (!updated) {
+        return sendBadRequest(res, 'No changes made');
+      }
+
+      const updatedAppointment = await Appointment.findById(req.params.id);
+
+      // Track changes for blockchain
+      const changedFields = {};
+      if (appointment_type_id !== undefined && appointment_type_id !== existing.appointment_type_id) {
+        changedFields.appointment_type_id = { old: existing.appointment_type_id, new: appointment_type_id };
+      }
+      if (scheduled_at !== undefined && scheduled_at !== existing.scheduled_at) {
+        changedFields.scheduled_at = { old: existing.scheduled_at, new: scheduled_at };
+      }
+      if (status !== undefined && status !== existing.status) {
+        changedFields.status = { old: existing.status, new: status };
+      }
+      if (notes !== undefined && notes !== existing.notes) {
+        changedFields.notes = { old: existing.notes, new: notes };
+      }
+
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE',
+        'appointments',
+        req.params.id,
+        existing.patient_id,
+        existing,
+        updatedAppointment,
+        `Updated appointment ${existing.appointment_number} - Changes: ${Object.keys(changedFields).join(', ')}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store appointment snapshot on blockchain for significant changes
+      const significantChanges = ['status', 'scheduled_at', 'appointment_type_id'];
+      const hasSignificantChanges = Object.keys(changedFields).some(field => significantChanges.includes(field));
+      
+      if (hasSignificantChanges) {
+        blockchainAuditService.storeAppointmentSnapshot(
+          updatedAppointment,
+          'UPDATE',
+          req
+        ).catch(err => console.error('Appointment snapshot storage failed:', err));
+      }
+
+      return sendSuccess(res, 'Appointment updated successfully', updatedAppointment);
+    } catch (error) {
+      console.error('Error in updateAppointment:', error);
+      next(error);
     }
-    
-    if (notes !== undefined) {
-      updateData.notes = notes;
-    }
-    
-    if (status !== undefined) {
-      updateData.status = status;
-    }
-
-    // If no valid fields to update
-    if (Object.keys(updateData).length === 0) {
-      return sendBadRequest(res, 'No valid fields to update');
-    }
-
-    // If status is being changed to cancelled/no-show and there's a queue entry, update it
-    if (status && ['CANCELLED', 'NO_SHOW'].includes(status)) {
-      await Queue.updateStatusByAppointment(req.params.id, 'SKIPPED');
-    }
-
-    // If status is being changed to completed, update queue
-    if (status === 'COMPLETED') {
-      await Queue.updateStatusByAppointment(req.params.id, 'COMPLETED', { completed_at: new Date() });
-    }
-
-    // Update appointment
-    const updated = await Appointment.update(req.params.id, updateData);
-
-    if (!updated) {
-      return sendBadRequest(res, 'No changes made');
-    }
-
-    const updatedAppointment = await Appointment.findById(req.params.id);
-
-    // Log audit
-    await AuditLog.log({
-      user_id: req.user.id,
-      action_type: 'UPDATE',
-      table_name: 'appointments',
-      record_id: req.params.id,
-      patient_id: existing.patient_id,
-      old_values: existing,
-      new_values: updatedAppointment,
-      description: 'Updated appointment',
-      ip_address: req.ip,
-      user_agent: req.get('user-agent')
-    });
-
-    return sendSuccess(res, 'Appointment updated successfully', updatedAppointment);
-  } catch (error) {
-    console.error('Error in updateAppointment:', error);
-    next(error);
-  }
-},
+  },
 
   // Update appointment status
   async updateAppointmentStatus(req, res, next) {
@@ -417,19 +449,24 @@ async updateAppointment(req, res, next) {
 
       const updatedAppointment = await Appointment.findById(req.params.id);
 
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE_STATUS',
-        table_name: 'appointments',
-        record_id: req.params.id,
-        patient_id: existing.patient_id,
-        old_values: { status: existing.status },
-        new_values: { status: updatedAppointment.status },
-        description: `Changed appointment status from ${existing.status} to ${status}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'STATUS_CHANGE',
+        'appointments',
+        req.params.id,
+        existing.patient_id,
+        { status: existing.status },
+        { status: status },
+        `Changed appointment ${existing.appointment_number} status from ${existing.status} to ${status}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store appointment snapshot on blockchain for status change
+      blockchainAuditService.storeAppointmentSnapshot(
+        updatedAppointment,
+        'STATUS_CHANGE',
+        req
+      ).catch(err => console.error('Appointment snapshot storage failed:', err));
 
       return sendSuccess(res, 'Appointment status updated successfully', updatedAppointment);
     } catch (error) {
@@ -453,18 +490,24 @@ async updateAppointment(req, res, next) {
         return sendBadRequest(res, 'Cannot delete appointment with lab results');
       }
 
-      // Log audit before deletion
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'DELETE',
-        table_name: 'appointments',
-        record_id: req.params.id,
-        patient_id: appointment.patient_id,
-        old_values: appointment,
-        description: `Deleted appointment ${appointment.appointment_number}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'DELETE',
+        'appointments',
+        req.params.id,
+        appointment.patient_id,
+        appointment,
+        null,
+        `Deleted appointment ${appointment.appointment_number}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store deletion record on blockchain
+      blockchainAuditService.storeAppointmentSnapshot(
+        appointment,
+        'DELETE',
+        req
+      ).catch(err => console.error('Appointment snapshot storage failed:', err));
 
       // Delete queue entry if exists
       await Queue.deleteByAppointment(req.params.id);

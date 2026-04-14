@@ -2,8 +2,8 @@
 const Queue = require('../models/Queue');
 const Appointment = require('../models/Appointment');
 const Patient = require('../models/Patient');
-const AuditLog = require('../models/AuditLog');
 const { sendResponse } = require('../utils/responseHandler');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const queueController = {
   // Get queue display board (public)
@@ -226,18 +226,17 @@ const queueController = {
       
       const newQueue = await Queue.findById(queueId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'CONFIRM_AND_ADD_TO_QUEUE',
-        table_name: 'queue',
-        record_id: queueId,
-        patient_id: appointment.patient_id,
-        old_values: { status: appointment.status },
-        new_values: { status: 'CONFIRMED', queue_number: queueNumber, queue_code: queueCode },
-        description: `Confirmed appointment and added to queue (${queueCode})`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CONFIRM_AND_ADD_TO_QUEUE',
+        'queue',
+        queueId,
+        appointment.patient_id,
+        { status: appointment.status },
+        { status: 'CONFIRMED', queue_number: queueNumber, queue_code: queueCode },
+        `Confirmed appointment and added to queue (${queueCode})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 201, 'Appointment confirmed and added to queue successfully', {
         appointment: {
@@ -304,17 +303,17 @@ const queueController = {
       
       const newQueue = await Queue.findById(queueId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'WALKIN_ADD',
-        table_name: 'queue',
-        record_id: queueId,
-        patient_id: patient_id,
-        new_values: newQueue,
-        description: `Added walk-in patient ${patient.first_name} ${patient.last_name} to queue (${queueCode})`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'WALKIN_ADD',
+        'queue',
+        queueId,
+        patient_id,
+        null,
+        newQueue,
+        `Added walk-in patient ${patient.first_name} ${patient.last_name} (${patient.patient_facility_code}) to queue (${queueCode})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 201, 'Walk-in patient added to queue successfully', newQueue);
     } catch (error) {
@@ -354,18 +353,17 @@ const queueController = {
       
       const updated = await Queue.findById(queueEntry.id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: id === 'next' ? 'CALL_NEXT' : 'CALL',
-        table_name: 'queue',
-        record_id: queueEntry.id,
-        patient_id: queueEntry.patient_id,
-        old_values: { status: 'WAITING' },
-        new_values: { status: 'CALLED' },
-        description: `Called patient ${updated.queue_code}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        id === 'next' ? 'CALL_NEXT' : 'CALL',
+        'queue',
+        queueEntry.id,
+        queueEntry.patient_id,
+        { status: 'WAITING' },
+        { status: 'CALLED' },
+        `Called patient ${updated.queue_code} (${updated.patient_first_name} ${updated.patient_last_name})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Patient called successfully', updated);
     } catch (error) {
@@ -394,18 +392,17 @@ const queueController = {
       
       const updated = await Queue.findById(id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'START_SERVING',
-        table_name: 'queue',
-        record_id: id,
-        patient_id: queueEntry.patient_id,
-        old_values: { status: 'CALLED' },
-        new_values: { status: 'SERVING' },
-        description: `Started serving patient ${updated.queue_code}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'START_SERVING',
+        'queue',
+        id,
+        queueEntry.patient_id,
+        { status: 'CALLED' },
+        { status: 'SERVING' },
+        `Started serving patient ${updated.queue_code}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Started serving patient', updated);
     } catch (error) {
@@ -436,18 +433,17 @@ const queueController = {
       
       const updated = await Queue.findById(id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'COMPLETE_SERVICE',
-        table_name: 'queue',
-        record_id: id,
-        patient_id: queueEntry.patient_id,
-        old_values: { status: 'SERVING' },
-        new_values: { status: 'COMPLETED' },
-        description: `Completed service for patient ${updated.queue_code}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'COMPLETE_SERVICE',
+        'queue',
+        id,
+        queueEntry.patient_id,
+        { status: 'SERVING' },
+        { status: 'COMPLETED' },
+        `Completed service for patient ${updated.queue_code}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Service completed successfully', updated);
     } catch (error) {
@@ -473,18 +469,17 @@ const queueController = {
       await Queue.updateStatus(id, 'SKIPPED', { updated_by: req.user.id });
       await Appointment.updateStatus(queueEntry.appointment_id, 'SCHEDULED', req.user.id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'SKIP',
-        table_name: 'queue',
-        record_id: id,
-        patient_id: queueEntry.patient_id,
-        old_values: { status: queueEntry.status },
-        new_values: { status: 'SKIPPED' },
-        description: `Skipped patient ${queueEntry.queue_code}${reason ? ': ' + reason : ''}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'SKIP',
+        'queue',
+        id,
+        queueEntry.patient_id,
+        { status: queueEntry.status },
+        { status: 'SKIPPED' },
+        `Skipped patient ${queueEntry.queue_code}${reason ? ': ' + reason : ''}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Patient skipped successfully', {
         id: queueEntry.id,
@@ -511,18 +506,17 @@ const queueController = {
       const oldPriority = queueEntry.priority;
       await Queue.updatePriority(queue_id, priority, req.user.id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE_PRIORITY',
-        table_name: 'queue',
-        record_id: queue_id,
-        patient_id: queueEntry.patient_id,
-        old_values: { priority: oldPriority },
-        new_values: { priority },
-        description: `Updated queue priority from ${oldPriority} to ${priority} for ${queueEntry.queue_code}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE_PRIORITY',
+        'queue',
+        queue_id,
+        queueEntry.patient_id,
+        { priority: oldPriority },
+        { priority: priority },
+        `Updated queue priority from ${oldPriority} to ${priority} for ${queueEntry.queue_code}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Queue priority updated successfully');
     } catch (error) {
@@ -542,19 +536,18 @@ const queueController = {
         return sendResponse(res, 404, 'No queue entries found to reset');
       }
       
-      // Log audit for each entry
+      // Log blockchain audit for each entry
       for (const entry of queueEntries) {
-        await AuditLog.log({
-          user_id: req.user.id,
-          action_type: 'DELETE',
-          table_name: 'queue',
-          record_id: entry.id,
-          patient_id: entry.patient_id,
-          old_values: entry,
-          description: `Reset queue entry (${entry.queue_code}) for patient ${entry.first_name} ${entry.last_name}`,
-          ip_address: req.ip,
-          user_agent: req.get('user-agent')
-        });
+        blockchainAuditService.logAction(
+          'DELETE',
+          'queue',
+          entry.id,
+          entry.patient_id,
+          entry,
+          null,
+          `Reset queue entry (${entry.queue_code}) for patient ${entry.first_name} ${entry.last_name}`,
+          req
+        ).catch(err => console.error('Blockchain audit log failed:', err));
       }
       
       // Update appointments status back to SCHEDULED

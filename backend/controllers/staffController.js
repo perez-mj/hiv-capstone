@@ -1,9 +1,9 @@
 // backend/controllers/staffController.js
 const Staff = require('../models/Staff');
 const User = require('../models/User');
-const AuditLog = require('../models/AuditLog');
 const { sendResponse } = require('../utils/responseHandler');
 const bcrypt = require('bcryptjs');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 // Helper functions
 const generateUsername = (firstName, lastName) => {
@@ -25,27 +25,27 @@ const generateRandomPassword = (length = 10) => {
 const staffController = {
   // Get all staff members
   async getAllStaff(req, res, next) {
-  try {
-    const { page = 1, limit = 100, search, position } = req.query;
-    const offset = (page - 1) * limit;
-    
-    const filters = { search, position };
-    const staff = await Staff.findAll(filters, { limit, offset });
-    const total = await Staff.count(filters);
-    
-    // Return data directly, not nested
-    sendResponse(res, 200, 'Staff members retrieved successfully', staff, {
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        total_pages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-},
+    try {
+      const { page = 1, limit = 100, search, position } = req.query;
+      const offset = (page - 1) * limit;
+      
+      const filters = { search, position };
+      const staff = await Staff.findAll(filters, { limit, offset });
+      const total = await Staff.count(filters);
+      
+      // Return data directly, not nested
+      sendResponse(res, 200, 'Staff members retrieved successfully', staff, {
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          total_pages: Math.ceil(total / limit)
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
 
   // Get staff statistics
   async getStatistics(req, res, next) {
@@ -119,16 +119,17 @@ const staffController = {
       
       const newStaff = await Staff.findById(staffId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'STAFF_CREATED_WITH_USER',
-        table_name: 'staff',
-        record_id: staffId,
-        new_values: newStaff,
-        description: `Staff member ${first_name} ${last_name} created with user account`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'STAFF_CREATED_WITH_USER',
+        'staff',
+        staffId,
+        null, // No patient_id for staff
+        null,
+        newStaff,
+        `Staff member ${first_name} ${last_name} created with user account (Role: ${finalRole})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       const response = {
         success: true,
@@ -178,16 +179,17 @@ const staffController = {
       
       const newStaff = await Staff.findById(staffId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'STAFF_CREATED',
-        table_name: 'staff',
-        record_id: staffId,
-        new_values: newStaff,
-        description: `Staff member ${first_name} ${last_name} created`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'STAFF_CREATED',
+        'staff',
+        staffId,
+        null,
+        null,
+        newStaff,
+        `Staff member ${first_name} ${last_name} created${user_id ? ` (linked to user ID: ${user_id})` : ''}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 201, 'Staff member created successfully', newStaff);
     } catch (error) {
@@ -234,17 +236,35 @@ const staffController = {
       
       const updatedStaff = await Staff.findById(id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'STAFF_UPDATED',
-        table_name: 'staff',
-        record_id: id,
-        old_values: existingStaff,
-        new_values: updatedStaff,
-        description: `Staff member ${existingStaff.first_name} ${existingStaff.last_name} updated`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Track changes for blockchain
+      const changedFields = {};
+      if (first_name !== undefined && first_name !== existingStaff.first_name) {
+        changedFields.first_name = { old: existingStaff.first_name, new: first_name };
+      }
+      if (last_name !== undefined && last_name !== existingStaff.last_name) {
+        changedFields.last_name = { old: existingStaff.last_name, new: last_name };
+      }
+      if (position !== undefined && position !== existingStaff.position) {
+        changedFields.position = { old: existingStaff.position, new: position };
+      }
+      if (user_id !== undefined && user_id !== existingStaff.user_id) {
+        changedFields.user_id = { old: existingStaff.user_id, new: user_id };
+      }
+      if (contact_number !== undefined && contact_number !== existingStaff.contact_number) {
+        changedFields.contact_number = { old: existingStaff.contact_number, new: contact_number };
+      }
+      
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'STAFF_UPDATED',
+        'staff',
+        id,
+        null,
+        existingStaff,
+        updatedStaff,
+        `Staff member ${existingStaff.first_name} ${existingStaff.last_name} updated - Changes: ${Object.keys(changedFields).join(', ')}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Staff member updated successfully', updatedStaff);
     } catch (error) {
@@ -267,16 +287,17 @@ const staffController = {
         return sendResponse(res, 400, 'Cannot delete staff member with existing clinical encounters');
       }
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'STAFF_DELETED',
-        table_name: 'staff',
-        record_id: id,
-        old_values: existingStaff,
-        description: `Staff member ${existingStaff.first_name} ${existingStaff.last_name} deleted`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'STAFF_DELETED',
+        'staff',
+        id,
+        null,
+        existingStaff,
+        null,
+        `Staff member ${existingStaff.first_name} ${existingStaff.last_name} deleted (Position: ${existingStaff.position || 'N/A'})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       await Staff.delete(id);
       

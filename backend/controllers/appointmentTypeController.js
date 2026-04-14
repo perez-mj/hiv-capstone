@@ -1,7 +1,7 @@
 // backend/controllers/appointmentTypeController.js
 const AppointmentType = require('../models/AppointmentType');
-const AuditLog = require('../models/AuditLog');
 const { sendSuccess, sendCreated, sendNotFound, sendBadRequest } = require('../utils/responseHandler');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const appointmentTypeController = {
   // Get all appointment types
@@ -33,17 +33,17 @@ const appointmentTypeController = {
       
       const newType = await AppointmentType.findById(typeId);
       
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'INSERT',
-        table_name: 'appointment_types',
-        record_id: typeId,
-        new_values: newType,
-        description: `Created appointment type: ${type_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CREATE',
+        'appointment_types',
+        typeId,
+        null, // No patient_id for appointment types
+        null,
+        newType,
+        `Created appointment type: ${type_name} (Duration: ${duration_minutes || 30} mins)`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       return sendCreated(res, 'Appointment type created successfully', newType);
     } catch (error) {
@@ -84,18 +84,32 @@ const appointmentTypeController = {
       
       const updatedType = await AppointmentType.findById(id);
       
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE',
-        table_name: 'appointment_types',
-        record_id: id,
-        old_values: existing,
-        new_values: updatedType,
-        description: `Updated appointment type: ${updatedType.type_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Track changes for blockchain
+      const changedFields = {};
+      if (type_name !== undefined && type_name !== existing.type_name) {
+        changedFields.type_name = { old: existing.type_name, new: type_name };
+      }
+      if (description !== undefined && description !== existing.description) {
+        changedFields.description = { old: existing.description, new: description };
+      }
+      if (duration_minutes !== undefined && duration_minutes !== existing.duration_minutes) {
+        changedFields.duration_minutes = { old: existing.duration_minutes, new: duration_minutes };
+      }
+      if (is_active !== undefined && is_active !== existing.is_active) {
+        changedFields.is_active = { old: existing.is_active, new: is_active };
+      }
+      
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE',
+        'appointment_types',
+        id,
+        null,
+        existing,
+        updatedType,
+        `Updated appointment type: ${updatedType.type_name} - Changes: ${Object.keys(changedFields).join(', ')}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       return sendSuccess(res, 'Appointment type updated successfully', updatedType);
     } catch (error) {
@@ -119,17 +133,17 @@ const appointmentTypeController = {
         return sendBadRequest(res, 'Cannot delete appointment type that is in use');
       }
       
-      // Log audit
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'DELETE',
-        table_name: 'appointment_types',
-        record_id: id,
-        old_values: existing,
-        description: `Deleted appointment type: ${existing.type_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'DELETE',
+        'appointment_types',
+        id,
+        null,
+        existing,
+        null,
+        `Deleted appointment type: ${existing.type_name} (ID: ${id})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       await AppointmentType.delete(id);
       

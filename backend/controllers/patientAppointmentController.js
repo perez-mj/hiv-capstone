@@ -3,71 +3,71 @@ const Patient = require('../models/Patient');
 const Appointment = require('../models/Appointment');
 const AppointmentType = require('../models/AppointmentType');
 const Queue = require('../models/Queue');
-const AuditLog = require('../models/AuditLog');
 const { generateAppointmentNumber } = require('../utils/helpers');
 const { sendSuccess, sendCreated, sendNotFound, sendBadRequest, sendPaginated } = require('../utils/responseHandler');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const patientAppointmentController = {
   async getPatientAppointments(req, res, next) {
-  try {
-    const patientId = req.params.id;
-    const { page = 1, limit = 100, status } = req.query;
-    const offset = (page - 1) * limit;
-    
-    const patient = await Patient.findById(patientId);
-    if (!patient) {
-      return sendNotFound(res, 'Patient not found');
+    try {
+      const patientId = req.params.id;
+      const { page = 1, limit = 100, status } = req.query;
+      const offset = (page - 1) * limit;
+      
+      const patient = await Patient.findById(patientId);
+      if (!patient) {
+        return sendNotFound(res, 'Patient not found');
+      }
+      
+      const filters = { patient_id: patientId, status };
+      const appointments = await Appointment.findAll(filters, { limit, offset });
+      const total = await Appointment.count(filters);
+      
+      // FIX: Ensure appointments is an array
+      const safeAppointments = Array.isArray(appointments) ? appointments : [];
+      
+      sendPaginated(res, safeAppointments, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total || 0,
+        total_pages: Math.ceil((total || 0) / parseInt(limit))
+      }, 'Patient appointments retrieved successfully');
+    } catch (error) {
+      next(error);
     }
-    
-    const filters = { patient_id: patientId, status };
-    const appointments = await Appointment.findAll(filters, { limit, offset });
-    const total = await Appointment.count(filters);
-    
-    // FIX: Ensure appointments is an array
-    const safeAppointments = Array.isArray(appointments) ? appointments : [];
-    
-    sendPaginated(res, safeAppointments, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      total: total || 0,
-      total_pages: Math.ceil((total || 0) / parseInt(limit))
-    }, 'Patient appointments retrieved successfully');
-  } catch (error) {
-    next(error);
-  }
-},
+  },
 
-async getMyHistory(req, res, next) {
-  try {
-    const { page = 1, limit = 100 } = req.query;
-    const offset = (page - 1) * limit;
-    
-    const patient = await Patient.findByUserId(req.user.id);
-    if (!patient) {
-      return sendNotFound(res, 'Patient record not found');
+  async getMyHistory(req, res, next) {
+    try {
+      const { page = 1, limit = 100 } = req.query;
+      const offset = (page - 1) * limit;
+      
+      const patient = await Patient.findByUserId(req.user.id);
+      if (!patient) {
+        return sendNotFound(res, 'Patient record not found');
+      }
+      
+      const filters = { 
+        patient_id: patient.id,
+        status: ['COMPLETED', 'CANCELLED', 'NO_SHOW']
+      };
+      
+      const appointments = await Appointment.findAll(filters, { limit, offset });
+      const total = await Appointment.count(filters);
+      
+      // FIX: Ensure appointments is an array
+      const safeAppointments = Array.isArray(appointments) ? appointments : [];
+      
+      sendPaginated(res, safeAppointments, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total || 0,
+        total_pages: Math.ceil((total || 0) / parseInt(limit))
+      }, 'Appointment history retrieved successfully');
+    } catch (error) {
+      next(error);
     }
-    
-    const filters = { 
-      patient_id: patient.id,
-      status: ['COMPLETED', 'CANCELLED', 'NO_SHOW']
-    };
-    
-    const appointments = await Appointment.findAll(filters, { limit, offset });
-    const total = await Appointment.count(filters);
-    
-    // FIX: Ensure appointments is an array
-    const safeAppointments = Array.isArray(appointments) ? appointments : [];
-    
-    sendPaginated(res, safeAppointments, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      total: total || 0,
-      total_pages: Math.ceil((total || 0) / parseInt(limit))
-    }, 'Appointment history retrieved successfully');
-  } catch (error) {
-    next(error);
-  }
-},
+  },
   
   async getPatientLabResults(req, res, next) {
     try {
@@ -234,17 +234,24 @@ async getMyHistory(req, res, next) {
       await Queue.createForAppointment(appointmentId);
       const newAppointment = await Appointment.findById(appointmentId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'INSERT',
-        table_name: 'appointments',
-        record_id: appointmentId,
-        patient_id: patient.id,
-        new_values: newAppointment,
-        description: `Patient ${patient.first_name} ${patient.last_name} booked an appointment`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'BOOK_APPOINTMENT',
+        'appointments',
+        appointmentId,
+        patient.id,
+        null,
+        newAppointment,
+        `Patient ${patient.first_name} ${patient.last_name} (${patient.patient_facility_code}) booked appointment ${appointmentNumber}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      // Store appointment snapshot on blockchain for patient self-booking
+      blockchainAuditService.storeAppointmentSnapshot(
+        newAppointment,
+        'PATIENT_BOOKED',
+        req
+      ).catch(err => console.error('Appointment snapshot storage failed:', err));
       
       sendCreated(res, 'Appointment booked successfully', newAppointment);
     } catch (error) {
@@ -291,18 +298,24 @@ async getMyHistory(req, res, next) {
       
       const updatedAppointment = await Appointment.findById(appointmentId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE_STATUS',
-        table_name: 'appointments',
-        record_id: appointmentId,
-        patient_id: patient.id,
-        old_values: { status: appointment.status },
-        new_values: { status: 'CANCELLED' },
-        description: `Patient cancelled appointment ${appointment.appointment_number}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CANCEL_APPOINTMENT',
+        'appointments',
+        appointmentId,
+        patient.id,
+        { status: appointment.status, scheduled_at: appointment.scheduled_at },
+        { status: 'CANCELLED', cancelled_by_patient: true },
+        `Patient ${patient.first_name} ${patient.last_name} cancelled appointment ${appointment.appointment_number} (${hoursUntil.toFixed(1)} hours before scheduled time)`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      // Store appointment snapshot for patient cancellation
+      blockchainAuditService.storeAppointmentSnapshot(
+        updatedAppointment,
+        'PATIENT_CANCELLED',
+        req
+      ).catch(err => console.error('Appointment snapshot storage failed:', err));
       
       sendSuccess(res, 'Appointment cancelled successfully', updatedAppointment);
     } catch (error) {

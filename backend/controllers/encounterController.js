@@ -2,9 +2,9 @@
 const Encounter = require('../models/Encounter');
 const Patient = require('../models/Patient');
 const Staff = require('../models/Staff');
-const AuditLog = require('../models/AuditLog');
 const { sendSuccess, sendCreated, sendNotFound, sendBadRequest, sendPaginated } = require('../utils/responseHandler');
 const { calculateAgeAtDate } = require('../utils/helpers');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const encounterController = {
   // Get all encounters with filters
@@ -194,17 +194,35 @@ const encounterController = {
 
       const newEncounter = await Encounter.findById(encounterId);
 
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'INSERT',
-        table_name: 'clinical_encounters',
-        record_id: encounterId,
-        patient_id: patient_id,
-        new_values: newEncounter,
-        description: `Created ${type} encounter for ${patient.first_name} ${patient.last_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CREATE',
+        'clinical_encounters',
+        encounterId,
+        patient_id,
+        null,
+        newEncounter,
+        `Created ${type} encounter for patient ${patient.first_name} ${patient.last_name} with Dr./Staff ${staff.first_name} ${staff.last_name}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store patient record snapshot for encounter (important medical event)
+      blockchainAuditService.storePatientRecord(
+        patient_id,
+        'CLINICAL_ENCOUNTER',
+        {
+          action: 'ENCOUNTER_CREATED',
+          patient_id: patient_id,
+          encounter_id: encounterId,
+          encounter_type: type,
+          encounter_date: encounter_date,
+          staff_name: `${staff.first_name} ${staff.last_name}`,
+          notes_summary: notes ? notes.substring(0, 200) : null,
+          timestamp: new Date().toISOString(),
+          created_by: req.user.username || 'system'
+        },
+        req
+      ).catch(err => console.error('Patient record storage failed:', err));
 
       sendCreated(res, 'Clinical encounter created successfully', newEncounter);
     } catch (error) {
@@ -240,18 +258,46 @@ const encounterController = {
 
       const updatedEncounter = await Encounter.findById(req.params.id);
 
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE',
-        table_name: 'clinical_encounters',
-        record_id: req.params.id,
-        patient_id: existing.patient_id,
-        old_values: existing,
-        new_values: updatedEncounter,
-        description: 'Updated clinical encounter',
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Track changes for blockchain
+      const changedFields = {};
+      if (encounter_date !== undefined && encounter_date !== existing.encounter_date) {
+        changedFields.encounter_date = { old: existing.encounter_date, new: encounter_date };
+      }
+      if (type !== undefined && type !== existing.type) {
+        changedFields.type = { old: existing.type, new: type };
+      }
+      if (notes !== undefined && notes !== existing.notes) {
+        changedFields.notes = { old: existing.notes ? '[REDACTED]' : null, new: notes ? '[REDACTED]' : null };
+      }
+
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE',
+        'clinical_encounters',
+        req.params.id,
+        existing.patient_id,
+        existing,
+        updatedEncounter,
+        `Updated encounter ID ${req.params.id} - Changes: ${Object.keys(changedFields).join(', ')}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store patient record snapshot for significant encounter updates
+      if (Object.keys(changedFields).length > 0) {
+        blockchainAuditService.storePatientRecord(
+          existing.patient_id,
+          'ENCOUNTER_UPDATE',
+          {
+            action: 'ENCOUNTER_UPDATED',
+            patient_id: existing.patient_id,
+            encounter_id: req.params.id,
+            changed_fields: Object.keys(changedFields),
+            timestamp: new Date().toISOString(),
+            updated_by: req.user.username || 'system'
+          },
+          req
+        ).catch(err => console.error('Patient record storage failed:', err));
+      }
 
       sendSuccess(res, 'Encounter updated successfully', updatedEncounter);
     } catch (error) {
@@ -269,17 +315,34 @@ const encounterController = {
 
       const patient = await Patient.findById(encounter.patient_id);
 
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'DELETE',
-        table_name: 'clinical_encounters',
-        record_id: req.params.id,
-        patient_id: encounter.patient_id,
-        old_values: encounter,
-        description: `Deleted ${encounter.type} encounter for ${patient?.first_name} ${patient?.last_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'DELETE',
+        'clinical_encounters',
+        req.params.id,
+        encounter.patient_id,
+        encounter,
+        null,
+        `Deleted ${encounter.type} encounter for patient ${patient?.first_name} ${patient?.last_name}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+
+      // Store deletion record on blockchain
+      blockchainAuditService.storePatientRecord(
+        encounter.patient_id,
+        'ENCOUNTER_DELETION',
+        {
+          action: 'ENCOUNTER_DELETED',
+          patient_id: encounter.patient_id,
+          encounter_id: req.params.id,
+          encounter_type: encounter.type,
+          encounter_date: encounter.encounter_date,
+          deletion_reason: 'Manual deletion by staff',
+          deleted_by: req.user.username || 'system',
+          deletion_timestamp: new Date().toISOString()
+        },
+        req
+      ).catch(err => console.error('Patient record storage failed:', err));
 
       await Encounter.delete(req.params.id);
 

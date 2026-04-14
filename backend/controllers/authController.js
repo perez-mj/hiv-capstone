@@ -1,11 +1,11 @@
 // backend/controllers/authController.js
 const User = require('../models/User');
 const PasswordReset = require('../models/PasswordReset');
-const AuditLog = require('../models/AuditLog');
 const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../middleware/auth');
 const { comparePassword } = require('../utils/helpers');
 const { sendResponse } = require('../utils/responseHandler');
 const bcrypt = require('bcryptjs');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const authController = {
   // User login
@@ -38,16 +38,17 @@ const authController = {
       const token = generateToken(user);
       const refreshToken = generateRefreshToken(user);
       
-      // Log login
-      await AuditLog.log({
-        user_id: user.id,
-        action_type: 'LOGIN',
-        table_name: 'users',
-        record_id: user.id,
-        description: `User ${username} logged in`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'LOGIN',
+        'users',
+        user.id,
+        null, // No patient_id for user login
+        null,
+        { username: user.username, role: user.role, last_login: new Date().toISOString() },
+        `User ${username} (${user.role}) logged in successfully`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       // Remove sensitive data
       const { password_hash, ...userWithoutPassword } = user;
@@ -83,16 +84,17 @@ const authController = {
   // User logout
   async logout(req, res, next) {
     try {
-      // Log logout action
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'LOGOUT',
-        table_name: 'users',
-        record_id: req.user.id,
-        description: `User ${req.user.username} logged out`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'LOGOUT',
+        'users',
+        req.user.id,
+        null,
+        { username: req.user.username, role: req.user.role },
+        null,
+        `User ${req.user.username} (${req.user.role}) logged out`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Logout successful');
       
@@ -126,16 +128,17 @@ const authController = {
         return sendResponse(res, 401, 'Current password is incorrect or new password is same as old');
       }
       
-      // Log password change
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'PASSWORD_CHANGE',
-        table_name: 'users',
-        record_id: req.user.id,
-        description: `User ${req.user.username} changed their password`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'PASSWORD_CHANGE',
+        'users',
+        req.user.id,
+        null,
+        { username: req.user.username, action: 'password_change_request' },
+        { username: req.user.username, action: 'password_change_completed' },
+        `User ${req.user.username} changed their password`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Password changed successfully');
       
@@ -163,6 +166,18 @@ const authController = {
       // Generate new tokens
       const newToken = generateToken(user);
       const newRefreshToken = generateRefreshToken(user);
+      
+      // Blockchain audit logging for token refresh (non-blocking)
+      blockchainAuditService.logAction(
+        'REFRESH_TOKEN',
+        'users',
+        user.id,
+        null,
+        null,
+        { username: user.username, action: 'token_refresh' },
+        `User ${user.username} refreshed their authentication token`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Token refreshed successfully', {
         token: newToken,
@@ -204,16 +219,17 @@ const authController = {
       // In production, send email with reset link
       console.log(`Password reset token for ${user.username}: ${resetToken}`);
       
-      // Log password reset request
-      await AuditLog.log({
-        user_id: user.id,
-        action_type: 'PASSWORD_RESET_REQUEST',
-        table_name: 'users',
-        record_id: user.id,
-        description: `Password reset requested for ${user.username}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging for password reset request (non-blocking)
+      blockchainAuditService.logAction(
+        'PASSWORD_RESET_REQUEST',
+        'users',
+        user.id,
+        null,
+        { username: user.username, email: email },
+        { reset_token_generated: true, timestamp: new Date().toISOString() },
+        `Password reset requested for user ${user.username}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'If the email exists, a password reset link will be sent');
       
@@ -269,16 +285,17 @@ const authController = {
       // Mark token as used
       await PasswordReset.markAsUsed(token);
       
-      // Log password reset
-      await AuditLog.log({
-        user_id: user.id,
-        action_type: 'PASSWORD_RESET',
-        table_name: 'users',
-        record_id: user.id,
-        description: 'Password reset completed',
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging for password reset completion (non-blocking)
+      blockchainAuditService.logAction(
+        'PASSWORD_RESET_COMPLETE',
+        'users',
+        user.id,
+        null,
+        { username: user.username, action: 'password_reset_initiated' },
+        { username: user.username, action: 'password_reset_completed', timestamp: new Date().toISOString() },
+        `Password reset completed for user ${user.username}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendResponse(res, 200, 'Password reset successful');
       

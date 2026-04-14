@@ -1,43 +1,43 @@
 // backend/controllers/patientController.js
 const Patient = require('../models/Patient');
 const User = require('../models/User');
-const AuditLog = require('../models/AuditLog');
 const Encounter = require('../models/Encounter');
 const { generatePatientCode, hashPassword } = require('../utils/helpers');
 const { sendSuccess, sendCreated, sendNotFound, sendBadRequest, sendPaginated } = require('../utils/responseHandler');
 const { Parser } = require('json2csv');
+const blockchainAuditService = require('../services/blockchainAuditService');
 
 const patientController = {
   // Get all patients with pagination and filters
-async getAllPatients(req, res, next) {
-  try {
-    const { page = 1, limit = 100, search, hiv_status, sex, sort_by, sort_order } = req.query;
-    const offset = (page - 1) * limit;
-    
-    const filters = { search, hiv_status, sex, sort_by, sort_order };
-    const patients = await Patient.findAll(filters, { limit, offset });
-    const total = await Patient.count(filters);
-    
-    // FIX: Ensure patients is an array
-    const safePatients = Array.isArray(patients) ? patients : [];
-    
-    // Add additional data for each patient
-    for (const patient of safePatients) {
-      patient.latest_lab_results = await Patient.getLatestLabResults(patient.id);
-      patient.upcoming_appointments = await Patient.getUpcomingAppointments(patient.id);
-      patient.last_visit = await Encounter.getLastVisitDate(patient.id);
+  async getAllPatients(req, res, next) {
+    try {
+      const { page = 1, limit = 100, search, hiv_status, sex, sort_by, sort_order } = req.query;
+      const offset = (page - 1) * limit;
+      
+      const filters = { search, hiv_status, sex, sort_by, sort_order };
+      const patients = await Patient.findAll(filters, { limit, offset });
+      const total = await Patient.count(filters);
+      
+      // FIX: Ensure patients is an array
+      const safePatients = Array.isArray(patients) ? patients : [];
+      
+      // Add additional data for each patient
+      for (const patient of safePatients) {
+        patient.latest_lab_results = await Patient.getLatestLabResults(patient.id);
+        patient.upcoming_appointments = await Patient.getUpcomingAppointments(patient.id);
+        patient.last_visit = await Encounter.getLastVisitDate(patient.id);
+      }
+      
+      sendPaginated(res, safePatients, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: total || 0,
+        total_pages: Math.ceil((total || 0) / parseInt(limit))
+      }, 'Patients retrieved successfully');
+    } catch (error) {
+      next(error);
     }
-    
-    sendPaginated(res, safePatients, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      total: total || 0,
-      total_pages: Math.ceil((total || 0) / parseInt(limit))
-    }, 'Patients retrieved successfully');
-  } catch (error) {
-    next(error);
-  }
-},
+  },
   
   // Get current patient's own profile
   async getMyProfile(req, res, next) {
@@ -82,6 +82,8 @@ async getAllPatients(req, res, next) {
         return sendBadRequest(res, 'First name, last name, date of birth, and sex are required');
       }
       
+      const oldValues = { ...patient };
+      
       const updated = await Patient.update(patient.id, {
         first_name,
         middle_name,
@@ -99,17 +101,31 @@ async getAllPatients(req, res, next) {
       
       const updatedPatient = await Patient.findById(patient.id);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE',
-        table_name: 'patients',
-        record_id: patient.id,
-        patient_id: patient.id,
-        new_values: updatedPatient,
-        description: 'Patient updated their own profile',
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE',
+        'patients',
+        patient.id,
+        patient.id,
+        oldValues,
+        updatedPatient,
+        `Patient updated their own profile (ID: ${patient.id})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      // Store patient record snapshot on blockchain
+      blockchainAuditService.storePatientRecord(
+        patient.id,
+        'DEMOGRAPHICS',
+        {
+          action: 'PROFILE_UPDATE',
+          patient_id: patient.id,
+          updated_fields: Object.keys(req.body),
+          timestamp: new Date().toISOString(),
+          updated_by: req.user.username || 'patient'
+        },
+        req
+      ).catch(err => console.error('Patient record storage failed:', err));
       
       sendSuccess(res, 'Profile updated successfully', updatedPatient);
     } catch (error) {
@@ -241,7 +257,7 @@ async getAllPatients(req, res, next) {
         });
       }
       
-      const patientId = await Patient.create({
+      const newPatientData = {
         patient_facility_code: finalPatientCode,
         user_id,
         first_name,
@@ -258,21 +274,39 @@ async getAllPatients(req, res, next) {
         latest_viral_load,
         created_by: req.user.id,
         updated_by: req.user.id
-      });
+      };
       
+      const patientId = await Patient.create(newPatientData);
       const newPatient = await Patient.findById(patientId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'INSERT',
-        table_name: 'patients',
-        record_id: patientId,
-        patient_id: patientId,
-        new_values: newPatient,
-        description: `Created patient record for ${first_name} ${last_name} with code ${finalPatientCode}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'CREATE',
+        'patients',
+        patientId,
+        patientId,
+        null,
+        newPatient,
+        `Created new patient: ${first_name} ${last_name} (Code: ${finalPatientCode})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      // Store full patient record snapshot on blockchain
+      blockchainAuditService.storePatientRecord(
+        patientId,
+        'ENROLLMENT',
+        {
+          action: 'PATIENT_CREATED',
+          patient_id: patientId,
+          patient_facility_code: finalPatientCode,
+          hiv_status: hiv_status,
+          diagnosis_date: finalDiagnosisDate,
+          art_start_date: art_start_date,
+          created_by: req.user.username || 'system',
+          enrollment_data: newPatientData
+        },
+        req
+      ).catch(err => console.error('Patient record storage failed:', err));
       
       sendCreated(res, 'Patient created successfully', newPatient);
     } catch (error) {
@@ -353,18 +387,66 @@ async getAllPatients(req, res, next) {
       
       const updatedPatient = await Patient.findById(patientId);
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'UPDATE',
-        table_name: 'patients',
-        record_id: patientId,
-        patient_id: patientId,
-        old_values: existingPatient,
-        new_values: updatedPatient,
-        description: `Updated patient record for ${updatedPatient.first_name} ${updatedPatient.last_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'UPDATE',
+        'patients',
+        patientId,
+        patientId,
+        existingPatient,
+        updatedPatient,
+        `Updated patient record: ${existingPatient.first_name} ${existingPatient.last_name}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      // Track specific changes for blockchain
+      const changedFields = {};
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] !== undefined && updateData[key] !== existingPatient[key]) {
+          changedFields[key] = {
+            old: existingPatient[key],
+            new: updateData[key]
+          };
+        }
       });
+      
+      // Store patient record snapshot if important fields changed
+      const importantFields = ['hiv_status', 'diagnosis_date', 'art_start_date', 'latest_cd4_count', 'latest_viral_load'];
+      const hasImportantChanges = Object.keys(changedFields).some(field => importantFields.includes(field));
+      
+      if (hasImportantChanges) {
+        blockchainAuditService.storePatientRecord(
+          patientId,
+          'MEDICAL_UPDATE',
+          {
+            action: 'PATIENT_UPDATED',
+            patient_id: patientId,
+            changed_fields: changedFields,
+            hiv_status_changed: changedFields.hiv_status ? true : false,
+            timestamp: new Date().toISOString(),
+            updated_by: req.user.username || 'system'
+          },
+          req
+        ).catch(err => console.error('Patient record storage failed:', err));
+      }
+      
+      // If hiv status changed to reactive, log that as a significant event
+      if (changedFields.hiv_status && changedFields.hiv_status.new === 'REACTIVE') {
+        blockchainAuditService.storePatientRecord(
+          patientId,
+          'HIV_STATUS_CHANGE',
+          {
+            action: 'HIV_STATUS_UPDATED',
+            patient_id: patientId,
+            previous_status: changedFields.hiv_status.old,
+            new_status: changedFields.hiv_status.new,
+            diagnosis_date: finalDiagnosisDate,
+            timestamp: new Date().toISOString(),
+            updated_by: req.user.username || 'system'
+          },
+          req
+        ).catch(err => console.error('HIV status change storage failed:', err));
+      }
       
       sendSuccess(res, 'Patient updated successfully', updatedPatient);
     } catch (error) {
@@ -394,17 +476,33 @@ async getAllPatients(req, res, next) {
         await User.update(patient.user_id, { is_active: 0 });
       }
       
-      await AuditLog.log({
-        user_id: req.user.id,
-        action_type: 'DELETE',
-        table_name: 'patients',
-        record_id: patientId,
-        patient_id: patientId,
-        old_values: patient,
-        description: `Deleted patient record for ${patient.first_name} ${patient.last_name}`,
-        ip_address: req.ip,
-        user_agent: req.get('user-agent')
-      });
+      // Blockchain audit logging (non-blocking)
+      blockchainAuditService.logAction(
+        'DELETE',
+        'patients',
+        patientId,
+        patientId,
+        patient,
+        null,
+        `Deleted patient: ${patient.first_name} ${patient.last_name} (Code: ${patient.patient_facility_code})`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      // Store deletion record on blockchain (for legal/compliance)
+      blockchainAuditService.storePatientRecord(
+        patientId,
+        'DELETION',
+        {
+          action: 'PATIENT_DELETED',
+          patient_id: patientId,
+          patient_facility_code: patient.patient_facility_code,
+          patient_name: `${patient.first_name} ${patient.last_name}`,
+          deletion_reason: 'Manual deletion by staff',
+          deleted_by: req.user.username || 'system',
+          deletion_timestamp: new Date().toISOString()
+        },
+        req
+      ).catch(err => console.error('Patient deletion record storage failed:', err));
       
       await Patient.delete(patientId);
       
@@ -462,6 +560,18 @@ async getAllPatients(req, res, next) {
       
       const json2csvParser = new Parser();
       const csv = json2csvParser.parse(exportData);
+      
+      // Log export action to blockchain
+      blockchainAuditService.logAction(
+        'EXPORT',
+        'patients',
+        null,
+        null,
+        null,
+        { export_count: exportData.length, filters },
+        `Exported ${exportData.length} patients with filters: ${JSON.stringify(filters)}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       res.header('Content-Type', 'text/csv');
       res.attachment(`patients-export-${new Date().toISOString().split('T')[0]}.csv`);
@@ -541,6 +651,18 @@ async getAllPatients(req, res, next) {
           });
         }
       }
+      
+      // Log import results to blockchain
+      blockchainAuditService.logAction(
+        'IMPORT',
+        'patients',
+        null,
+        null,
+        null,
+        results,
+        `Imported ${results.success} patients, ${results.failed} failed`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
       
       sendSuccess(res, `Imported ${results.success} patients, ${results.failed} failed`, results);
     } catch (error) {

@@ -4,7 +4,14 @@
   "scripts": {
     "start-backend": "npm run dev --prefix backend",
     "start-frontend": "npm run dev --prefix frontend",
-    "start": "run-p start-backend start-frontend"
+    "start": "run-p start-backend start-frontend",
+    "blockchain:start": "node backend/scripts/start-blockchain.js",
+    "blockchain:stop": "node backend/scripts/stop-blockchain.js",
+    "blockchain:restart": "node backend/scripts/restart-blockchain.js",
+    "blockchain:status": "node backend/scripts/blockchain-status.js",
+    "blockchain:setup": "node backend/scripts/setup-multichain.js",
+    "blockchain:reset": "node backend/scripts/reset-multichain.js",
+    "blockchain:logs": "tail -f ~/.multichain/omph_hiv_chain/debug.log"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
