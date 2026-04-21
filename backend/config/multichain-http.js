@@ -1,4 +1,3 @@
-// backend/config/multichain-http.js
 const axios = require('axios');
 
 class MultiChainHTTPClient {
@@ -18,10 +17,11 @@ class MultiChainHTTPClient {
     // Validate required configuration
     if (!password) {
       console.error('❌ MULTICHAIN_PASSWORD is not set in environment variables');
+      console.log('💡 Get password from: ~/.multichain/omph_hiv_chain/multichain.conf');
       throw new Error('MULTICHAIN_PASSWORD is required');
     }
     
-    console.log(`Connecting to MultiChain at ${host}:${port}`);
+    console.log(`🔗 Connecting to MultiChain at http://${host}:${port}`);
     
     return {
       url: `http://${host}:${port}`,
@@ -46,7 +46,7 @@ class MultiChainHTTPClient {
         {
           auth: this.config.auth,
           headers: { 'Content-Type': 'application/json' },
-          timeout: 10000
+          timeout: 30000 // Increased timeout
         }
       );
       
@@ -59,7 +59,10 @@ class MultiChainHTTPClient {
       if (error.response) {
         console.error(`RPC call failed (${method}): Status ${error.response.status}`);
         if (error.response.status === 401) {
-          console.error('  Authentication failed - check username and password');
+          console.error('  🔑 Authentication failed - check username and password in .env');
+          console.error('  💡 Get password from: ~/.multichain/omph_hiv_chain/multichain.conf');
+        } else if (error.response.status === 503) {
+          console.error('  ⚠️  MultiChain node is busy or not ready');
         }
       } else {
         console.error(`RPC call failed (${method}):`, error.message);
@@ -70,41 +73,24 @@ class MultiChainHTTPClient {
 
   async initialize() {
     try {
-      console.log('Testing MultiChain connection...');
+      console.log('🔍 Testing MultiChain connection...');
       const info = await this.call('getinfo');
       
       if (!info || !info.chainname) {
         throw new Error('Invalid response from MultiChain');
       }
       
-      console.log('✅ Connected to MultiChain:', info.chainname);
-      console.log('   Version:', info.protocolversion);
-      console.log('   Blocks:', info.blocks);
-      console.log('   Connections:', info.connections);
+      console.log(`✅ Connected to MultiChain: ${info.chainname}`);
+      console.log(`   📦 Version: ${info.protocolversion}`);
+      console.log(`   📊 Blocks: ${info.blocks}`);
+      console.log(`   🔗 Connections: ${info.connections}`);
+      console.log(`   💰 Balance: ${info.balance || 0}`);
       
       this.initialized = true;
       return true;
     } catch (error) {
       console.error('❌ Failed to initialize MultiChain client:', error.message);
       this.initialized = false;
-      throw error;
-    }
-  }
-
-  async createStream(streamName, restricted = false) {
-    if (!this.initialized) {
-      throw new Error('MultiChain client not initialized');
-    }
-    
-    try {
-      const result = await this.call('create', ['stream', streamName, restricted]);
-      console.log(`✅ Created stream: ${streamName}`);
-      return result;
-    } catch (error) {
-      if (error.message.includes('already exists')) {
-        console.log(`ℹ️  Stream ${streamName} already exists`);
-        return null;
-      }
       throw error;
     }
   }
@@ -117,54 +103,10 @@ class MultiChainHTTPClient {
     try {
       return await this.call('getstreaminfo', [streamName]);
     } catch (error) {
-      return null;
-    }
-  }
-
-  async publishToStream(streamName, key, data) {
-    if (!this.initialized) {
-      throw new Error('MultiChain client not initialized');
-    }
-
-    try {
-      const hexData = Buffer.from(JSON.stringify(data)).toString('hex');
-      const result = await this.call('publish', [streamName, key, hexData]);
-      
-      return {
-        txid: result,
-        timestamp: new Date().toISOString(),
-        stream: streamName,
-        key: key
-      };
-    } catch (error) {
-      console.error('Error publishing to stream:', error.message);
-      throw error;
-    }
-  }
-
-  async getStreamItems(streamName, key = null, count = 100, start = 0) {
-    if (!this.initialized) {
-      throw new Error('MultiChain client not initialized');
-    }
-
-    try {
-      const params = [streamName, true, count, start];
-      if (key) {
-        params.push(key);
+      if (error.message.includes('stream not found')) {
+        return null;
       }
-      
-      const items = await this.call('liststreamkeyitems', params);
-      
-      return items.map(item => ({
-        txid: item.txid,
-        key: item.key,
-        data: JSON.parse(Buffer.from(item.data, 'hex').toString()),
-        time: item.time,
-        confirmations: item.confirmations
-      }));
-    } catch (error) {
-      console.error('Error getting stream items:', error.message);
-      return [];
+      throw error;
     }
   }
 
@@ -181,24 +123,330 @@ class MultiChainHTTPClient {
     }
   }
 
-  async verifyTransaction(txid) {
+  async subscribeToStream(streamName) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      await this.call('subscribe', [streamName]);
+      console.log(`✅ Subscribed to stream: ${streamName}`);
+      return true;
+    } catch (error) {
+      console.error(`Error subscribing to stream ${streamName}:`, error.message);
+      return false;
+    }
+  }
+
+  async getStreamItems(streamName, key = null, count = 100, start = 0) {
     if (!this.initialized) {
       throw new Error('MultiChain client not initialized');
     }
 
     try {
-      const transaction = await this.call('gettransaction', [txid]);
+      let items;
+      
+      if (key) {
+        try {
+          items = await this.call('liststreamkeyitems', [streamName, key, true, count, start]);
+        } catch (error) {
+          const allItems = await this.call('liststreamitems', [streamName, true, count, start]);
+          items = allItems.filter(item => item.keys && item.keys.includes(key));
+        }
+      } else {
+        items = await this.call('liststreamitems', [streamName, true, count, start]);
+      }
+      
+      return items.map(item => ({
+        txid: item.txid,
+        key: item.keys ? item.keys[0] : 'unknown',
+        data: this.parseData(item.data),
+        time: item.time,
+        confirmations: item.confirmations
+      }));
+    } catch (error) {
+      console.error('Error getting stream items:', error.message);
+      return [];
+    }
+  }
+
+  // NEW METHOD: Publish to stream
+  async publishToStream(streamName, key, data, options = {}) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      // Convert data to hex string if it's an object
+      let hexData;
+      if (typeof data === 'object') {
+        hexData = Buffer.from(JSON.stringify(data)).toString('hex');
+      } else if (typeof data === 'string') {
+        hexData = Buffer.from(data).toString('hex');
+      } else {
+        hexData = Buffer.from(String(data)).toString('hex');
+      }
+      
+      // Prepare publish parameters
+      const params = [streamName, key, hexData];
+      
+      // Add options if provided (e.g., offline, metadata)
+      if (options.offline) {
+        params.push('offline');
+      }
+      
+      // Call the publish method
+      const result = await this.call('publish', params);
+      
+      console.log(`✅ Published to stream ${streamName} with key ${key}: ${result}`);
       return {
-        verified: true,
-        confirmations: transaction.confirmations,
-        blockhash: transaction.blockhash,
-        blocktime: transaction.blocktime
+        txid: result,
+        stream: streamName,
+        key: key,
+        timestamp: new Date().toISOString()
       };
     } catch (error) {
+      console.error(`Failed to publish to stream ${streamName}:`, error.message);
+      throw error;
+    }
+  }
+
+  // NEW METHOD: Publish multiple items to stream
+  async publishMultiple(streamName, items) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const results = [];
+      for (const item of items) {
+        const result = await this.publishToStream(streamName, item.key, item.data);
+        results.push(result);
+      }
+      return results;
+    } catch (error) {
+      console.error('Failed to publish multiple items:', error.message);
+      throw error;
+    }
+  }
+
+  // NEW METHOD: Get stream items by key
+  async getStreamKeyItems(streamName, key, verbose = true, count = 100, start = 0) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const items = await this.call('liststreamkeyitems', [streamName, key, verbose, count, start]);
+      return items.map(item => ({
+        txid: item.txid,
+        key: item.keys ? item.keys[0] : key,
+        data: this.parseData(item.data),
+        time: item.time,
+        confirmations: item.confirmations
+      }));
+    } catch (error) {
+      console.error(`Error getting stream items for key ${key}:`, error.message);
+      return [];
+    }
+  }
+
+  // NEW METHOD: Ensure stream exists and create if needed
+  async ensureStreamExists(streamName, options = {}) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      // Check if stream exists
+      const streamInfo = await this.getStreamInfo(streamName);
+      
+      if (!streamInfo) {
+        console.log(`Stream ${streamName} not found, creating...`);
+        
+        // Create the stream
+        const createParams = [streamName];
+        if (options.open) {
+          createParams.push('open');
+        }
+        
+        const txid = await this.call('create', createParams);
+        console.log(`✅ Created stream ${streamName}: ${txid}`);
+        
+        // Subscribe to the stream
+        await this.subscribeToStream(streamName);
+        
+        return { created: true, txid, stream: streamName };
+      }
+      
+      // Ensure we're subscribed
+      if (!streamInfo.subscribed) {
+        await this.subscribeToStream(streamName);
+      }
+      
+      return { created: false, stream: streamName, exists: true };
+    } catch (error) {
+      console.error(`Error ensuring stream ${streamName}:`, error.message);
+      throw error;
+    }
+  }
+
+  // NEW METHOD: Get stream item by transaction ID
+  async getStreamItem(txid) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const item = await this.call('getstreamitem', [txid]);
       return {
-        verified: false,
-        error: error.message
+        txid: item.txid,
+        key: item.keys ? item.keys[0] : 'unknown',
+        data: this.parseData(item.data),
+        time: item.time,
+        confirmations: item.confirmations
       };
+    } catch (error) {
+      console.error(`Error getting stream item ${txid}:`, error.message);
+      return null;
+    }
+  }
+
+  // NEW METHOD: Get transaction details
+  async getTransaction(txid) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const tx = await this.call('gettransaction', [txid]);
+      return tx;
+    } catch (error) {
+      console.error(`Error getting transaction ${txid}:`, error.message);
+      return null;
+    }
+  }
+
+  // NEW METHOD: Get raw transaction
+  async getRawTransaction(txid) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const rawTx = await this.call('getrawtransaction', [txid]);
+      return rawTx;
+    } catch (error) {
+      console.error(`Error getting raw transaction ${txid}:`, error.message);
+      return null;
+    }
+  }
+
+  // NEW METHOD: Get address information
+  async getAddressInfo(address) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const info = await this.call('getaddressinfo', [address]);
+      return info;
+    } catch (error) {
+      console.error(`Error getting address info for ${address}:`, error.message);
+      return null;
+    }
+  }
+
+  parseData(data) {
+    try {
+      if (typeof data === 'string' && data.match(/^[0-9a-fA-F]+$/)) {
+        const decoded = Buffer.from(data, 'hex').toString();
+        try {
+          return JSON.parse(decoded);
+        } catch (e) {
+          return decoded;
+        }
+      }
+      return data;
+    } catch (error) {
+      return { raw: data };
+    }
+  }
+
+  // NEW METHOD: Check if client is initialized
+  isInitialized() {
+    return this.initialized;
+  }
+
+  // NEW METHOD: Get chain info
+  async getChainInfo() {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const info = await this.call('getinfo');
+      const blockchainInfo = await this.call('getblockchaininfo');
+      const miningInfo = await this.call('getmininginfo');
+      
+      return {
+        ...info,
+        ...blockchainInfo,
+        mining: miningInfo
+      };
+    } catch (error) {
+      console.error('Error getting chain info:', error.message);
+      throw error;
+    }
+  }
+
+  // NEW METHOD: Get block hash by height
+  async getBlockHash(height) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      return await this.call('getblockhash', [height]);
+    } catch (error) {
+      console.error(`Error getting block hash for height ${height}:`, error.message);
+      return null;
+    }
+  }
+
+  // NEW METHOD: Get block by hash
+  async getBlock(blockHash) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      return await this.call('getblock', [blockHash]);
+    } catch (error) {
+      console.error(`Error getting block ${blockHash}:`, error.message);
+      return null;
+    }
+  }
+
+  // NEW METHOD: Get block by height
+  async getBlockByHeight(height) {
+    const blockHash = await this.getBlockHash(height);
+    if (!blockHash) return null;
+    return await this.getBlock(blockHash);
+  }
+
+  // NEW METHOD: Get address balances
+  async getAddressBalances(address) {
+    if (!this.initialized) {
+      throw new Error('MultiChain client not initialized');
+    }
+    
+    try {
+      const balances = await this.call('getaddressbalances', [address]);
+      return balances;
+    } catch (error) {
+      console.error(`Error getting balances for ${address}:`, error.message);
+      return [];
     }
   }
 }

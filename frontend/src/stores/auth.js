@@ -146,17 +146,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 }
 
-  const checkAuth = async () => {
+const checkAuth = async () => {
   try {
     console.log('🔄 Checking auth status...')
     
     if (!token.value) {
       console.log('⚠️ No token found')
-      // Clear any stale user data
       await logout()
       return false
     }
 
+    // Set default headers for all requests
+    http.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
+    
     const response = await http.get('/auth/check')
     
     // Handle nested response structure
@@ -178,17 +180,17 @@ export const useAuthStore = defineStore('auth', () => {
     const status = error.response?.status
     
     if (status === 401 || status === 403) {
-      // Token is invalid or expired - force logout
       console.log('🔒 Token invalid/expired, logging out...')
       await logout()
+      return false
     } else if (status === 404) {
-      // Endpoint not found, but token might still be valid
       console.warn('⚠️ Auth check endpoint not found')
-      // Don't logout automatically for 404
+      // Don't logout for 404, token might still be valid
+      return token.value !== null
     } else if (error.message.includes('Network Error')) {
       console.log('🌐 Network error during auth check')
-      // Don't logout on network errors, just return false
-      return false
+      // Don't logout on network errors
+      return token.value !== null
     }
     
     return false

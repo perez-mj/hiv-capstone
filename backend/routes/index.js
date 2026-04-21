@@ -12,6 +12,7 @@ const queueRoutes = require('./queueRoutes');
 const staffRoutes = require('./staffRoutes');
 const kioskRoutes = require('./kioskRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
+const blockchainRoutes = require('./blockchainRoutes');
 
 // Public routes
 router.use('/auth', authRoutes);
@@ -26,5 +27,6 @@ router.use('/lab-results', labResultRoutes);
 router.use('/queue', queueRoutes);
 router.use('/staff', staffRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/blockchain', blockchainRoutes);
 
 module.exports = router;

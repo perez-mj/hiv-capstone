@@ -593,8 +593,9 @@ async function checkQueueStatus() {
   
   loading.value.queue = true
   try {
-    const response = await queueApi.getPatientQueue(patientId.value)
-    if (response.data.in_queue) {
+    // CHANGE THIS: Use getMyQueueStatus instead of getPatientQueue
+    const response = await queueApi.getMyQueueStatus()
+    if (response.data && response.data.in_queue) {
       queueStatus.value = {
         in_queue: true,
         queue_number: response.data.queue_number,
@@ -612,6 +613,8 @@ async function checkQueueStatus() {
     }
   } catch (error) {
     console.error('Failed to check queue status:', error)
+    // Don't show error to user, just set empty status
+    queueStatus.value = { in_queue: false }
   } finally {
     loading.value.queue = false
   }
@@ -621,12 +624,14 @@ async function getNextAppointment() {
   if (!patientId.value) return
   
   try {
-    const response = await appointmentsApi.getNextPatientAppointment(patientId.value)
-    if (response.data.id) {
+    // CHANGE THIS: Use the patient's own endpoint
+    const response = await appointmentsApi.getNextAppointment()
+    if (response.data && response.data.id) {
       nextAppointment.value = response.data
     }
   } catch (error) {
     console.error('Failed to get next appointment:', error)
+    // Don't show error to user
   }
 }
 

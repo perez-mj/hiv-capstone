@@ -25,7 +25,7 @@ const routes = [
       { path: 'appointments-calendar', name: 'AppointmentsCalendar', component: () => import('@/pages/admin/AppointmentsCalendar.vue') },
       { path: 'queue', name: 'QueueManagement', component: () => import('@/pages/admin/QueueManagement.vue') },
       { path: 'administration', name: 'Administartion', component: () => import('@/pages/admin/Administration.vue'), meta: { allowedRoles: ['ADMIN'] } },
-
+      { path: 'blockchain-status', name: 'BlockchainStatus', component: () => import('@/pages/admin/BlockchainStatus.vue'), meta: { title: 'Blockchain Status', allowedRoles: ['ADMIN'] }},
     ]
   },
   {

@@ -257,9 +257,9 @@ const systemMenu = ref([
     icon: 'mdi-security',
   },
   { 
-    title: 'Settings', 
-    to: '/admin/settings', 
-    icon: 'mdi-cog',
+    title: 'Blockchain', 
+    to: '/admin/blockchain-status', 
+    icon: 'mdi-book-variant',
   },
 ])
 

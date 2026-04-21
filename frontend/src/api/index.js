@@ -4,6 +4,7 @@ import http from './http'
 // ==========================================================================================================
 // PATIENT API - ADD THIS SECTION (for patient portal)
 // ==========================================================================================================
+
 export const patientApi = {
   // Dashboard - get patient's own data
   getDashboard: () => http.get('/patients/me/dashboard'),
@@ -19,8 +20,8 @@ export const patientApi = {
   bookAppointment: (data) => http.post('/appointments/patient/me/book', data),
   cancelAppointment: (id) => http.delete(`/appointments/patient/me/cancel/${id}`),
 
-  // Lab Results - patient's own lab results
-  getLabResults: (params) => http.get('/lab-results/patient/me', { params }),
+  // LAB RESULTS - COMMENTED OUT TO PREVENT 403 ERROR
+  // getLabResults: (params) => http.get('/lab-results/patient/me', { params }),
 
   // Queue - patient's queue position
   getQueuePosition: () => http.get('/queue/patient/me'),
@@ -269,6 +270,36 @@ export const dashboardApi = {
   getPublicQueueDisplay: () => http.get('/dashboard/queue/public')
 }
 
+// frontend/src/api/index.js
+
+export const blockchainApi = {
+  getInfo: async () => {
+    const response = await http.get('/blockchain/info')
+    // response already contains { success: true, data: {...} }
+    return response
+  },
+  getBlocks: async (params) => {
+    const response = await http.get('/blockchain/blocks', { params })
+    return response
+  },
+  getStreams: async () => {
+    const response = await http.get('/blockchain/streams')
+    return response
+  },
+  verify: async () => {
+    const response = await http.get('/blockchain/verify')
+    return response
+  },
+  getBlockGrowth: async (params, config = {}) => {
+    const response = await http.get('/blockchain/growth', { params, ...config })
+    return response
+  },
+  diagnostics: async () => {
+    const response = await http.get('/blockchain/diagnostics')
+    return response
+  }
+};
+
 // ==========================================================================================================
 // EXPORT ALL APIS
 // ==========================================================================================================
@@ -285,10 +316,4 @@ export default {
   kiosk: kioskApi,
   staff: staffApi,
   dashboard: dashboardApi
-}
-// Blockchain API
-export const blockchainApi = {
-  getInfo: () => http.get('/blockchain/info'),
-  verify: () => http.get('/blockchain/verify'),
-  export: () => http.get('/blockchain/export')
 }
