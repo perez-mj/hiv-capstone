@@ -2,10 +2,21 @@
 const { exec } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 
 const chainName = process.env.MULTICHAIN_CHAINNAME || 'omph_hiv_chain';
-const homeDir = os.homedir();
-const chainDir = `${homeDir}/.multichain/${chainName}`;
+
+// Cross-platform chain directory detection
+const getChainDir = () => {
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appData, 'MultiChain', chainName);
+  } else {
+    return path.join(os.homedir(), '.multichain', chainName);
+  }
+};
+
+const chainDir = getChainDir();
 
 // Required streams to check
 const REQUIRED_STREAMS = [
@@ -17,11 +28,19 @@ const REQUIRED_STREAMS = [
 
 async function executeCommand(command, ignoreErrors = false) {
   return new Promise((resolve) => {
-    exec(command, { shell: true }, (error, stdout, stderr) => {
+    // Use appropriate shell for each platform
+    const options = { 
+      shell: process.platform === 'win32' ? 'powershell.exe' : true,
+      maxBuffer: 10 * 1024 * 1024 // 10MB buffer
+    };
+    
+    exec(command, options, (error, stdout, stderr) => {
       if (error && !ignoreErrors) {
         resolve({ success: false, output: error.message });
       } else {
-        resolve({ success: true, output: stdout || stderr });
+        // Prefer stdout, fallback to stderr
+        const output = stdout || stderr || '';
+        resolve({ success: true, output: output.toString() });
       }
     });
   });
@@ -39,7 +58,7 @@ async function checkStreamSubscription(streamName) {
     
     // Alternative: check via liststreams with detailed info
     const { output: listOutput } = await executeCommand(`multichain-cli ${chainName} liststreams`, true);
-    if (listOutput) {
+    if (listOutput && listOutput.trim()) {
       const streams = JSON.parse(listOutput);
       const stream = streams.find(s => s.name === streamName);
       return stream ? stream.subscribed === true : false;
@@ -51,6 +70,45 @@ async function checkStreamSubscription(streamName) {
   return false;
 }
 
+async function getDirectorySize(dirPath) {
+  try {
+    if (process.platform === 'win32') {
+      // Windows: Use PowerShell to get directory size
+      const { output } = await executeCommand(
+        `powershell -Command "& { if (Test-Path '${dirPath}') { (Get-ChildItem -Recurse '${dirPath}' -File | Measure-Object -Property Length -Sum).Sum } else { 0 } }"`,
+        true
+      );
+      const sizeBytes = parseInt(output.trim());
+      if (!isNaN(sizeBytes) && sizeBytes > 0) {
+        return formatBytes(sizeBytes);
+      }
+      return 'N/A';
+    } else {
+      // Linux/Unix: Use du command
+      const { output } = await executeCommand(`du -sh "${dirPath}" 2>/dev/null | cut -f1`, true);
+      if (output && output.trim() && !output.includes('No such file')) {
+        return output.trim();
+      }
+      return 'N/A';
+    }
+  } catch (error) {
+    return 'N/A';
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function checkIfRunning() {
+  const { success, output } = await executeCommand(`multichain-cli ${chainName} getinfo`, true);
+  return success && output && output.includes('chainname');
+}
+
 async function showStatus() {
   console.log('\n═══════════════════════════════════════════');
   console.log('    MULTICHAIN STATUS');
@@ -59,55 +117,64 @@ async function showStatus() {
   // Check if chain exists
   if (!fs.existsSync(chainDir)) {
     console.log('❌ Blockchain does not exist');
+    console.log(`   Expected location: ${chainDir}`);
     console.log('\nTo create a new blockchain:');
     console.log('  npm run blockchain:setup');
+    console.log('\n═══════════════════════════════════════════');
     return;
   }
   
   console.log(`📁 Chain Directory: ${chainDir}`);
   
   // Check if running
-  const { success, output } = await executeCommand(`multichain-cli ${chainName} getinfo`, true);
+  const isRunning = await checkIfRunning();
   
-  if (success && output.includes('chainname')) {
+  if (isRunning) {
     console.log('\n✅ STATUS: RUNNING\n');
     
-    try {
-      const info = JSON.parse(output);
-      console.log('📊 Blockchain Info:');
-      console.log(`   Chain: ${info.chainname}`);
-      console.log(`   Version: ${info.protocolversion}`);
-      console.log(`   Blocks: ${info.blocks}`);
-      console.log(`   Connections: ${info.connections}`);
-      console.log(`   Difficulty: ${info.difficulty}`);
-      console.log(`   Wallet Balance: ${info.balance || info.walletbalance || 'N/A'}`);
-      console.log(`   Streams: ${info.streams || 0}`);
-      
-      // Get mining info
-      const { output: miningOutput } = await executeCommand(`multichain-cli ${chainName} getmininginfo`, true);
-      if (miningOutput && !miningOutput.includes('error')) {
-        try {
-          const miningInfo = JSON.parse(miningOutput);
-          console.log(`   Mining Enabled: ${miningInfo.mine ? 'Yes' : 'No'}`);
-        } catch (e) {}
+    // Get blockchain info
+    const { output } = await executeCommand(`multichain-cli ${chainName} getinfo`, true);
+    
+    if (output && output.includes('chainname')) {
+      try {
+        const info = JSON.parse(output);
+        console.log('📊 Blockchain Info:');
+        console.log(`   Chain: ${info.chainname}`);
+        console.log(`   Version: ${info.protocolversion}`);
+        console.log(`   Blocks: ${info.blocks}`);
+        console.log(`   Connections: ${info.connections}`);
+        console.log(`   Difficulty: ${info.difficulty}`);
+        console.log(`   Wallet Balance: ${info.balance || info.walletbalance || 'N/A'}`);
+        console.log(`   Streams: ${info.streams || 0}`);
+        
+        // Get mining info (cross-platform)
+        const { output: miningOutput } = await executeCommand(`multichain-cli ${chainName} getmininginfo`, true);
+        if (miningOutput && !miningOutput.includes('error') && miningOutput.trim()) {
+          try {
+            const miningInfo = JSON.parse(miningOutput);
+            console.log(`   Mining Enabled: ${miningInfo.mine ? 'Yes' : 'No'}`);
+          } catch (e) {
+            // Silent fail
+          }
+        }
+        
+        // Get disk usage (cross-platform)
+        const diskUsage = await getDirectorySize(chainDir);
+        if (diskUsage !== 'N/A') {
+          console.log(`   Disk Usage: ${diskUsage}`);
+        }
+        
+      } catch (e) {
+        console.log('   📊 Blockchain Info:');
+        console.log(`   ${output.substring(0, 200)}`);
       }
-      
-      // Get disk usage
-      const { output: duOutput } = await executeCommand(`du -sh ${chainDir} 2>/dev/null`, true);
-      if (duOutput && duOutput.includes('/')) {
-        console.log(`   Disk Usage: ${duOutput.split('\t')[0]}`);
-      }
-      
-    } catch (e) {
-      console.log('   Error parsing blockchain info');
-      console.log(output);
     }
     
     // List streams with subscription status
     console.log('\n📋 Streams:');
     const { output: streamsOutput } = await executeCommand(`multichain-cli ${chainName} liststreams`, true);
     
-    if (streamsOutput && !streamsOutput.includes('error')) {
+    if (streamsOutput && !streamsOutput.includes('error') && streamsOutput.trim()) {
       try {
         const allStreams = JSON.parse(streamsOutput);
         // Filter to only show our required streams plus root
@@ -117,6 +184,8 @@ async function showStatus() {
         
         if (relevantStreams.length === 0) {
           console.log('   No streams created yet');
+          console.log('\n   To create required streams:');
+          console.log(`   npm run blockchain:setup`);
         } else {
           for (const stream of relevantStreams) {
             // Get subscription status
@@ -128,60 +197,86 @@ async function showStatus() {
             
             // If not subscribed, show how to fix
             if (!subscribed && stream.name !== 'root') {
-              console.log(`      💡 Fix: multichain-cli ${chainName} subscribe ${stream.name}`);
+              const command = `multichain-cli ${chainName} subscribe ${stream.name}`;
+              console.log(`      💡 Fix: ${command}`);
             }
           }
         }
       } catch (e) {
         console.log('   Unable to parse streams list');
         console.log(`   Error: ${e.message}`);
+        console.log(`   Raw output: ${streamsOutput.substring(0, 200)}`);
       }
     } else {
-      console.log('   Unable to list streams (blockchain may be starting up)');
+      console.log('   No streams found or unable to list streams');
+      if (streamsOutput && streamsOutput.includes('error')) {
+        console.log(`   Response: ${streamsOutput.substring(0, 100)}`);
+      }
     }
     
-    // Show recent blocks
+    // Show blockchain status
     console.log('\n📦 Blockchain Status:');
     const { output: blocksOutput } = await executeCommand(`multichain-cli ${chainName} getblockchaininfo`, true);
     try {
-      if (blocksOutput && !blocksOutput.includes('error')) {
+      if (blocksOutput && !blocksOutput.includes('error') && blocksOutput.trim()) {
         const blockchainInfo = JSON.parse(blocksOutput);
         console.log(`   Current Block: ${blockchainInfo.blocks}`);
         console.log(`   Verification Progress: ${(blockchainInfo.verificationprogress * 100).toFixed(2)}%`);
       } else {
-        console.log(`   Blocks: ${JSON.parse(output).blocks}`);
+        // Fallback to getinfo
+        const { output: infoOutput } = await executeCommand(`multichain-cli ${chainName} getinfo`, true);
+        if (infoOutput && infoOutput.includes('blocks')) {
+          const info = JSON.parse(infoOutput);
+          console.log(`   Current Block: ${info.blocks}`);
+        }
       }
     } catch (e) {
-      // Fallback to getinfo
-      try {
-        const info = JSON.parse(output);
-        console.log(`   Current Block: ${info.blocks}`);
-      } catch (err) {
-        console.log('   Unable to get block info');
-      }
+      console.log('   Unable to get block info');
     }
     
   } else {
     console.log('\n❌ STATUS: NOT RUNNING\n');
     
-    // Check if there are any processes
-    const { output: psOutput } = await executeCommand(`ps aux | grep "multichaind.*${chainName}" | grep -v grep`, true);
-    if (psOutput && psOutput.trim()) {
-      console.log('⚠️  Found zombie processes:');
-      console.log(psOutput);
-      console.log('\nRun to clean up: npm run blockchain:stop');
-    } else {
-      console.log('To start the blockchain:');
+    // Check if chain exists but not running
+    if (fs.existsSync(chainDir)) {
+      console.log('⚠️  Blockchain data exists but node is not running');
+      console.log('\nTo start the blockchain:');
       console.log('  npm run blockchain:start');
+      
+      // Show how to start manually
+      console.log('\nOr manually:');
+      if (process.platform === 'win32') {
+        console.log(`  multichaind ${chainName} -daemon`);
+        console.log('  Note: On Windows, open a new terminal instead of using -daemon');
+      } else {
+        console.log(`  multichaind ${chainName} -daemon`);
+      }
+    } else {
+      console.log('❌ Blockchain not set up');
+      console.log('\nTo create and start the blockchain:');
+      console.log('  npm run blockchain:setup');
     }
   }
   
   console.log('\n═══════════════════════════════════════════');
 }
 
-// Run if called directly
-if (require.main === module) {
-  showStatus();
+// Helper function to get stream details (useful for debugging)
+async function getStreamDetails(streamName) {
+  const { output } = await executeCommand(`multichain-cli ${chainName} getstreaminfo ${streamName}`, true);
+  try {
+    if (output && output.trim()) {
+      return JSON.parse(output);
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
 }
 
-module.exports = { showStatus, checkStreamSubscription };
+// Run if called directly
+if (require.main === module) {
+  showStatus().catch(console.error);
+}
+
+module.exports = { showStatus, checkStreamSubscription, getStreamDetails, getChainDir };

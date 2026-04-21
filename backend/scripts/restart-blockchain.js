@@ -1,10 +1,13 @@
 const { stopBlockchain } = require('./stop-blockchain');
 const { startBlockchain } = require('./start-blockchain');
+const os = require('os');
 
 async function restartBlockchain() {
   console.log('\n═══════════════════════════════════════════');
   console.log('    RESTARTING MULTICHAIN NODE');
   console.log('═══════════════════════════════════════════\n');
+  
+  console.log(`Platform: ${process.platform}`);
   
   await stopBlockchain();
   
@@ -14,11 +17,16 @@ async function restartBlockchain() {
   await startBlockchain();
   
   console.log('\n✅ Restart complete!');
+  console.log('\nTo check status, run:');
+  console.log('  npm run blockchain:status');
 }
 
 // Run if called directly
 if (require.main === module) {
-  restartBlockchain();
+  restartBlockchain().catch(error => {
+    console.error('❌ Restart failed:', error.message);
+    process.exit(1);
+  });
 }
 
 module.exports = { restartBlockchain };

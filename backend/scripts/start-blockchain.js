@@ -5,8 +5,18 @@ const os = require('os');
 const path = require('path');
 
 const chainName = process.env.MULTICHAIN_CHAINNAME || 'omph_hiv_chain';
-const homeDir = os.homedir();
-const chainDir = `${homeDir}/.multichain/${chainName}`;
+
+// Cross-platform chain directory detection
+const getChainDir = () => {
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appData, 'MultiChain', chainName);
+  } else {
+    return path.join(os.homedir(), '.multichain', chainName);
+  }
+};
+
+const chainDir = getChainDir();
 
 // Configuration for development auto-mining
 const AUTO_MINE = process.env.MULTICHAIN_AUTO_MINE !== 'false'; // Enable by default
@@ -19,14 +29,21 @@ function sleep(ms) {
 async function executeCommand(command, options = {}) {
   return new Promise((resolve, reject) => {
     console.log(`Executing: ${command}`);
-    exec(command, { ...options, shell: true, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+    const execOptions = { 
+      ...options, 
+      shell: process.platform === 'win32' ? 'powershell.exe' : true,
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: options.timeout || 30000
+    };
+    
+    exec(command, execOptions, (error, stdout, stderr) => {
       if (error && !options.ignoreErrors) {
         console.error(`Error: ${error.message}`);
         reject(error);
       } else {
-        if (stdout && stdout.trim()) console.log(stdout.trim());
-        if (stderr && !options.ignoreErrors && stderr.trim()) console.error(stderr.trim());
-        resolve({ stdout, stderr });
+        if (stdout && stdout.toString().trim()) console.log(stdout.toString().trim());
+        if (stderr && !options.ignoreErrors && stderr.toString().trim()) console.error(stderr.toString().trim());
+        resolve({ stdout: stdout?.toString() || '', stderr: stderr?.toString() || '' });
       }
     });
   });
@@ -48,17 +65,34 @@ async function isBlockchainRunning() {
   }
 }
 
-async function stopBlockchain() {
+async function stopBlockchainWindows() {
   console.log('\n🛑 Stopping MultiChain daemon...');
   
   try {
+    // Try graceful stop first
     await executeCommand(`multichain-cli ${chainName} stop`, {
       ignoreErrors: true,
       timeout: 10000
     });
     
-    // Wait for process to stop
     await sleep(3000);
+    
+    // Force kill any remaining processes
+    const { stdout } = await executeCommand(
+      `powershell -Command "Get-Process -Name multichaind -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id"`,
+      { ignoreErrors: true }
+    );
+    
+    if (stdout && stdout.trim()) {
+      const processIds = stdout.trim().split('\n');
+      for (const pid of processIds) {
+        if (pid) {
+          await executeCommand(`taskkill /F /PID ${pid}`, { ignoreErrors: true });
+          console.log(`✅ Killed process ${pid}`);
+        }
+      }
+    }
+    
     console.log('✅ Blockchain stopped');
     return true;
   } catch (error) {
@@ -67,16 +101,91 @@ async function stopBlockchain() {
   }
 }
 
-async function startBlockchain() {
-  console.log('\n═══════════════════════════════════════════');
-  console.log('    STARTING MULTICHAIN NODE');
-  console.log('═══════════════════════════════════════════\n');
+async function stopBlockchainLinux() {
+  console.log('\n🛑 Stopping MultiChain daemon...');
   
+  try {
+    await executeCommand(`multichain-cli ${chainName} stop`, {
+      ignoreErrors: true,
+      timeout: 10000
+    });
+    
+    await sleep(3000);
+    
+    // Kill any remaining processes
+    await executeCommand(`pkill -f "multichaind.*${chainName}"`, {
+      ignoreErrors: true
+    });
+    
+    console.log('✅ Blockchain stopped');
+    return true;
+  } catch (error) {
+    console.log('⚠️ Blockchain was not running or stop failed');
+    return false;
+  }
+}
+
+async function stopBlockchain() {
+  if (process.platform === 'win32') {
+    return await stopBlockchainWindows();
+  } else {
+    return await stopBlockchainLinux();
+  }
+}
+
+async function startBlockchainWindows() {
+  return new Promise(async (resolve, reject) => {
+    // Check if chain exists
+    if (!fs.existsSync(chainDir)) {
+      reject(new Error('Blockchain does not exist. Please run setup first: npm run blockchain:setup'));
+      return;
+    }
+    
+    // Start the node (on Windows, don't use -daemon flag)
+    console.log('🚀 Starting MultiChain node...');
+    
+    const startCommand = `start /B multichaind ${chainName}`;
+    
+    exec(startCommand, { shell: true }, async (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      
+      // Wait for startup
+      console.log('⏳ Waiting for node to be ready...');
+      let attempts = 0;
+      const maxAttempts = 20;
+      
+      while (attempts < maxAttempts) {
+        await sleep(2000);
+        attempts++;
+        
+        const info = await isBlockchainRunning();
+        if (info) {
+          console.log('\n✅ Blockchain started successfully!');
+          console.log(`\n📊 Status:`);
+          console.log(`   Chain: ${info.chainname}`);
+          console.log(`   Blocks: ${info.blocks}`);
+          console.log(`   Connections: ${info.connections}`);
+          console.log(`   Mining: ${AUTO_MINE ? 'Enabled (manual mining required)' : 'Disabled'}`);
+          
+          resolve(info);
+          return;
+        }
+        
+        process.stdout.write(`   Attempt ${attempts}/${maxAttempts}...\r`);
+      }
+      
+      reject(new Error('Failed to start blockchain'));
+    });
+  });
+}
+
+async function startBlockchainLinux() {
   // Check if chain exists
   if (!fs.existsSync(chainDir)) {
-    console.error('❌ Blockchain does not exist. Please run setup first:');
-    console.log('   npm run blockchain:setup');
-    process.exit(1);
+    throw new Error('Blockchain does not exist. Please run setup first: npm run blockchain:setup');
   }
   
   // Check if already running
@@ -89,7 +198,6 @@ async function startBlockchain() {
     console.log(`   Connections: ${runningInfo.connections}`);
     console.log(`   Version: ${runningInfo.version}`);
     
-    // Check if mining is enabled
     await checkAndEnableMining();
     return runningInfo;
   }
@@ -98,7 +206,7 @@ async function startBlockchain() {
   await stopBlockchain();
   
   // Start the daemon with mining enabled
-  console.log('🚀 Starting MultiChain daemon with auto-mining...');
+  console.log('🚀 Starting MultiChain daemon...');
   
   const startArgs = [chainName, '-daemon'];
   
@@ -151,22 +259,47 @@ async function startBlockchain() {
     process.stdout.write(`   Attempt ${attempts}/${maxAttempts}...\r`);
   }
   
-  console.log('\n❌ Failed to start blockchain');
-  console.log('Check logs: tail -f ~/.multichain/*/debug.log');
+  throw new Error('Failed to start blockchain');
+}
+
+async function startBlockchain() {
+  console.log('\n═══════════════════════════════════════════');
+  console.log('    STARTING MULTICHAIN NODE');
+  console.log('═══════════════════════════════════════════\n');
   
-  // Try to get error from debug log
+  console.log(`Chain Name: ${chainName}`);
+  console.log(`Chain Directory: ${chainDir}`);
+  console.log(`Platform: ${process.platform}`);
+  console.log(`Auto-mine: ${AUTO_MINE ? 'Yes' : 'No'}`);
+  
   try {
-    const debugLogPath = `${chainDir}/debug.log`;
-    if (fs.existsSync(debugLogPath)) {
-      const lastLines = execSync(`tail -n 20 ${debugLogPath}`, { encoding: 'utf8' });
-      console.log('\n📋 Last 20 lines of debug.log:');
-      console.log(lastLines);
+    let result;
+    if (process.platform === 'win32') {
+      result = await startBlockchainWindows();
+    } else {
+      result = await startBlockchainLinux();
     }
+    
+    // Check if mining is enabled
+    await checkAndEnableMining();
+    
+    return result;
   } catch (error) {
-    // Ignore
+    console.error('\n❌ Failed to start blockchain:', error.message);
+    console.log('\nTroubleshooting:');
+    if (process.platform === 'win32') {
+      console.log('1. Check if MultiChain is installed: multichaind --version');
+      console.log('2. Check logs: type "%APPDATA%\\MultiChain\\*\\debug.log"');
+      console.log('3. Try manual start: multichaind ' + chainName);
+      console.log('4. Check if chain exists: dir "%APPDATA%\\MultiChain"');
+    } else {
+      console.log('1. Check if MultiChain is installed: multichaind --version');
+      console.log('2. Check logs: tail -f ~/.multichain/*/debug.log');
+      console.log('3. Try manual start: multichaind ' + chainName + ' -daemon');
+      console.log('4. Check if chain exists: ls ~/.multichain/');
+    }
+    process.exit(1);
   }
-  
-  return null;
 }
 
 async function checkAndEnableMining() {
@@ -176,14 +309,14 @@ async function checkAndEnableMining() {
       ignoreErrors: true
     });
     
-    if (stdout) {
+    if (stdout && stdout.trim()) {
       const miningInfo = JSON.parse(stdout);
       console.log(`\n⛏️ Mining Status:`);
       console.log(`   Enabled: ${miningInfo.mine ? 'Yes' : 'No'}`);
       console.log(`   Current Block: ${miningInfo.blocks}`);
       console.log(`   Network Hashrate: ${miningInfo.networkhashps || 0}`);
       
-      if (!miningInfo.mine && AUTO_MINE) {
+      if (!miningInfo.mine && AUTO_MINE && process.platform !== 'win32') {
         console.log('\n⚠️ Mining is not enabled but AUTO_MINE is true');
         console.log('Please restart blockchain with mining enabled:');
         console.log(`  multichaind ${chainName} -daemon -mine=1 -mineinterval=${MINE_INTERVAL}`);
@@ -201,7 +334,7 @@ async function setupMiningPermissions() {
       ignoreErrors: true
     });
     
-    if (addresses) {
+    if (addresses && addresses.trim()) {
       const addressList = JSON.parse(addresses);
       if (addressList && addressList.length > 0) {
         const nodeAddress = addressList[0];
@@ -236,7 +369,7 @@ async function generateBlocks(count = 1) {
         const { stdout: address } = await executeCommand(`multichain-cli ${chainName} getnewaddress`, {
           ignoreErrors: true
         });
-        if (address) {
+        if (address && address.trim()) {
           const { stdout } = await executeCommand(`multichain-cli ${chainName} generatetoaddress ${count} ${address.trim()}`, {
             ignoreErrors: true,
             timeout: 30000
@@ -250,7 +383,7 @@ async function generateBlocks(count = 1) {
     for (const method of methods) {
       try {
         const result = await method();
-        if (result) {
+        if (result && result.stdout) {
           console.log(`✅ Generated ${count} block(s) successfully`);
           return true;
         }
@@ -269,13 +402,16 @@ async function generateBlocks(count = 1) {
 }
 
 async function restartWithMining() {
-  console.log('\n🔄 Restarting blockchain with mining enabled...');
+  console.log('\n🔄 Restarting blockchain...');
   
   await stopBlockchain();
   await sleep(3000);
   
   // Clear any lock files
-  const lockFile = `${chainDir}/.lock`;
+  const lockFile = process.platform === 'win32' 
+    ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'MultiChain', `${chainName}.lock`)
+    : `${chainDir}/.lock`;
+    
   if (fs.existsSync(lockFile)) {
     fs.unlinkSync(lockFile);
     console.log('Removed lock file');
@@ -306,11 +442,13 @@ async function getBlockchainStatus() {
     const { stdout } = await executeCommand(`multichain-cli ${chainName} getmininginfo`, {
       ignoreErrors: true
     });
-    if (stdout) {
+    if (stdout && stdout.trim()) {
       const miningInfo = JSON.parse(stdout);
       console.log(`\n⛏️ Mining:`);
       console.log(`   Enabled: ${miningInfo.mine ? 'Yes' : 'No'}`);
-      console.log(`   Mining Interval: ${MINE_INTERVAL}s`);
+      if (miningInfo.mine) {
+        console.log(`   Mining Interval: ${MINE_INTERVAL}s`);
+      }
     }
   } catch (error) {
     // Ignore - older version
@@ -321,12 +459,15 @@ async function getBlockchainStatus() {
     const { stdout } = await executeCommand(`multichain-cli ${chainName} liststreams`, {
       ignoreErrors: true
     });
-    if (stdout) {
+    if (stdout && stdout.trim()) {
       const streams = JSON.parse(stdout);
       console.log(`\n📋 Streams (${streams.length}):`);
-      streams.forEach(stream => {
-        console.log(`   - ${stream.name}`);
+      streams.slice(0, 10).forEach(stream => {
+        console.log(`   - ${stream.name} (${stream.items || 0} items)`);
       });
+      if (streams.length > 10) {
+        console.log(`   ... and ${streams.length - 10} more`);
+      }
     }
   } catch (error) {
     // Ignore
@@ -364,5 +505,6 @@ module.exports = {
   restartWithMining, 
   getBlockchainStatus,
   generateBlocks,
-  isBlockchainRunning
+  isBlockchainRunning,
+  getChainDir
 };
