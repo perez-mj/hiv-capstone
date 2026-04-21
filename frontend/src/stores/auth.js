@@ -121,63 +121,79 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
-    console.log('🚪 Logging out...')
+  console.log('🚪 Logging out...')
+  
+  try {
+    // Call logout endpoint if it exists
+    await http.post('/auth/logout').catch(() => {})
+  } catch (error) {
+    console.log('Logout endpoint error (ignored):', error.message)
+  } finally {
+    // Clear local state
+    token.value = null
+    user.value = null
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('authUser')
+    localStorage.removeItem('refreshToken')
     
-    try {
-      // Call logout endpoint if it exists
-      await http.post('/auth/logout').catch(() => {})
-    } catch (error) {
-      console.log('Logout endpoint error (ignored):', error.message)
-    } finally {
-      // Clear local state
-      token.value = null
-      user.value = null
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('authUser')
-      localStorage.removeItem('refreshToken')
-      
-      // Redirect to login
-      if (router) {
-        await router.push('/login')
-      } else {
-        window.location.href = '/login'
-      }
+    // Redirect to login
+    if (router && router.currentRoute.value.path !== '/login') {
+      await router.push('/login')
+    } else if (!router) {
+      // Fallback if router not available
+      window.location.href = '/login'
     }
   }
+}
 
   const checkAuth = async () => {
-    try {
-      console.log('🔄 Checking auth status...')
-      
-      if (!token.value) {
-        console.log('⚠️ No token found')
-        return false
-      }
-
-      const response = await http.get('/auth/check')
-      
-      // Handle nested response structure
-      const userData = response.data?.data?.user || response.data?.user
-      
-      if (userData) {
-        console.log('✅ Auth check successful, role:', userData.role)
-        // Update user data in case it changed
-        user.value = userData
-        localStorage.setItem('authUser', JSON.stringify(userData))
-        return true
-      }
-      
-      return false
-    } catch (error) {
-      console.error('❌ Auth check failed:', error.message)
-      
-      if (error.response?.status === 401) {
-        await logout()
-      }
-      
+  try {
+    console.log('🔄 Checking auth status...')
+    
+    if (!token.value) {
+      console.log('⚠️ No token found')
+      // Clear any stale user data
+      await logout()
       return false
     }
+
+    const response = await http.get('/auth/check')
+    
+    // Handle nested response structure
+    const userData = response.data?.user || response.user
+    
+    if (userData) {
+      console.log('✅ Auth check successful, role:', userData.role)
+      // Update user data in case it changed
+      user.value = userData
+      localStorage.setItem('authUser', JSON.stringify(userData))
+      return true
+    }
+    
+    return false
+  } catch (error) {
+    console.error('❌ Auth check failed:', error.message)
+    
+    // Handle different error status codes
+    const status = error.response?.status
+    
+    if (status === 401 || status === 403) {
+      // Token is invalid or expired - force logout
+      console.log('🔒 Token invalid/expired, logging out...')
+      await logout()
+    } else if (status === 404) {
+      // Endpoint not found, but token might still be valid
+      console.warn('⚠️ Auth check endpoint not found')
+      // Don't logout automatically for 404
+    } else if (error.message.includes('Network Error')) {
+      console.log('🌐 Network error during auth check')
+      // Don't logout on network errors, just return false
+      return false
+    }
+    
+    return false
   }
+}
 
   // Initialize from localStorage
   const initialize = () => {

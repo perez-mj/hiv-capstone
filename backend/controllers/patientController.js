@@ -209,17 +209,16 @@ const patientController = {
       
       // Generate facility code if not provided
       let finalPatientCode = patient_facility_code;
-      if (!finalPatientCode) {
-        const registrationYear = new Date().getFullYear();
-        finalPatientCode = await generatePatientCode(
-          null,
-          first_name,
-          middle_name,
-          last_name,
-          hiv_status,
-          registrationYear
-        );
-      } else {
+if (!finalPatientCode) {
+  const registrationYear = new Date().getFullYear();
+  finalPatientCode = await generatePatientCode(
+    first_name,
+    middle_name,
+    last_name,
+    hiv_status,
+    registrationYear
+  );
+} else {
         const exists = await Patient.checkFacilityCodeExists(finalPatientCode);
         if (exists) {
           let counter = 1;

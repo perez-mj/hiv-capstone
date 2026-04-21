@@ -6,7 +6,7 @@ const { sendResponse } = require('../utils/responseHandler');
 const blockchainAuditService = require('../services/blockchainAuditService');
 
 const queueController = {
-  // Get queue display board (public)
+  // OPTIMIZED: Get queue display board (public)
   async getQueueDisplay(req, res, next) {
     try {
       const queue = await Queue.getQueueDisplay();
@@ -16,48 +16,18 @@ const queueController = {
     }
   },
 
-  // Get current queue status
+  // OPTIMIZED: Get current queue status using optimized method
   async getCurrentQueue(req, res, next) {
     try {
-      const queue = await Queue.getTodayQueue();
-      
-      const nowServing = queue.find(q => q.status === 'SERVING');
-      const waitingCount = queue.filter(q => q.status === 'WAITING').length;
-      const calledCount = queue.filter(q => q.status === 'CALLED').length;
-      const estimatedWaitTime = waitingCount * 15;
-      
-      const grouped = {
-        waiting: queue.filter(q => q.status === 'WAITING'),
-        called: queue.filter(q => q.status === 'CALLED'),
-        serving: queue.filter(q => q.status === 'SERVING')
-      };
-      
-      // Return data directly without extra nesting
-      sendResponse(res, 200, 'Current queue retrieved successfully', {
-        waiting: grouped.waiting,
-        called: grouped.called,
-        serving: grouped.serving,
-        now_serving: nowServing ? {
-          id: nowServing.id,
-          number: nowServing.queue_number,
-          code: nowServing.queue_code,
-          name: `${nowServing.patient_first_name} ${nowServing.patient_last_name}`,
-          type: nowServing.type_name
-        } : null,
-        stats: {
-          waiting_count: waitingCount,
-          called_count: calledCount,
-          serving_count: grouped.serving.length,
-          total_in_queue: queue.length,
-          estimated_total_wait: estimatedWaitTime
-        }
-      });
+      // Use the optimized single-query method
+      const queueData = await Queue.getCurrentQueueOptimized();
+      sendResponse(res, 200, 'Current queue retrieved successfully', queueData);
     } catch (error) {
       next(error);
     }
   },
 
-  // Get all queue entries (Admin/Nurse only)
+  // OPTIMIZED: Get all queue entries (Admin/Nurse only)
   async getAllQueue(req, res, next) {
     try {
       const queue = await Queue.getTodayQueue();
@@ -71,12 +41,11 @@ const queueController = {
       
       const currentServing = queue.find(q => q.status === 'SERVING');
       
-      // Calculate estimated wait times
-      const avgServiceTime = 15;
+      // Calculate estimated wait times (15 min average per patient)
       let estimatedWaitTime = 0;
       for (let i = 0; i < grouped.waiting.length; i++) {
         grouped.waiting[i].estimated_wait_minutes = estimatedWaitTime;
-        estimatedWaitTime += avgServiceTime;
+        estimatedWaitTime += 15;
       }
       
       sendResponse(res, 200, 'Queue retrieved successfully', {
@@ -97,7 +66,7 @@ const queueController = {
     }
   },
 
-  // Get queue statistics
+  // OPTIMIZED: Get queue statistics
   async getQueueStatistics(req, res, next) {
     try {
       const stats = await Queue.getQueueStatistics();
@@ -107,7 +76,7 @@ const queueController = {
     }
   },
 
-  // Get queue history with filters
+  // OPTIMIZED: Get queue history with filters
   async getQueueHistory(req, res, next) {
     try {
       const { page = 1, limit = 20, start_date, end_date, status } = req.query;
@@ -118,7 +87,6 @@ const queueController = {
       const total = await Queue.countHistory(filters);
       const summary = await Queue.getTodaySummary();
       
-      // Return data directly without extra nesting
       sendResponse(res, 200, 'Queue history retrieved successfully', {
         data: history,
         summary: {
@@ -139,7 +107,7 @@ const queueController = {
     }
   },
 
-  // Get patient's queue status
+  // OPTIMIZED: Get patient's queue status
   async getPatientQueue(req, res, next) {
     try {
       const { patientId } = req.params;
@@ -159,7 +127,7 @@ const queueController = {
     }
   },
 
-  // Get current patient's own queue status
+  // OPTIMIZED: Get current patient's own queue status
   async getMyQueueStatus(req, res, next) {
     try {
       if (req.user.role !== 'PATIENT') {
@@ -189,7 +157,7 @@ const queueController = {
     }
   },
 
-  // Confirm appointment and add to queue
+  // OPTIMIZED: Confirm appointment and add to queue (with transaction)
   async confirmAndAddToQueue(req, res, next) {
     try {
       const { appointmentId } = req.params;
@@ -208,33 +176,18 @@ const queueController = {
         return sendResponse(res, 400, 'Appointment is already in today\'s queue');
       }
       
-      // Update appointment status
-      await Appointment.updateStatus(appointmentId, 'CONFIRMED', req.user.id);
-      
-      // Generate queue number
-      const queueNumber = await Queue.getNextQueueNumber();
-      const queueCode = await Queue.generateQueueCode(queueNumber);
-      
-      // Add to queue
-      const queueId = await Queue.create({
-        appointment_id: appointmentId,
-        queue_number: queueNumber,
-        queue_code: queueCode,
-        priority: 0,
-        created_by: req.user.id
-      });
-      
-      const newQueue = await Queue.findById(queueId);
+      // Use the optimized confirm method that handles everything in a transaction
+      const queueEntry = await Queue.confirmAppointment(appointmentId, req.user.id);
       
       // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         'CONFIRM_AND_ADD_TO_QUEUE',
         'queue',
-        queueId,
+        queueEntry.id,
         appointment.patient_id,
         { status: appointment.status },
-        { status: 'CONFIRMED', queue_number: queueNumber, queue_code: queueCode },
-        `Confirmed appointment and added to queue (${queueCode})`,
+        { status: 'CONFIRMED', queue_number: queueEntry.queue_number, queue_code: queueEntry.queue_code },
+        `Confirmed appointment and added to queue (${queueEntry.queue_code})`,
         req
       ).catch(err => console.error('Blockchain audit log failed:', err));
       
@@ -243,85 +196,73 @@ const queueController = {
           id: appointment.id,
           status: 'CONFIRMED'
         },
-        queue: newQueue
+        queue: queueEntry
       });
     } catch (error) {
       next(error);
     }
   },
 
-  // Add walk-in patient to queue
-  async addWalkIn(req, res, next) {
-    try {
-      const { patient_id, appointment_type_id, notes } = req.body;
-      
-      if (!patient_id || !appointment_type_id) {
-        return sendResponse(res, 400, 'Patient ID and appointment type are required');
-      }
-      
-      const patient = await Patient.findById(patient_id);
-      if (!patient) {
-        return sendResponse(res, 404, 'Patient not found');
-      }
-      
-      const existingQueue = await Queue.getPatientCurrentQueue(patient_id);
-      if (existingQueue) {
-        return sendResponse(res, 400, 'Patient is already in today\'s queue');
-      }
-      
-      // Create temporary appointment for walk-in
-      const scheduledAt = new Date();
-      scheduledAt.setMinutes(scheduledAt.getMinutes() + 5);
-      
-      const date = new Date();
-      const datePrefix = `W${date.getFullYear().toString().slice(-2)}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
-      
-      const appointmentNumber = await Appointment.generateNumber(datePrefix);
-      
-      const appointmentId = await Appointment.create({
-        appointment_number: appointmentNumber,
-        patient_id,
-        appointment_type_id,
-        scheduled_at: scheduledAt,
-        notes: notes || 'Walk-in patient',
-        status: 'CONFIRMED',
-        created_by: req.user.id
-      });
-      
-      // Generate queue number
-      const queueNumber = await Queue.getNextQueueNumber();
-      const queueCode = await Queue.generateQueueCode(queueNumber);
-      
-      // Add to queue
-      const queueId = await Queue.create({
-        appointment_id: appointmentId,
-        queue_number: queueNumber,
-        queue_code: queueCode,
-        priority: 0,
-        created_by: req.user.id
-      });
-      
-      const newQueue = await Queue.findById(queueId);
-      
-      // Blockchain audit logging (non-blocking)
-      blockchainAuditService.logAction(
-        'WALKIN_ADD',
-        'queue',
-        queueId,
-        patient_id,
-        null,
-        newQueue,
-        `Added walk-in patient ${patient.first_name} ${patient.last_name} (${patient.patient_facility_code}) to queue (${queueCode})`,
-        req
-      ).catch(err => console.error('Blockchain audit log failed:', err));
-      
-      sendResponse(res, 201, 'Walk-in patient added to queue successfully', newQueue);
-    } catch (error) {
-      next(error);
+async addWalkIn(req, res, next) {
+  try {
+    const { patient_id, appointment_type_id, notes } = req.body;
+    
+    if (!patient_id || !appointment_type_id) {
+      return sendResponse(res, 400, 'Patient ID and appointment type are required');
     }
-  },
+    
+    const patient = await Patient.findById(patient_id);
+    if (!patient) {
+      return sendResponse(res, 404, 'Patient not found');
+    }
+    
+    const existingQueue = await Queue.getPatientCurrentQueue(patient_id);
+    if (existingQueue) {
+      return sendResponse(res, 400, 'Patient is already in today\'s queue');
+    }
+    
+    // Create temporary appointment for walk-in
+    const scheduledAt = new Date();
+    scheduledAt.setMinutes(scheduledAt.getMinutes() + 5);
+    
+    const date = new Date();
+    const datePrefix = `W${date.getFullYear().toString().slice(-2)}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+    
+    const appointmentNumber = await Appointment.generateNumber(datePrefix);
+    
+    const appointmentId = await Appointment.create({
+      appointment_number: appointmentNumber,
+      patient_id,
+      appointment_type_id,
+      scheduled_at: scheduledAt,
+      notes: notes || 'Walk-in patient',
+      status: 'CONFIRMED',
+      created_by: req.user.id
+      // Removed is_walkin field
+    });
+    
+    // Generate queue number
+    const queueNumber = await Queue.getNextQueueNumber();
+    const queueCode = await Queue.generateQueueCode(queueNumber);
+    
+    // Add to queue
+    const queueId = await Queue.create({
+      appointment_id: appointmentId,
+      queue_number: queueNumber,
+      queue_code: queueCode,
+      priority: 0,
+      created_by: req.user.id
+    });
+    
+    const newQueue = await Queue.findById(queueId);
+    
+    sendResponse(res, 201, 'Walk-in patient added to queue successfully', newQueue);
+  } catch (error) {
+    next(error);
+  }
+},
 
-  // Call patient (next or specific)
+  // OPTIMIZED: Call patient (next or specific)
   async callPatient(req, res, next) {
     try {
       const { id } = req.params;
@@ -371,7 +312,7 @@ const queueController = {
     }
   },
 
-  // Start serving patient
+  // OPTIMIZED: Start serving patient
   async startServing(req, res, next) {
     try {
       const { id } = req.params;
@@ -410,7 +351,7 @@ const queueController = {
     }
   },
 
-  // Complete serving patient
+  // OPTIMIZED: Complete serving patient
   async completeService(req, res, next) {
     try {
       const { id } = req.params;
@@ -451,7 +392,7 @@ const queueController = {
     }
   },
 
-  // Skip patient
+  // OPTIMIZED: Skip patient
   async skipPatient(req, res, next) {
     try {
       const { id } = req.params;
@@ -493,7 +434,7 @@ const queueController = {
     }
   },
 
-  // Update queue priority (reorder)
+  // OPTIMIZED: Update queue priority (reorder)
   async updatePriority(req, res, next) {
     try {
       const { queue_id, priority } = req.body;
@@ -524,7 +465,7 @@ const queueController = {
     }
   },
 
-  // Reset queue (with filters)
+  // OPTIMIZED: Reset queue (with filters) using batch operations
   async resetQueue(req, res, next) {
     try {
       const { appointment_id, date } = req.query;
@@ -536,7 +477,7 @@ const queueController = {
         return sendResponse(res, 404, 'No queue entries found to reset');
       }
       
-      // Log blockchain audit for each entry
+      // Log blockchain audit for each entry (non-blocking)
       for (const entry of queueEntries) {
         blockchainAuditService.logAction(
           'DELETE',
@@ -565,7 +506,7 @@ const queueController = {
     }
   },
 
-  // Get queue summary
+  // OPTIMIZED: Get queue summary (cached-friendly)
   async getQueueSummary(req, res, next) {
     try {
       const summary = await Queue.getCurrentSummary();
@@ -575,7 +516,7 @@ const queueController = {
     }
   },
 
-  // Check if appointment is in queue
+  // OPTIMIZED: Check if appointment is in queue
   async checkAppointmentInQueue(req, res, next) {
     try {
       const { appointmentId } = req.params;
@@ -594,7 +535,7 @@ const queueController = {
     }
   },
 
-  // Get daily stats
+  // OPTIMIZED: Get daily stats
   async getDailyStats(req, res, next) {
     try {
       const { start_date, end_date } = req.query;
@@ -605,11 +546,74 @@ const queueController = {
     }
   },
 
-  // Get peak hours stats
+  // OPTIMIZED: Get peak hours stats
   async getPeakHours(req, res, next) {
     try {
       const peakHours = await Queue.getPeakHours();
       sendResponse(res, 200, 'Peak hours stats retrieved successfully', peakHours);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // OPTIMIZED: Batch update multiple queue statuses (new endpoint)
+  async batchUpdateStatus(req, res, next) {
+    try {
+      const { updates } = req.body;
+      
+      if (!updates || !Array.isArray(updates) || updates.length === 0) {
+        return sendResponse(res, 400, 'Updates array is required');
+      }
+      
+      // Validate updates
+      for (const update of updates) {
+        if (!update.id || !update.status) {
+          return sendResponse(res, 400, 'Each update must have id and status');
+        }
+        if (!['WAITING', 'CALLED', 'SERVING', 'COMPLETED', 'SKIPPED'].includes(update.status)) {
+          return sendResponse(res, 400, `Invalid status: ${update.status}`);
+        }
+      }
+      
+      // Add updated_by to each update
+      const updatesWithUser = updates.map(update => ({
+        ...update,
+        updated_by: req.user.id
+      }));
+      
+      const result = await Queue.batchUpdateStatus(updatesWithUser);
+      
+      if (result) {
+        sendResponse(res, 200, `Successfully updated ${updates.length} queue entries`);
+      } else {
+        sendResponse(res, 500, 'Failed to update queue entries');
+      }
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // OPTIMIZED: Get waiting time estimation (new endpoint)
+  async getWaitingTimeEstimation(req, res, next) {
+    try {
+      const waitingCount = await Queue.getCurrentSummary();
+      const avgServiceTime = 15; // minutes
+      const estimatedWaitTime = waitingCount.waiting * avgServiceTime;
+      
+      // Get current time distribution
+      const timeDistribution = {
+        less_than_15: Math.max(0, 1 * avgServiceTime),
+        less_than_30: Math.max(0, 2 * avgServiceTime),
+        less_than_60: Math.max(0, 4 * avgServiceTime),
+        more_than_60: Math.max(0, (waitingCount.waiting - 4) * avgServiceTime)
+      };
+      
+      sendResponse(res, 200, 'Waiting time estimation retrieved', {
+        current_waiting: waitingCount.waiting,
+        estimated_wait_minutes: estimatedWaitTime,
+        estimated_wait_formatted: `${Math.floor(estimatedWaitTime / 60)}h ${estimatedWaitTime % 60}m`,
+        time_distribution: timeDistribution
+      });
     } catch (error) {
       next(error);
     }

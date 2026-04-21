@@ -1,134 +1,135 @@
 <!-- frontend/src/pages/admin/AppointmentsCalendar.vue -->
 <template>
-  <v-container fluid class="pa-4 pa-md-6 appointments-calendar">
+  <div class="appointments-calendar">
     <!-- Header Section -->
-    <v-row class="mb-4 align-center">
-      <v-col cols="12" md="6">
-        <div class="d-flex align-center">
-          <v-btn icon variant="text" @click="goToToday" class="mr-2" color="primary">
-            <v-icon>mdi-calendar-today</v-icon>
-          </v-btn>
-          <h1 class="text-h4 font-weight-medium text-primary">
+    <v-container fluid class="pa-3 pa-md-6">
+      <v-row class="mb-4 align-center">
+        <v-col cols="12" md="6" class="text-center text-md-left">
+          <h1 class="text-h5 text-md-h4 font-weight-medium text-primary">
+            <v-icon icon="mdi-calendar-month" class="mr-2" color="primary" size="28" />
             Appointments Calendar
           </h1>
-        </div>
-      </v-col>
+          <p class="text-caption text-medium-emphasis mt-1">Manage and track patient appointments</p>
+        </v-col>
 
-      <v-col cols="12" md="6" class="text-md-right">
-        <v-btn color="secondary" prepend-icon="mdi-plus" @click="openCreateDialog" class="mr-2">
-          New Appointment
-        </v-btn>
-        <v-btn color="primary" variant="outlined" prepend-icon="mdi-format-list-numbered" @click="goToQueue">
-          Queue Management
-        </v-btn>
-      </v-col>
-    </v-row>
-
-    <!-- Filter Section -->
-    <v-row class="mb-4">
-      <v-col cols="12" md="4">
-        <v-select v-model="filters.appointmentType" :items="appointmentTypes" item-title="type_name" item-value="id"
-          label="Filter by Type" clearable color="primary" @update:model-value="fetchAppointments" />
-      </v-col>
-      <v-col cols="12" md="4">
-        <v-select v-model="filters.status" :items="statusOptions" label="Filter by Status" clearable color="primary"
-          @update:model-value="fetchAppointments" />
-      </v-col>
-      <v-col cols="12" md="4">
-        <v-text-field v-model="filters.search" label="Search Patient" prepend-inner-icon="mdi-magnify" clearable
-          color="primary" @update:model-value="debouncedSearch" />
-      </v-col>
-    </v-row>
-
-    <!-- Quick Stats -->
-    <v-row class="mb-4">
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" elevation="2" :style="{ borderLeft: '4px solid #1976D2' }">
-          <v-card-text class="text-center">
-            <div class="text-subtitle-2 text-medium-emphasis">Today's Appointments</div>
-            <div class="text-h4 font-weight-bold text-primary">{{ stats.today.total || 0 }}/16</div>
-            <v-progress-linear :model-value="(stats.today.total / 16) * 100" color="primary" height="6" rounded
-              class="mt-2"></v-progress-linear>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" elevation="2" :style="{ borderLeft: '4px solid #4CAF50' }">
-          <v-card-text class="text-center">
-            <div class="text-subtitle-2 text-medium-emphasis">Completed</div>
-            <div class="text-h4 font-weight-bold text-success">{{ stats.today.completed || 0 }}</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" elevation="2" :style="{ borderLeft: '4px solid #FFC107' }">
-          <v-card-text class="text-center">
-            <div class="text-subtitle-2 text-medium-emphasis">Waiting for Queue</div>
-            <div class="text-h4 font-weight-bold text-warning">{{ getWaitingCount }}</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-
-      <v-col cols="12" sm="6" md="3">
-        <v-card class="stat-card" elevation="2" :style="{ borderLeft: '4px solid #9C27B0' }">
-          <v-card-text class="text-center">
-            <div class="text-subtitle-2 text-medium-emphasis">In Queue Today</div>
-            <div class="text-h4 font-weight-bold text-purple">{{ getTotalInQueue }}</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Calendar View Toggle -->
-    <v-row class="mb-4">
-      <v-col cols="12">
-        <v-btn-toggle v-model="calendarView" mandatory border divided color="primary">
-          <v-btn value="day" prepend-icon="mdi-calendar-day">
-            Day
+        <v-col cols="12" md="6" class="text-center text-md-right mt-3 mt-md-0">
+          <v-btn 
+            color="secondary" 
+            size="small" 
+            prepend-icon="mdi-plus" 
+            @click="openCreateDialog" 
+            class="mr-2"
+          >
+            New
           </v-btn>
-          <v-btn value="week" prepend-icon="mdi-calendar-week">
-            Week
+          <v-btn 
+            color="primary" 
+            variant="outlined" 
+            size="small" 
+            prepend-icon="mdi-format-list-numbered" 
+            @click="goToQueue"
+          >
+            Queue
           </v-btn>
-          <v-btn value="month" prepend-icon="mdi-calendar-month">
-            Month
-          </v-btn>
-        </v-btn-toggle>
-      </v-col>
-    </v-row>
+        </v-col>
+      </v-row>
 
-    <!-- Main Calendar -->
-    <v-card elevation="4" class="calendar-card">
+      <!-- Quick Stats Row -->
+      <v-row class="mb-4">
+        <v-col cols="6" sm="3" v-for="stat in quickStats" :key="stat.title">
+          <v-card class="stat-card" elevation="1" @click="stat.clickable ? stat.onClick() : null">
+            <v-card-text class="pa-3 pa-sm-4 text-center">
+              <v-icon :color="stat.color" size="24" class="mb-1">{{ stat.icon }}</v-icon>
+              <div class="text-h5 text-md-h4 font-weight-bold" :class="`text-${stat.color}`">
+                {{ stat.value }}
+              </div>
+              <div class="text-caption text-medium-emphasis">{{ stat.title }}</div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Filter Section -->
+      <v-row class="mb-4">
+        <v-col cols="12">
+          <v-card class="filter-card" elevation="1">
+            <v-card-text class="pa-3">
+              <v-row dense>
+                <v-col cols="12" sm="4">
+                  <v-select 
+                    v-model="filters.appointmentType" 
+                    :items="appointmentTypes" 
+                    item-title="type_name" 
+                    item-value="id"
+                    label="Appointment Type" 
+                    clearable 
+                    density="compact"
+                    hide-details
+                    @update:model-value="fetchAppointments"
+                  />
+                </v-col>
+                <v-col cols="12" sm="4">
+                  <v-select 
+                    v-model="filters.status" 
+                    :items="statusOptions" 
+                    label="Status" 
+                    clearable 
+                    density="compact"
+                    hide-details
+                    @update:model-value="fetchAppointments"
+                  />
+                </v-col>
+                <v-col cols="12" sm="4">
+                  <v-text-field 
+                    v-model="filters.search" 
+                    label="Search Patient" 
+                    prepend-inner-icon="mdi-magnify" 
+                    clearable 
+                    density="compact"
+                    hide-details
+                    @update:model-value="debouncedSearch"
+                  />
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
       <!-- Calendar Toolbar -->
-      <v-toolbar color="background" flat class="calendar-toolbar">
-        <v-btn icon @click="previousPeriod" color="primary">
-          <v-icon>mdi-chevron-left</v-icon>
-        </v-btn>
+      <v-card class="calendar-toolbar-card mb-4" elevation="1">
+        <v-card-text class="pa-2 pa-sm-3">
+          <div class="d-flex flex-wrap align-center justify-space-between">
+            <div class="d-flex align-center">
+              <v-btn icon size="small" variant="text" @click="previousPeriod" color="primary">
+                <v-icon>mdi-chevron-left</v-icon>
+              </v-btn>
+              <v-btn size="small" variant="text" @click="goToToday" color="primary" class="mx-1">
+                Today
+              </v-btn>
+              <v-btn icon size="small" variant="text" @click="nextPeriod" color="primary">
+                <v-icon>mdi-chevron-right</v-icon>
+              </v-btn>
+              <span class="ml-3 text-subtitle-2 font-weight-medium">{{ calendarTitle }}</span>
+            </div>
 
-        <v-toolbar-title class="text-h6 font-weight-medium">
-          {{ calendarTitle }}
-        </v-toolbar-title>
+            <div class="d-flex mt-2 mt-sm-0">
+              <v-btn-toggle v-model="calendarView" mandatory density="compact" color="primary" divided>
+                <v-btn value="day" size="small">Day</v-btn>
+                <v-btn value="week" size="small">Week</v-btn>
+                <v-btn value="month" size="small">Month</v-btn>
+              </v-btn-toggle>
+            </div>
+          </div>
+        </v-card-text>
+      </v-card>
 
-        <v-btn icon @click="nextPeriod" color="primary">
-          <v-icon>mdi-chevron-right</v-icon>
-        </v-btn>
-
-        <v-spacer />
-
-        <v-btn color="primary" variant="text" @click="goToToday">
-          Today
-        </v-btn>
-      </v-toolbar>
-
-      <!-- Loading State -->
-      <v-skeleton-loader v-if="loading" type="table" class="pa-4" />
-
-      <!-- Calendar Grid -->
-      <div v-else class="calendar-grid" :class="`view-${calendarView}`">
-        <!-- Day View -->
-        <template v-if="calendarView === 'day'">
-          <div class="day-view">
+      <!-- Calendar -->
+      <v-card class="calendar-card" elevation="2">
+        <v-skeleton-loader v-if="loading" type="table" class="pa-4" />
+        <v-sheet v-else class="calendar-sheet">
+          <!-- Day View -->
+          <div v-if="calendarView === 'day'" class="day-view">
             <div class="time-slots">
               <div v-for="hour in workingHours" :key="hour" class="time-slot">
                 <div class="time-label text-medium-emphasis">
@@ -164,7 +165,7 @@
                           <v-btn size="x-small" color="success" block @click.stop="confirmAndAddToQueue(appointment)"
                             :loading="confirmingId === appointment.id">
                             <v-icon left size="16">mdi-check</v-icon>
-                            Confirm & Add to Queue
+                            Confirm & Queue
                           </v-btn>
                         </div>
                       </v-card>
@@ -174,14 +175,12 @@
               </div>
             </div>
           </div>
-        </template>
 
-        <!-- Week View -->
-        <template v-else-if="calendarView === 'week'">
-          <div class="week-view">
+          <!-- Week View -->
+          <div v-else-if="calendarView === 'week'" class="week-view">
             <div class="week-header">
               <div class="time-column"></div>
-              <div v-for="day in weekDays" :key="day.date" class="day-column">
+              <div v-for="day in weekDays" :key="day.date" class="day-column" :class="{ 'is-today': day.isToday }">
                 <div class="day-name">{{ day.name }}</div>
                 <div class="day-number text-h6">{{ day.number }}</div>
                 <div class="day-count text-caption">{{ day.appointmentCount }}/16</div>
@@ -205,14 +204,12 @@
                           <span class="indicator-name">
                             {{ getInitials(appointment.patient_first_name, appointment.patient_last_name) }}
                           </span>
-                          <span v-if="appointment.in_queue" class="indicator-queue">#{{ appointment.queue_number
-                          }}</span>
+                          <span v-if="appointment.in_queue" class="indicator-queue">#{{ appointment.queue_number }}</span>
                         </div>
                       </template>
                       <span>
-                        {{ appointment.patient_first_name }} {{ appointment.patient_last_name }} - {{
-                          appointment.type_name }}
-                        <span v-if="appointment.in_queue"> (In Queue: #{{ appointment.queue_number }})</span>
+                        {{ appointment.patient_first_name }} {{ appointment.patient_last_name }} - {{ appointment.type_name }}
+                        <span v-if="appointment.in_queue"> (Queue: #{{ appointment.queue_number }})</span>
                       </span>
                     </v-tooltip>
                   </template>
@@ -220,11 +217,9 @@
               </div>
             </div>
           </div>
-        </template>
 
-        <!-- Month View -->
-        <template v-else>
-          <div class="month-view">
+          <!-- Month View -->
+          <div v-else class="month-view">
             <div class="month-header">
               <div v-for="day in dayNames" :key="day" class="header-day">
                 {{ day }}
@@ -238,9 +233,6 @@
               }" @click="selectDate(day.date)">
                 <div class="day-number">
                   {{ day.number }}
-                  <span class="day-count-badge" :class="getDayCapacityClass(day.appointmentCount)">
-                    {{ day.appointmentCount }}
-                  </span>
                 </div>
                 <div class="day-appointments">
                   <div v-for="appointment in getAppointmentsForDay(day.date).slice(0, 3)" :key="appointment.id"
@@ -250,8 +242,7 @@
                     }" @click.stop="openAppointmentDetails(appointment)">
                     <span class="indicator-time">{{ formatShortTime(appointment.scheduled_at) }}</span>
                     <span class="indicator-name">{{ appointment.patient_last_name }}</span>
-                    <span v-if="appointment.in_queue" class="indicator-queue-mini">#{{ appointment.queue_number
-                    }}</span>
+                    <span v-if="appointment.in_queue" class="indicator-queue-mini">#{{ appointment.queue_number }}</span>
                   </div>
                   <div v-if="getAppointmentsForDay(day.date).length > 3"
                     class="more-appointments text-caption text-primary" @click.stop="showDayDetails(day.date)">
@@ -261,212 +252,274 @@
               </div>
             </div>
           </div>
-        </template>
-      </div>
-    </v-card>
+        </v-sheet>
+      </v-card>
+    </v-container>
 
-    <!-- Appointment Details Dialog -->
-    <v-dialog v-model="detailsDialog" max-width="600px">
+    <!-- Appointment Details Dialog (Keep from first version) -->
+    <v-dialog v-model="detailsDialog" max-width="500px" :fullscreen="$vuetify.display.smAndDown">
       <v-card v-if="selectedAppointment">
-        <v-card-title class="d-flex align-center pa-4">
-          <v-icon color="primary" size="24" class="mr-2">
-            mdi-calendar-check
-          </v-icon>
-          <span class="text-h6">Appointment Details</span>
+        <v-toolbar color="primary" dark>
+          <v-toolbar-title class="text-subtitle-1">
+            Appointment Details
+          </v-toolbar-title>
           <v-spacer />
-          <v-chip :color="getStatusColor(selectedAppointment.status)" text-color="white" size="small">
-            {{ selectedAppointment.status }}
-          </v-chip>
-          <v-chip v-if="selectedAppointment.in_queue" color="success" text-color="white" size="small" class="ml-2">
-            In Queue: #{{ selectedAppointment.queue_number }}
-          </v-chip>
-          <v-btn icon variant="text" @click="detailsDialog = false">
+          <v-btn icon dark @click="detailsDialog = false">
             <v-icon>mdi-close</v-icon>
           </v-btn>
-        </v-card-title>
-
-        <v-divider />
+        </v-toolbar>
 
         <v-card-text class="pa-4">
-          <v-row>
-            <v-col cols="12" class="pb-0">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">
-                Appointment Number
-              </div>
-              <div class="text-body-1 mb-3">
+          <div class="d-flex justify-space-between align-center mb-4 flex-wrap gap-2">
+            <v-chip :color="getStatusColor(selectedAppointment.status)" text-color="white" size="small">
+              {{ selectedAppointment.status }}
+            </v-chip>
+            <v-chip v-if="selectedAppointment.in_queue" color="success" text-color="white" size="small">
+              <v-icon left size="14">mdi-format-list-numbered</v-icon>
+              Queue #{{ selectedAppointment.queue_number }}
+            </v-chip>
+          </div>
+
+          <v-divider class="mb-4" />
+
+          <v-list density="compact" class="bg-transparent">
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon color="primary">mdi-calendar-text</v-icon>
+              </template>
+              <v-list-item-title class="text-caption text-medium-emphasis">Appointment Number</v-list-item-title>
+              <v-list-item-subtitle class="text-body-2 font-weight-medium">
                 {{ selectedAppointment.appointment_number }}
-              </div>
-            </v-col>
+              </v-list-item-subtitle>
+            </v-list-item>
 
-            <v-col cols="6">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">
-                Patient
-              </div>
-              <div class="text-body-1">
+            <v-list-item @click="goToPatientProfile">
+              <template v-slot:prepend>
+                <v-icon color="primary">mdi-account</v-icon>
+              </template>
+              <v-list-item-title class="text-caption text-medium-emphasis">Patient</v-list-item-title>
+              <v-list-item-subtitle class="text-body-2 font-weight-medium">
                 {{ selectedAppointment.patient_first_name }} {{ selectedAppointment.patient_last_name }}
-              </div>
-              <div class="text-caption text-medium-emphasis">
-                {{ selectedAppointment.patient_facility_code }}
-              </div>
-            </v-col>
+                <span class="text-caption d-block">{{ selectedAppointment.patient_facility_code }}</span>
+              </v-list-item-subtitle>
+            </v-list-item>
 
-            <v-col cols="6">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">
-                Contact
-              </div>
-              <div class="text-body-1">
-                {{ selectedAppointment.patient_contact || 'N/A' }}
-              </div>
-            </v-col>
-
-            <v-col cols="6">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">
-                Date & Time
-              </div>
-              <div class="text-body-1">
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon color="primary">mdi-calendar-clock</v-icon>
+              </template>
+              <v-list-item-title class="text-caption text-medium-emphasis">Date & Time</v-list-item-title>
+              <v-list-item-subtitle class="text-body-2 font-weight-medium">
                 {{ formatFullDate(selectedAppointment.scheduled_at) }}
-              </div>
-            </v-col>
+              </v-list-item-subtitle>
+            </v-list-item>
 
-            <v-col cols="6">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">
-                Type
-              </div>
-              <v-chip :color="getTypeColor(selectedAppointment.type_name)" text-color="white" size="small">
-                {{ selectedAppointment.type_name }}
-              </v-chip>
-              <div class="text-caption">
-                {{ selectedAppointment.duration_minutes }} minutes
-              </div>
-            </v-col>
+            <v-list-item>
+              <template v-slot:prepend>
+                <v-icon color="primary">mdi-clipboard-text</v-icon>
+              </template>
+              <v-list-item-title class="text-caption text-medium-emphasis">Type</v-list-item-title>
+              <v-list-item-subtitle>
+                <v-chip :color="getTypeColor(selectedAppointment.type_name)" text-color="white" size="x-small">
+                  {{ selectedAppointment.type_name }}
+                </v-chip>
+              </v-list-item-subtitle>
+            </v-list-item>
 
-            <v-col cols="12" v-if="selectedAppointment.notes">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">
-                Notes
-              </div>
-              <div class="text-body-2 pa-2 rounded bg-grey-lighten-3">
+            <v-list-item v-if="selectedAppointment.notes">
+              <template v-slot:prepend>
+                <v-icon color="primary">mdi-note-text</v-icon>
+              </template>
+              <v-list-item-title class="text-caption text-medium-emphasis">Notes</v-list-item-title>
+              <v-list-item-subtitle class="text-body-2">
                 {{ selectedAppointment.notes }}
-              </div>
-            </v-col>
-          </v-row>
+              </v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
         </v-card-text>
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
-          <v-spacer />
-          <v-btn variant="text" @click="detailsDialog = false">
+        <v-card-actions class="pa-3 flex-wrap gap-2">
+          <v-btn variant="text" size="small" @click="detailsDialog = false">
             Close
           </v-btn>
-          <v-btn color="primary" variant="flat" @click="editAppointment">
+          <v-btn color="primary" variant="flat" size="small" @click="editAppointment">
+            <v-icon left size="16">mdi-pencil</v-icon>
             Edit
           </v-btn>
-          <v-btn v-if="canConfirm(selectedAppointment)" color="success" variant="flat"
-            @click="confirmAndAddToQueue(selectedAppointment)" :loading="confirmingId === selectedAppointment.id">
-            <v-icon left>mdi-check</v-icon>
-            Confirm & Add to Queue
+          <v-btn 
+            v-if="canConfirm(selectedAppointment)" 
+            color="success" 
+            variant="flat" 
+            size="small"
+            @click="confirmAndAddToQueue(selectedAppointment)" 
+            :loading="confirmingId === selectedAppointment.id"
+          >
+            <v-icon left size="16">mdi-check</v-icon>
+            Confirm & Queue
           </v-btn>
-          <v-btn v-if="selectedAppointment.in_queue" color="info" variant="flat" @click="goToQueue">
-            <v-icon left>mdi-format-list-numbered</v-icon>
-            View in Queue
+          <v-btn 
+            v-if="selectedAppointment.in_queue" 
+            color="info" 
+            variant="flat" 
+            size="small"
+            @click="goToQueue"
+          >
+            <v-icon left size="16">mdi-format-list-numbered</v-icon>
+            View Queue
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Create/Edit Appointment Dialog -->
-    <v-dialog v-model="appointmentDialog" max-width="600px">
+    <!-- Create/Edit Appointment Dialog (Keep from first version) -->
+    <v-dialog v-model="appointmentDialog" max-width="500px" :fullscreen="$vuetify.display.smAndDown">
       <v-card>
-        <v-card-title class="pa-4">
-          <v-icon color="primary" size="24" class="mr-2">
-            {{ editingAppointment ? 'mdi-pencil' : 'mdi-plus-circle' }}
-          </v-icon>
-          {{ editingAppointment ? 'Edit Appointment' : 'New Appointment' }}
-        </v-card-title>
-
-        <v-divider />
+        <v-toolbar :color="editingAppointment ? 'primary' : 'secondary'" dark>
+          <v-toolbar-title class="text-subtitle-1">
+            <v-icon left size="20">{{ editingAppointment ? 'mdi-pencil' : 'mdi-plus-circle' }}</v-icon>
+            {{ editingAppointment ? 'Edit Appointment' : 'New Appointment' }}
+          </v-toolbar-title>
+          <v-spacer />
+          <v-btn icon dark @click="closeAppointmentDialog">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-toolbar>
 
         <v-card-text class="pa-4">
-          <v-alert v-if="isSelectedDateAtCapacity && !editingAppointment" type="error" variant="tonal" class="mb-4">
+          <v-alert v-if="isSelectedDateAtCapacity && !editingAppointment" type="error" variant="tonal" class="mb-4" density="compact">
             <div class="d-flex align-center">
-              <v-icon class="mr-2">mdi-alert-circle</v-icon>
-              <span>This date has reached maximum capacity (16/16 appointments). Please select another date.</span>
+              <v-icon class="mr-2" size="18">mdi-alert-circle</v-icon>
+              <span class="text-caption">This date has reached maximum capacity (16/16 appointments)</span>
             </div>
           </v-alert>
 
           <v-form ref="appointmentForm" v-model="formValid">
-            <v-row>
-              <v-col cols="12">
-                <v-autocomplete v-model="formData.patient" :items="patients"
-                  :item-title="(item) => `${item.last_name}, ${item.first_name} (${item.patient_facility_code})`"
-                  :item-value="(item) => item" label="Select Patient" color="primary"
-                  :rules="[v => !!v || 'Patient is required']" prepend-inner-icon="mdi-account"
-                  :loading="searchingPatients" @update:search="searchPatients" return-object required clearable>
-                  <template v-slot:item="{ props, item }">
-                    <v-list-item v-bind="props" :title="`${item.raw.last_name}, ${item.raw.first_name}`"
-                      :subtitle="`${item.raw.patient_facility_code} | ${item.raw.hiv_status}`" />
-                  </template>
-                </v-autocomplete>
-              </v-col>
+            <v-autocomplete 
+              v-model="formData.patient" 
+              :items="patients"
+              :item-title="(item) => `${item.last_name}, ${item.first_name} (${item.patient_facility_code})`"
+              :item-value="(item) => item" 
+              label="Select Patient" 
+              density="comfortable"
+              :rules="[v => !!v || 'Patient is required']" 
+              :loading="searchingPatients" 
+              @update:search="searchPatients" 
+              return-object 
+              clearable
+              variant="outlined"
+            >
+              <template v-slot:item="{ props, item }">
+                <v-list-item v-bind="props">
+                  <v-list-item-title class="text-body-2">
+                    {{ item.raw.last_name }}, {{ item.raw.first_name }}
+                  </v-list-item-title>
+                  <v-list-item-subtitle class="text-caption">
+                    {{ item.raw.patient_facility_code }} | {{ item.raw.hiv_status }}
+                  </v-list-item-subtitle>
+                </v-list-item>
+              </template>
+            </v-autocomplete>
 
-              <v-col cols="12" md="6">
-                <v-select v-model="formData.appointment_type_id" :items="appointmentTypes" item-title="type_name"
-                  item-value="id" label="Appointment Type" color="primary"
-                  :rules="[v => !!v || 'Appointment type is required']" prepend-inner-icon="mdi-clipboard-text" required
-                  @update:model-value="updateDuration" />
-              </v-col>
+            <v-select 
+              v-model="formData.appointment_type_id" 
+              :items="appointmentTypes" 
+              item-title="type_name"
+              item-value="id" 
+              label="Appointment Type" 
+              density="comfortable"
+              :rules="[v => !!v || 'Appointment type is required']" 
+              variant="outlined"
+              class="mt-3"
+              @update:model-value="updateDuration" 
+            />
 
-              <v-col cols="12" md="6">
-                <v-text-field v-model="formData.duration" label="Duration (minutes)" type="number" color="primary"
-                  readonly disabled prepend-inner-icon="mdi-clock-outline" />
-              </v-col>
+            <v-text-field 
+              v-model="formData.duration" 
+              label="Duration (minutes)" 
+              type="number" 
+              density="comfortable"
+              readonly 
+              disabled 
+              variant="outlined"
+              class="mt-3"
+            />
 
-              <v-col cols="12" md="6">
-                <v-text-field v-model="formData.scheduled_date" label="Date" type="date" color="primary"
-                  :rules="[v => !!v || 'Date is required']" :min="minDate" prepend-inner-icon="mdi-calendar" required
-                  @update:model-value="checkAvailability" />
+            <v-row dense class="mt-3">
+              <v-col cols="12" sm="6">
+                <v-text-field 
+                  v-model="formData.scheduled_date" 
+                  label="Date" 
+                  type="date" 
+                  density="comfortable"
+                  :rules="[v => !!v || 'Date is required']" 
+                  :min="minDate" 
+                  variant="outlined"
+                  @update:model-value="checkAvailability" 
+                />
               </v-col>
-
-              <v-col cols="12" md="6">
-                <v-select v-model="formData.scheduled_time" :items="availableTimeSlots" item-title="display"
-                  item-value="time" label="Time" color="primary" :rules="[v => !!v || 'Time is required']"
+              <v-col cols="12" sm="6">
+                <v-select 
+                  v-model="formData.scheduled_time" 
+                  :items="availableTimeSlots" 
+                  item-title="display"
+                  item-value="time" 
+                  label="Time" 
+                  density="comfortable"
+                  :rules="[v => !!v || 'Time is required']"
                   :disabled="!formData.scheduled_date || checkingAvailability || isSelectedDateAtCapacity"
-                  :loading="checkingAvailability" prepend-inner-icon="mdi-clock" required />
-              </v-col>
-
-              <v-col cols="12">
-                <v-textarea v-model="formData.notes" label="Notes" color="primary" prepend-inner-icon="mdi-note-text"
-                  rows="3" />
+                  :loading="checkingAvailability" 
+                  variant="outlined"
+                />
               </v-col>
             </v-row>
+
+            <v-textarea 
+              v-model="formData.notes" 
+              label="Notes" 
+              density="comfortable"
+              rows="2" 
+              variant="outlined"
+              class="mt-3"
+            />
           </v-form>
         </v-card-text>
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-3">
           <v-spacer />
-          <v-btn variant="text" @click="closeAppointmentDialog">
+          <v-btn variant="text" size="small" @click="closeAppointmentDialog">
             Cancel
           </v-btn>
-          <v-btn color="primary" variant="flat" :loading="saving"
-            :disabled="isSelectedDateAtCapacity && !editingAppointment" @click="saveAppointment">
+          <v-btn 
+            color="primary" 
+            variant="flat" 
+            size="small"
+            :loading="saving"
+            :disabled="isSelectedDateAtCapacity && !editingAppointment" 
+            @click="saveAppointment"
+          >
             {{ editingAppointment ? 'Update' : 'Create' }}
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Snackbar for notifications -->
+    <!-- Snackbar -->
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000" location="top">
-      {{ snackbar.text }}
+      <div class="d-flex align-center">
+        <v-icon left size="20" class="mr-2">{{ getSnackbarIcon(snackbar.color) }}</v-icon>
+        {{ snackbar.text }}
+      </div>
       <template v-slot:actions>
-        <v-btn color="white" variant="text" @click="snackbar.show = false">
+        <v-btn color="white" variant="text" size="small" @click="snackbar.show = false">
           Close
         </v-btn>
       </template>
     </v-snackbar>
-  </v-container>
+  </div>
 </template>
 
 <script>
@@ -533,6 +586,7 @@ export default {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
     const statusOptions = [
+      { title: 'All Statuses', value: null },
       { title: 'Scheduled', value: 'SCHEDULED' },
       { title: 'Confirmed', value: 'CONFIRMED' },
       { title: 'In Progress', value: 'IN_PROGRESS' },
@@ -543,7 +597,46 @@ export default {
 
     const minDate = computed(() => format(new Date(), 'yyyy-MM-dd'))
 
-    // Computed
+    // Quick Stats
+    const quickStats = computed(() => {
+      const today = format(new Date(), 'yyyy-MM-dd')
+      const todayApps = appointments.value.filter(a =>
+        format(parseISO(a.scheduled_at), 'yyyy-MM-dd') === today
+      )
+
+      return [
+        { 
+          title: 'Today\'s Appointments', 
+          value: `${todayApps.length}/${MAX_DAILY_APPOINTMENTS}`, 
+          icon: 'mdi-calendar-today', 
+          color: 'primary',
+          clickable: false
+        },
+        { 
+          title: 'Waiting in Queue', 
+          value: currentQueue.value.waiting?.length || 0, 
+          icon: 'mdi-account-clock', 
+          color: 'warning',
+          clickable: true,
+          onClick: () => goToQueue()
+        },
+        { 
+          title: 'Confirmed Today', 
+          value: todayApps.filter(a => a.status === 'CONFIRMED').length, 
+          icon: 'mdi-check-circle', 
+          color: 'info',
+          clickable: false
+        },
+        { 
+          title: 'Completed Today', 
+          value: todayApps.filter(a => a.status === 'COMPLETED').length, 
+          icon: 'mdi-check-all', 
+          color: 'success',
+          clickable: false
+        }
+      ]
+    })
+
     const calendarTitle = computed(() => {
       if (calendarView.value === 'day') {
         return format(selectedDate.value, 'EEEE, MMMM d, yyyy')
@@ -554,37 +647,6 @@ export default {
       } else {
         return format(selectedDate.value, 'MMMM yyyy')
       }
-    })
-
-    const stats = computed(() => {
-      const today = format(new Date(), 'yyyy-MM-dd')
-      const todayApps = appointments.value.filter(a =>
-        format(parseISO(a.scheduled_at), 'yyyy-MM-dd') === today
-      )
-
-      return {
-        today: {
-          total: todayApps.length,
-          scheduled: todayApps.filter(a => a.status === 'SCHEDULED').length,
-          confirmed: todayApps.filter(a => a.status === 'CONFIRMED').length,
-          in_progress: todayApps.filter(a => a.status === 'IN_PROGRESS').length,
-          completed: todayApps.filter(a => a.status === 'COMPLETED').length,
-          cancelled: todayApps.filter(a => a.status === 'CANCELLED').length,
-          no_show: todayApps.filter(a => a.status === 'NO_SHOW').length
-        }
-      }
-    })
-
-    const getWaitingCount = computed(() => currentQueue.value.waiting?.length || 0)
-    const getTotalInQueue = computed(() => {
-      return (currentQueue.value.waiting?.length || 0) +
-        (currentQueue.value.called?.length || 0) +
-        (currentQueue.value.serving?.length || 0)
-    })
-
-    const isSelectedDateAtCapacity = computed(() => {
-      if (!formData.scheduled_date) return false
-      return getAppointmentsCountForDay(formData.scheduled_date) >= MAX_DAILY_APPOINTMENTS
     })
 
     const weekDays = computed(() => {
@@ -615,169 +677,16 @@ export default {
       }))
     })
 
-    // Methods
-    const fetchAppointmentTypes = async () => {
-      try {
-        const response = await appointmentsApi.getTypes()
-        // response is already response.data from interceptor
-        appointmentTypes.value = Array.isArray(response) ? response : 
-                                  (response?.data ? (Array.isArray(response.data) ? response.data : []) : [])
-        console.log('Appointment types loaded:', appointmentTypes.value.length)
-      } catch (error) {
-        console.error('Error fetching appointment types:', error)
-        showSnackbar('Failed to load appointment types', 'error')
-        appointmentTypes.value = []
-      }
-    }
+    const isSelectedDateAtCapacity = computed(() => {
+      if (!formData.scheduled_date) return false
+      return getAppointmentsCountForDay(formData.scheduled_date) >= MAX_DAILY_APPOINTMENTS
+    })
 
-    const fetchAppointments = async () => {
-      loading.value = true
-      try {
-        const params = {
-          start_date: format(startOfMonth(selectedDate.value), 'yyyy-MM-dd'),
-          end_date: format(endOfMonth(selectedDate.value), 'yyyy-MM-dd')
-        }
-
-        if (filters.appointmentType) params.type_id = filters.appointmentType
-        if (filters.status) params.status = filters.status
-        if (filters.search) params.search = filters.search
-
-        const response = await appointmentsApi.getAll(params)
-        
-        // SAFE: Extract appointments array from response
-        let appointmentsData = []
-        
-        if (Array.isArray(response)) {
-          appointmentsData = response
-        } else if (response?.data && Array.isArray(response.data)) {
-          appointmentsData = response.data
-        } else if (response?.items && Array.isArray(response.items)) {
-          appointmentsData = response.items
-        } else {
-          appointmentsData = []
-        }
-        
-        console.log('Appointments loaded:', appointmentsData.length)
-        
-        // Check queue status for each appointment
-        appointments.value = await Promise.all(
-          appointmentsData.map(async (app) => {
-            try {
-              const queueCheck = await queueApi.checkAppointmentInQueue(app.id)
-              // queueCheck is already response.data from interceptor
-              return {
-                ...app,
-                in_queue: queueCheck?.in_queue || false,
-                queue_number: queueCheck?.queue_number,
-                queue_status: queueCheck?.status
-              }
-            } catch (error) {
-              return { ...app, in_queue: false }
-            }
-          })
-        )
-      } catch (error) {
-        console.error('Error fetching appointments:', error)
-        showSnackbar('Failed to load appointments', 'error')
-        appointments.value = []
-      } finally {
-        loading.value = false
-      }
-    }
-
-    const checkAvailability = async () => {
-      if (!formData.scheduled_date || !formData.appointment_type_id) return
-
-      checkingAvailability.value = true
-      try {
-        const response = await appointmentsApi.checkAvailability({
-          date: formData.scheduled_date,
-          type_id: parseInt(formData.appointment_type_id)
-        })
-
-        // SAFE: Extract slots from response
-        let slots = []
-        if (response?.slots && Array.isArray(response.slots)) {
-          slots = response.slots
-        } else if (Array.isArray(response)) {
-          slots = response
-        } else if (response?.data?.slots && Array.isArray(response.data.slots)) {
-          slots = response.data.slots
-        }
-        
-        const now = new Date()
-        const today = new Date().toISOString().split('T')[0]
-        const isToday = formData.scheduled_date === today
-
-        availableTimeSlots.value = slots
-          .filter(slot => {
-            if (!slot.available) return false
-            if (isToday) {
-              const [hours, minutes] = slot.time.split(':').map(Number)
-              const slotTime = new Date()
-              slotTime.setHours(hours, minutes, 0, 0)
-              return slotTime > now
-            }
-            return true
-          })
-          .map(slot => ({
-            time: slot.time,
-            display: slot.display || `${slot.time} (Available)`
-          }))
-      } catch (error) {
-        console.error('Error checking availability:', error)
-        showSnackbar('Failed to check availability', 'error')
-        availableTimeSlots.value = []
-      } finally {
-        checkingAvailability.value = false
-      }
-    }
-
-    const fetchQueueData = async () => {
-      try {
-        const response = await queueApi.getCurrent()
-        // response is already response.data from interceptor
-        const data = response || {}
-        currentQueue.value = {
-          waiting: data.waiting || [],
-          called: data.called || [],
-          serving: data.serving || []
-        }
-      } catch (error) {
-        console.error('Error fetching queue:', error)
-        currentQueue.value = {
-          waiting: [],
-          called: [],
-          serving: []
-        }
-      }
-    }
-
-    const searchPatients = debounce(async (search) => {
-      if (!search || search.length < 3) {
-        patients.value = []
-        return
-      }
-
-      searchingPatients.value = true
-      try {
-        const response = await patientsApi.search(search, 10)
-        // response is already response.data from interceptor
-        patients.value = Array.isArray(response) ? response : 
-                        (response?.data ? (Array.isArray(response.data) ? response.data : []) : [])
-        console.log('Patients found:', patients.value.length)
-      } catch (error) {
-        console.error('Error searching patients:', error)
-        showSnackbar('Failed to search patients', 'error')
-        patients.value = []
-      } finally {
-        searchingPatients.value = false
-      }
-    }, 500)
-
+    // Helper Functions
     const getAppointmentsForDay = (date) => {
+      const dateStr = typeof date === 'string' ? date : format(date, 'yyyy-MM-dd')
       return appointments.value.filter(a =>
-        format(parseISO(a.scheduled_at), 'yyyy-MM-dd') === date
+        format(parseISO(a.scheduled_at), 'yyyy-MM-dd') === dateStr
       )
     }
 
@@ -804,34 +713,149 @@ export default {
       return appointment?.status === 'SCHEDULED' && !appointment.in_queue
     }
 
-    const confirmAndAddToQueue = async (appointment) => {
-      confirmingId.value = appointment.id
-      try {
-        const response = await queueApi.confirmAppointment(appointment.id)
+    const getSnackbarIcon = (color) => {
+      const icons = {
+        success: 'mdi-check-circle',
+        error: 'mdi-alert-circle',
+        warning: 'mdi-alert',
+        info: 'mdi-information'
+      }
+      return icons[color] || 'mdi-information'
+    }
 
-        if (response?.success !== false) {
-          const queueNumber = response?.queue?.queue_number || response?.queue_number
-          showSnackbar(
-            `Appointment confirmed and added to queue as #${queueNumber || 'N/A'}`,
-            'success'
-          )
-          await fetchQueueData()
-          await fetchAppointments()
-          detailsDialog.value = false
-        }
+    // API Calls
+    const fetchAppointmentTypes = async () => {
+      try {
+        const response = await appointmentsApi.getTypes()
+        appointmentTypes.value = Array.isArray(response) ? response : 
+                                  (response?.data ? (Array.isArray(response.data) ? response.data : []) : [])
       } catch (error) {
-        console.error('Error confirming appointment:', error)
-        showSnackbar(error.response?.data?.message || 'Failed to confirm appointment', 'error')
-      } finally {
-        confirmingId.value = null
+        console.error('Error fetching appointment types:', error)
+        showSnackbar('Failed to load appointment types', 'error')
       }
     }
 
-    const goToToday = () => {
-      selectedDate.value = new Date()
-      fetchAppointments()
+    const fetchAppointments = async () => {
+      loading.value = true
+      try {
+        const params = {
+          start_date: format(startOfMonth(selectedDate.value), 'yyyy-MM-dd'),
+          end_date: format(endOfMonth(selectedDate.value), 'yyyy-MM-dd')
+        }
+
+        if (filters.appointmentType) params.type_id = filters.appointmentType
+        if (filters.status) params.status = filters.status
+        if (filters.search) params.search = filters.search
+
+        const response = await appointmentsApi.getAll(params)
+        
+        let appointmentsData = []
+        if (Array.isArray(response)) {
+          appointmentsData = response
+        } else if (response?.data && Array.isArray(response.data)) {
+          appointmentsData = response.data
+        } else if (response?.items && Array.isArray(response.items)) {
+          appointmentsData = response.items
+        }
+        
+        appointments.value = await Promise.all(
+          appointmentsData.map(async (app) => {
+            try {
+              const queueCheck = await queueApi.checkAppointmentInQueue(app.id)
+              return {
+                ...app,
+                in_queue: queueCheck?.in_queue || false,
+                queue_number: queueCheck?.queue_number
+              }
+            } catch (error) {
+              return { ...app, in_queue: false }
+            }
+          })
+        )
+      } catch (error) {
+        console.error('Error fetching appointments:', error)
+        showSnackbar('Failed to load appointments', 'error')
+      } finally {
+        loading.value = false
+      }
     }
 
+    const fetchQueueData = async () => {
+      try {
+        const response = await queueApi.getCurrent()
+        currentQueue.value = {
+          waiting: response?.waiting || [],
+          called: response?.called || [],
+          serving: response?.serving || []
+        }
+      } catch (error) {
+        console.error('Error fetching queue:', error)
+      }
+    }
+
+    const checkAvailability = async () => {
+      if (!formData.scheduled_date || !formData.appointment_type_id) return
+
+      checkingAvailability.value = true
+      try {
+        const response = await appointmentsApi.checkAvailability({
+          date: formData.scheduled_date,
+          type_id: parseInt(formData.appointment_type_id)
+        })
+
+        let slots = []
+        if (response?.slots && Array.isArray(response.slots)) {
+          slots = response.slots
+        } else if (response?.data?.slots && Array.isArray(response.data.slots)) {
+          slots = response.data.slots
+        }
+        
+        const now = new Date()
+        const today = new Date().toISOString().split('T')[0]
+        const isToday = formData.scheduled_date === today
+
+        availableTimeSlots.value = slots
+          .filter(slot => {
+            if (!slot.available) return false
+            if (isToday) {
+              const [hours, minutes] = slot.time.split(':').map(Number)
+              const slotTime = new Date()
+              slotTime.setHours(hours, minutes, 0, 0)
+              return slotTime > now
+            }
+            return true
+          })
+          .map(slot => ({
+            time: slot.time,
+            display: slot.display || `${slot.time}`
+          }))
+      } catch (error) {
+        console.error('Error checking availability:', error)
+        availableTimeSlots.value = []
+      } finally {
+        checkingAvailability.value = false
+      }
+    }
+
+    const searchPatients = debounce(async (search) => {
+      if (!search || search.length < 3) {
+        patients.value = []
+        return
+      }
+
+      searchingPatients.value = true
+      try {
+        const response = await patientsApi.search(search, 10)
+        patients.value = Array.isArray(response) ? response : 
+                        (response?.data ? (Array.isArray(response.data) ? response.data : []) : [])
+      } catch (error) {
+        console.error('Error searching patients:', error)
+      } finally {
+        searchingPatients.value = false
+      }
+    }, 500)
+
+    // Navigation
     const previousPeriod = () => {
       if (calendarView.value === 'day') {
         selectedDate.value = subDays(selectedDate.value, 1)
@@ -854,6 +878,11 @@ export default {
       fetchAppointments()
     }
 
+    const goToToday = () => {
+      selectedDate.value = new Date()
+      fetchAppointments()
+    }
+
     const selectDate = (date) => {
       selectedDate.value = new Date(date)
       calendarView.value = 'day'
@@ -864,10 +893,35 @@ export default {
       calendarView.value = 'day'
     }
 
+    // Appointment Actions
     const openAppointmentDetails = (appointment) => {
       selectedAppointment.value = appointment
       detailsDialog.value = true
     }
+
+    const confirmAndAddToQueue = async (appointment) => {
+  confirmingId.value = appointment.id
+  try {
+    const response = await queueApi.confirmAppointment(appointment.id)
+    if (response?.data?.success !== false) {
+      showSnackbar(`Appointment #${appointment.appointment_number} confirmed and added to queue`, 'success')
+      // Refresh both queue and appointments data
+      await Promise.all([
+        fetchQueueData(),
+        fetchAppointments()
+      ])
+      detailsDialog.value = false
+    } else {
+      showSnackbar(response?.data?.message || 'Failed to confirm appointment', 'error')
+    }
+  } catch (error) {
+    console.error('Error confirming appointment:', error)
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to confirm appointment'
+    showSnackbar(errorMessage, 'error')
+  } finally {
+    confirmingId.value = null
+  }
+}
 
     const openCreateDialog = () => {
       editingAppointment.value = false
@@ -911,58 +965,66 @@ export default {
       patients.value = [formData.patient]
       detailsDialog.value = false
       appointmentDialog.value = true
-      checkAvailability()
+      
+      setTimeout(() => {
+        checkAvailability()
+      }, 100)
     }
 
     const closeAppointmentDialog = () => {
       appointmentDialog.value = false
-      resetForm()
-      if (appointmentForm.value) {
-        appointmentForm.value.reset()
-      }
+      setTimeout(() => {
+        resetForm()
+        if (appointmentForm.value) {
+          appointmentForm.value.reset()
+        }
+      }, 200)
     }
 
     const saveAppointment = async () => {
-  if (!appointmentForm.value?.validate()) return
-  if (!formData.patient) {
-    showSnackbar('Please select a patient', 'error')
-    return
-  }
+      if (!appointmentForm.value?.validate()) return
+      if (!formData.patient) {
+        showSnackbar('Please select a patient', 'error')
+        return
+      }
 
-  saving.value = true
-  try {
-    // Ensure scheduled_at is a proper ISO string
-    const scheduledDateTime = `${formData.scheduled_date}T${formData.scheduled_time}:00`
-    
-    const appointmentData = {
-      patient_id: parseInt(formData.patient.id),
-      appointment_type_id: parseInt(formData.appointment_type_id),
-      scheduled_at: scheduledDateTime, // This is a string like "2024-01-15T14:30:00"
-      notes: formData.notes || null
+      saving.value = true
+      try {
+        const scheduledDateTime = `${formData.scheduled_date}T${formData.scheduled_time}:00`
+        
+        const appointmentData = {
+          patient_id: parseInt(formData.patient.id),
+          appointment_type_id: parseInt(formData.appointment_type_id),
+          scheduled_at: scheduledDateTime,
+          notes: formData.notes || null
+        }
+
+        if (editingAppointment.value && selectedAppointment.value) {
+          await appointmentsApi.update(selectedAppointment.value.id, appointmentData)
+          showSnackbar('Appointment updated successfully', 'success')
+        } else {
+          await appointmentsApi.create(appointmentData)
+          showSnackbar('Appointment created successfully', 'success')
+        }
+
+        closeAppointmentDialog()
+        await fetchAppointments()
+      } catch (error) {
+        console.error('Error saving appointment:', error)
+        showSnackbar(error.response?.data?.message || 'Failed to save appointment', 'error')
+      } finally {
+        saving.value = false
+      }
     }
-
-    console.log('Saving appointment:', appointmentData) // Debug log
-
-    if (editingAppointment.value && selectedAppointment.value) {
-      await appointmentsApi.update(selectedAppointment.value.id, appointmentData)
-      showSnackbar('Appointment updated successfully', 'success')
-    } else {
-      await appointmentsApi.create(appointmentData)
-      showSnackbar('Appointment created successfully', 'success')
-    }
-
-    closeAppointmentDialog()
-    await fetchAppointments()
-  } catch (error) {
-    console.error('Error saving appointment:', error)
-    showSnackbar(error.response?.data?.message || 'Failed to save appointment', 'error')
-  } finally {
-    saving.value = false
-  }
-}
 
     const goToQueue = () => {
       router.push('/admin/queue')
+    }
+
+    const goToPatientProfile = () => {
+      if (selectedAppointment.value) {
+        router.push(`/admin/patients/${selectedAppointment.value.patient_id}`)
+      }
     }
 
     const updateDuration = () => {
@@ -972,7 +1034,7 @@ export default {
       }
     }
 
-    // Utility functions
+    // Formatting Utilities
     const formatHour = (hour) => {
       const ampm = hour >= 12 ? 'PM' : 'AM'
       const hour12 = hour % 12 || 12
@@ -981,7 +1043,7 @@ export default {
 
     const formatTime = (datetime) => format(parseISO(datetime), 'h:mm a')
     const formatShortTime = (datetime) => format(parseISO(datetime), 'h:mm a')
-    const formatFullDate = (datetime) => format(parseISO(datetime), 'EEEE, MMMM d, yyyy \'at\' h:mm a')
+    const formatFullDate = (datetime) => format(parseISO(datetime), 'MMM d, yyyy h:mm a')
 
     const getInitials = (first, last) => {
       return `${first?.charAt(0) || ''}${last?.charAt(0) || ''}`.toUpperCase()
@@ -1024,12 +1086,22 @@ export default {
     }, 500)
 
     // Watchers
-    watch([selectedDate, filters], () => {
+    watch([selectedDate, () => calendarView.value], () => {
+      fetchAppointments()
+    })
+
+    watch(() => filters.appointmentType, () => {
+      fetchAppointments()
+    })
+
+    watch(() => filters.status, () => {
       fetchAppointments()
     })
 
     watch(() => [formData.scheduled_date, formData.appointment_type_id], () => {
-      checkAvailability()
+      if (formData.scheduled_date && formData.appointment_type_id) {
+        checkAvailability()
+      }
     })
 
     watch(() => formData.patient, (newPatient) => {
@@ -1049,142 +1121,130 @@ export default {
       detailsDialog, appointmentDialog, editingAppointment, selectedAppointment,
       appointmentForm, formValid, availableTimeSlots, filters, formData, snackbar,
       workingHours, dayNames, statusOptions, minDate, MAX_DAILY_APPOINTMENTS,
-      calendarTitle, stats, getWaitingCount, getTotalInQueue, isSelectedDateAtCapacity,
-      weekDays, calendarDays, fetchAppointments, searchPatients, checkAvailability,
+      calendarTitle, quickStats, weekDays, calendarDays, isSelectedDateAtCapacity,
+      previousPeriod, nextPeriod, goToToday, selectDate, showDayDetails,
       getAppointmentsForDay, getAppointmentsForTimeSlot, getAppointmentsForDayAndTime,
-      getAppointmentsCountForDay, canConfirm, confirmAndAddToQueue, goToToday,
-      previousPeriod, nextPeriod, selectDate, showDayDetails, openAppointmentDetails,
-      openCreateDialog, editAppointment, closeAppointmentDialog, saveAppointment,
-      goToQueue, updateDuration, formatHour, formatTime, formatShortTime, formatFullDate,
-      getInitials, getTypeColor, getStatusColor, getDayCapacityClass, debouncedSearch
+      getAppointmentsCountForDay, canConfirm, confirmAndAddToQueue,
+      openAppointmentDetails, openCreateDialog, editAppointment, closeAppointmentDialog,
+      saveAppointment, goToQueue, goToPatientProfile, updateDuration,
+      formatHour, formatTime, formatShortTime, formatFullDate,
+      getInitials, getTypeColor, getStatusColor, getDayCapacityClass,
+      getSnackbarIcon, debouncedSearch, fetchAppointments, searchPatients, checkAvailability
     }
   }
 }
 </script>
 
 <style scoped>
-/* Theme Main Color: #1A4D3A (Dark Forest Green)
-  Secondary/Highlight: #FFD700 (Gold) or #2D5A27 (Lighter Forest)
-*/
-
-/* 1. GENERAL & STATS */
-.stat-card {
-  transition: transform 0.2s;
-  background-color: #FFFFFF;
-  height: 100%; 
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border: 1px solid #1A4D3A !important;
+.appointments-calendar {
+  background: linear-gradient(135deg, #F5F7F6 0%, #EDF2EF 100%);
+  min-height: 100vh;
 }
 
-/* Custom Forest Green Button Overrides */
-:deep(.v-btn.bg-primary), 
-:deep(.v-btn.color-primary) {
-  background-color: #1A4D3A !important;
-  color: white !important;
-}
-
-:deep(.v-btn.bg-secondary) {
-  background-color: #2D5A27 !important; /* Darker green variant for secondary */
-  color: white !important;
-}
-
-.calendar-card { 
-  overflow: hidden; 
-  border: 1px solid #1A4D3A; 
-  border-radius: 8px; 
-}
-
-/* 2. TOOLBAR & HEADER */
-.calendar-toolbar {
-  background-color: #F8FAF9 !important;
-  border-bottom: 1px solid #1A4D3A;
-}
-
-/* 3. MONTH VIEW */
-.month-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  border-top: 1px solid #1A4D3A;
-  border-left: 1px solid #1A4D3A;
-  background-color: #FFFFFF;
-}
-
-.month-day {
-  min-height: 120px;
-  padding: 8px;
-  cursor: pointer;
-  border-right: 1px solid #1A4D3A;
-  border-bottom: 1px solid #1A4D3A;
-  transition: all 0.2s ease;
-}
-
-/* TODAY HIGHLIGHT - MONTH VIEW */
-.month-day.is-today {
-  background-color: rgba(26, 77, 58, 0.05);
-  box-shadow: inset 0 0 0 2px #1A4D3A; 
-  position: relative;
-}
-
-.month-day.is-today .day-number {
+.text-primary {
   color: #1A4D3A !important;
-  font-weight: 900;
 }
 
-.month-day.is-today .day-number::after {
-  content: 'TODAY';
-  font-size: 0.6rem;
-  background: #1A4D3A;
-  color: #FFFFFF;
-  padding: 2px 4px;
-  border-radius: 2px;
-  margin-left: 6px;
+/* Stat Cards */
+.stat-card {
+  transition: all 0.3s ease;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #E0E8E4;
+  cursor: pointer;
 }
 
-.month-header {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background-color: #1A4D3A; 
-  color: #FFFFFF;
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 77, 58, 0.1);
 }
 
-.header-day {
-  padding: 10px;
-  text-align: center;
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.8rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+/* Filter Card */
+.filter-card {
+  border-radius: 12px;
+  background: white;
+  border: 1px solid #E0E8E4;
 }
 
-/* 4. DAY VIEW */
+/* Calendar Toolbar */
+.calendar-toolbar-card {
+  border-radius: 12px;
+  background: white;
+  border: 1px solid #E0E8E4;
+}
+
+/* Calendar Card */
+.calendar-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
+  border: 1px solid #E0E8E4;
+}
+
+.calendar-sheet {
+  background: white;
+}
+
+/* Day View */
 .day-view {
-  border-top: 1px solid #1A4D3A;
+  border-top: 1px solid #E0E8E4;
   background-color: #FFFFFF;
 }
 
 .day-view .time-slot {
   display: flex;
   min-height: 100px;
-  border-bottom: 1px solid #1A4D3A;
+  border-bottom: 1px solid #E0E8E4;
 }
 
 .time-label {
   width: 100px;
   padding: 10px;
-  background-color: #F0F4F2;
-  border-right: 1px solid #1A4D3A;
+  background-color: #F8FAF9;
+  border-right: 1px solid #E0E8E4;
   font-weight: 700;
   color: #1A4D3A;
 }
 
-/* 5. WEEK VIEW */
+.slot-appointments {
+  flex: 1;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.appointment-card {
+  border-left: 4px solid #1A4D3A !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.appointment-card:hover {
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.appointment-card.in-queue {
+  border-left: 4px solid #FFD700 !important;
+  background-color: #FFF9E6;
+}
+
+.appointment-time {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.appointment-patient {
+  font-size: 0.875rem;
+}
+
+/* Week View */
 .week-view {
   display: flex;
   flex-direction: column;
   background-color: #FFFFFF;
-  border-top: 1px solid #1A4D3A;
+  border-top: 1px solid #E0E8E4;
 }
 
 .week-header {
@@ -1195,25 +1255,45 @@ export default {
   border-left: 1px solid #1A4D3A;
 }
 
+.week-header .day-column {
+  padding: 12px;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .week-header .day-column.is-today {
-  background-color: #2D5A27; 
-  box-shadow: inset 0 -5px 0px #FFD700; 
+  background-color: #2D5A27;
+}
+
+.day-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.day-number {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.day-count {
+  font-size: 0.7rem;
+  opacity: 0.9;
 }
 
 .week-body {
   display: grid;
   grid-template-columns: 100px repeat(7, 1fr);
-  border-left: 1px solid #1A4D3A;
+  border-left: 1px solid #E0E8E4;
 }
 
 .week-body .time-column {
-  background-color: #F0F4F2;
-  border-right: 1px solid #1A4D3A;
+  background-color: #F8FAF9;
+  border-right: 1px solid #E0E8E4;
 }
 
 .hour-marker, .hour-slot {
   height: 95px;
-  border-bottom: 1px solid rgba(26, 77, 58, 0.2);
+  border-bottom: 1px solid rgba(26, 77, 58, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1226,62 +1306,248 @@ export default {
 }
 
 .week-body .day-column {
-  border-right: 1px solid #1A4D3A;
+  border-right: 1px solid #E0E8E4;
+  position: relative;
 }
 
-/* 6. APPOINTMENTS & INDICATORS */
 .appointment-indicator {
   font-size: 10px;
   padding: 4px 6px;
   border-radius: 4px;
   color: white;
   margin-bottom: 2px;
-  background-color: #2D5A27; /* Forest green indicator */
+  background-color: #2D5A27;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.appointment-indicator.in-queue { 
-  border: 2px solid #FFD700 !important;
+.appointment-indicator:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.appointment-indicator.in-queue {
+  border: 2px solid #FFD700;
   font-weight: bold;
 }
 
-.appointment-card {
-  border-left: 4px solid #1A4D3A !important;
+.appointment-indicator.scheduled {
+  background-color: #FFC107;
+  color: #000;
 }
 
-/* 7. TEXT & BADGES */
-.text-primary { color: #1A4D3A !important; }
+.appointment-indicator.confirmed {
+  background-color: #2196F3;
+}
+
+.appointment-indicator.in_progress {
+  background-color: #1A4D3A;
+}
+
+.appointment-indicator.completed {
+  background-color: #4CAF50;
+}
+
+.indicator-queue {
+  margin-left: 4px;
+  font-weight: bold;
+}
+
+/* Month View */
+.month-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background-color: #1A4D3A;
+  color: #FFFFFF;
+}
+
+.header-day {
+  padding: 12px;
+  text-align: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-top: 1px solid #E0E8E4;
+  border-left: 1px solid #E0E8E4;
+  background-color: #FFFFFF;
+}
+
+.month-day {
+  min-height: 120px;
+  padding: 8px;
+  cursor: pointer;
+  border-right: 1px solid #E0E8E4;
+  border-bottom: 1px solid #E0E8E4;
+  transition: all 0.2s ease;
+}
+
+.month-day:hover {
+  background-color: rgba(26, 77, 58, 0.05);
+}
+
+.month-day.is-today {
+  background-color: rgba(26, 77, 58, 0.05);
+  box-shadow: inset 0 0 0 2px #1A4D3A;
+}
+
+.month-day.is-today .day-number {
+  color: #1A4D3A;
+  font-weight: 900;
+}
+
+.month-day.other-month {
+  background-color: #F8FAF9;
+  color: #999;
+}
+
+.day-number {
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
 .day-count-badge {
   font-size: 0.7rem;
   padding: 2px 6px;
   border-radius: 4px;
   color: #FFFFFF;
+}
+
+.bg-success { background-color: #4CAF50 !important; }
+.bg-warning { background-color: #FFC107 !important; color: #000 !important; }
+.bg-error { background-color: #F44336 !important; }
+
+.day-appointments {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appointment-indicator.mini {
+  font-size: 9px;
+  padding: 2px 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.indicator-time {
+  font-size: 8px;
+  opacity: 0.9;
+}
+
+.indicator-queue-mini {
+  background-color: #FFD700;
+  color: #000;
+  border-radius: 10px;
+  padding: 1px 4px;
+  font-size: 8px;
+  margin-left: 4px;
+}
+
+.more-appointments {
+  color: #1A4D3A;
+  font-size: 0.7rem;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.more-appointments:hover {
+  text-decoration: underline;
+}
+
+/* Gap utility */
+.gap-2 {
+  gap: 8px;
+}
+
+/* Button Overrides */
+:deep(.v-btn--variant-text) {
+  color: #1A4D3A !important;
+}
+
+:deep(.v-btn--variant-outlined) {
+  border-color: #1A4D3A !important;
+  color: #1A4D3A !important;
+}
+
+:deep(.v-btn--variant-flat.bg-primary) {
   background-color: #1A4D3A !important;
-  margin-left: auto;
 }
 
-/* Capacity Classes */
-.bg-success { background-color: #2D5A27 !important; }
-.bg-warning { background-color: #8B7355 !important; } /* Muted earthy gold */
-.bg-error { background-color: #7A2626 !important; } /* Deep red */
-
-/* Hover Effects */
-.month-day:hover, .hour-slot:hover {
-  background-color: rgba(26, 77, 58, 0.08);
+:deep(.v-btn-group .v-btn) {
+  border-color: #1A4D3A !important;
 }
 
-/* Scrollbar styling */
+:deep(.v-btn-group .v-btn--active) {
+  background-color: #1A4D3A !important;
+  color: white !important;
+}
+
+/* Form Overrides */
+:deep(.v-field--focused) .v-field__field {
+  color: #1A4D3A !important;
+}
+
+:deep(.v-field--focused .v-field__outline) {
+  border-color: #1A4D3A !important;
+}
+
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
+
+::-webkit-scrollbar-track {
+  background: #E0E8E4;
+  border-radius: 10px;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #1A4D3A;
   border-radius: 10px;
 }
 
-@media (max-width: 960px) {
-  .week-header, .week-body {
+::-webkit-scrollbar-thumb:hover {
+  background: #2D5A27;
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+  .appointments-calendar {
+    padding-bottom: 70px;
+  }
+  
+  .time-label {
+    width: 60px;
+    font-size: 0.7rem;
+  }
+  
+  .week-header,
+  .week-body {
     grid-template-columns: 60px repeat(7, 1fr);
+  }
+  
+  .month-day {
+    min-height: 80px;
+    padding: 4px;
+  }
+  
+  .day-number {
+    font-size: 0.8rem;
+  }
+  
+  .appointment-indicator.mini {
+    font-size: 7px;
   }
 }
 </style>

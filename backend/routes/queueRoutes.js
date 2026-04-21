@@ -25,6 +25,8 @@ router.get('/stats/daily', authorize('ADMIN', 'NURSE'), queueController.getDaily
 router.get('/stats/peak-hours', authorize('ADMIN', 'NURSE'), queueController.getPeakHours);
 router.get('/current/summary', queueController.getQueueSummary);
 router.get('/check-appointment/:appointmentId', queueController.checkAppointmentInQueue);
+router.post('/batch-update', authorize('ADMIN', 'NURSE'), queueController.batchUpdateStatus);
+router.get('/waiting-time', queueController.getWaitingTimeEstimation);
 
 // Queue actions (Admin/Nurse only)
 router.post('/confirm/:appointmentId', authorize('ADMIN', 'NURSE'), queueController.confirmAndAddToQueue);

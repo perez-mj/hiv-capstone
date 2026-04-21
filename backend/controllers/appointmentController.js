@@ -257,9 +257,6 @@ const appointmentController = {
         created_by: req.user.id
       });
 
-      // Create queue entry
-      await Queue.createForAppointment(appointmentId);
-
       // Get created appointment
       const newAppointment = await Appointment.findById(appointmentId);
 

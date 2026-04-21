@@ -42,7 +42,9 @@ const generateRandomPassword = (length = 12) => {
  *   - First letter of first name + First letter of middle name + First letter of last name (if with middle name)
  * - Suffix: Number (2,3,4...) if duplicate initials exist
  */
-const generatePatientCode = async (pool, firstName, middleName, lastName, hivStatus, registrationYear = new Date().getFullYear()) => {
+const generatePatientCode = async (firstName, middleName, lastName, hivStatus, registrationYear = new Date().getFullYear()) => {
+  const pool = require('../db'); // Import pool inside the function
+  
   // Determine prefix based on HIV status
   const prefix = (hivStatus === 'REACTIVE') ? 'PR' : 'P';
   

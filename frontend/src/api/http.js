@@ -47,7 +47,7 @@ http.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor - RETURNS response.data directly
+// Response interceptor
 http.interceptors.response.use(
   (response) => {
     if (process.env.NODE_ENV === 'development') {
@@ -55,7 +55,6 @@ http.interceptors.response.use(
     }
     
     // Return the data directly, not the whole response
-    // This way you don't need to do response.data everywhere
     return response.data
   },
   (error) => {
@@ -63,17 +62,25 @@ http.interceptors.response.use(
       console.error(`❌ ${error.response?.status} ${error.config?.url}`, error.message)
     }
     
-    // Handle 401 Unauthorized
-    if (error.response?.status === 401) {
+    // Handle 401 Unauthorized and 403 Forbidden (expired token)
+    if (error.response?.status === 401 || error.response?.status === 403) {
       const isPatientRoute = error.config?.url?.includes('/patient/')
       const isPatientRole = localStorage.getItem(TOKENS.ROLE) === 'PATIENT'
       const isPatient = isPatientRoute || isPatientRole
       
+      // Clear tokens based on role
       localStorage.removeItem(isPatient ? TOKENS.PATIENT : TOKENS.ADMIN)
       localStorage.removeItem(TOKENS.ROLE)
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('authUser')
+      localStorage.removeItem('refreshToken')
       
       const loginPath = isPatient ? '/patient/login' : '/login'
-      if (!window.location.pathname.includes(loginPath)) {
+      
+      // Only redirect if not already on login page
+      if (!window.location.pathname.includes(loginPath) && 
+          !window.location.pathname.includes('/auth/check')) {
+        console.log(`🔄 Redirecting to ${loginPath} due to ${error.response.status}`)
         window.location.href = loginPath
       }
     }
