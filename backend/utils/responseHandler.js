@@ -1,7 +1,7 @@
-// backend/utils/responseHandler.js
 /**
- * Standard API response handler - SIMPLIFIED VERSION
- * Returns data directly without nested 'data' property when possible
+ * Standard API response handler - ALIGNED WITH FRONTEND http.js
+ * Frontend http.js interceptor returns response.data automatically
+ * So we should return data directly without double nesting
  */
 
 const sendResponse = (res, statusCode, message, data = null, meta = null) => {
@@ -11,7 +11,7 @@ const sendResponse = (res, statusCode, message, data = null, meta = null) => {
     timestamp: new Date().toISOString()
   };
   
-  // If data exists, attach it directly
+  // If data exists, attach it directly (not wrapped in another data property)
   if (data !== null) {
     response.data = data;
   }
@@ -23,12 +23,8 @@ const sendResponse = (res, statusCode, message, data = null, meta = null) => {
   return res.status(statusCode).json(response);
 };
 
-// Success responses
+// Success responses - Return data directly in response.data
 const sendSuccess = (res, message = 'Operation successful', data = null) => {
-  if (data !== null && !data.hasOwnProperty('data')) {
-    // If data is array or object, return it directly
-    return sendResponse(res, 200, message, data);
-  }
   return sendResponse(res, 200, message, data);
 };
 
@@ -69,7 +65,7 @@ const sendServerError = (res, message = 'Internal server error', error = null) =
   return sendResponse(res, 500, message, null, error);
 };
 
-// Paginated response - returns data array directly with pagination in meta
+// Paginated response - returns data array with pagination in meta
 const sendPaginated = (res, data, pagination, message = 'Data retrieved successfully') => {
   const safeData = Array.isArray(data) ? data : [];
   
@@ -77,7 +73,7 @@ const sendPaginated = (res, data, pagination, message = 'Data retrieved successf
     success: true,
     message,
     timestamp: new Date().toISOString(),
-    data: safeData,
+    data: safeData,  // Frontend will get this as response.data
     pagination: {
       page: pagination.page || 1,
       limit: pagination.limit || 100,

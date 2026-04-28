@@ -5,87 +5,95 @@ const fs = require('fs').promises;
 
 class LabResult {
   static async findAll(filters = {}, pagination = {}) {
-    const { patient_id, test_type, start_date, end_date, search } = filters;
-    const { limit = 100, offset = 0 } = pagination;
+  const { patient_id, test_type, start_date, end_date, search } = filters;
+  const { limit = 100, offset = 0 } = pagination;
+  
+  // Convert limit and offset to integers
+  const limitNum = parseInt(limit) || 100;
+  const offsetNum = parseInt(offset) || 0;
 
-    let query = `
-      SELECT 
-        lr.*,
-        p.patient_facility_code,
-        p.first_name as patient_first_name,
-        p.last_name as patient_last_name,
-        p.middle_name as patient_middle_name,
-        p.date_of_birth,
-        u.username as performed_by_username,
-        a.appointment_number,
-        a.scheduled_at as appointment_scheduled_at,
-        CASE 
-          WHEN lr.test_type = 'CD4' AND lr.result_value IS NOT NULL THEN
-            CASE 
-              WHEN CAST(lr.result_value AS UNSIGNED) >= 500 THEN 'Normal'
-              WHEN CAST(lr.result_value AS UNSIGNED) >= 200 THEN 'Moderate'
-              ELSE 'Low'
-            END
-          WHEN lr.test_type = 'VIRAL_LOAD' AND lr.result_value IS NOT NULL THEN
-            CASE 
-              WHEN CAST(lr.result_value AS UNSIGNED) < 40 THEN 'Undetectable'
-              WHEN CAST(lr.result_value AS UNSIGNED) < 1000 THEN 'Low'
-              ELSE 'High'
-            END
-          ELSE 'N/A'
-        END as clinical_significance
-      FROM lab_results lr
-      LEFT JOIN patients p ON lr.patient_id = p.id
-      LEFT JOIN users u ON lr.performed_by = u.id
-      LEFT JOIN appointments a ON lr.appointment_id = a.id
-      WHERE 1=1
-    `;
+  let query = `
+    SELECT 
+      lr.*,
+      p.patient_facility_code,
+      p.first_name as patient_first_name,
+      p.last_name as patient_last_name,
+      p.middle_name as patient_middle_name,
+      p.date_of_birth,
+      u.username as performed_by_username,
+      a.appointment_number,
+      a.scheduled_at as appointment_scheduled_at,
+      CASE 
+        WHEN lr.test_type = 'CD4' AND lr.result_value IS NOT NULL THEN
+          CASE 
+            WHEN CAST(lr.result_value AS UNSIGNED) >= 500 THEN 'Normal'
+            WHEN CAST(lr.result_value AS UNSIGNED) >= 200 THEN 'Moderate'
+            ELSE 'Low'
+          END
+        WHEN lr.test_type = 'VIRAL_LOAD' AND lr.result_value IS NOT NULL THEN
+          CASE 
+            WHEN CAST(lr.result_value AS UNSIGNED) < 40 THEN 'Undetectable'
+            WHEN CAST(lr.result_value AS UNSIGNED) < 1000 THEN 'Low'
+            ELSE 'High'
+          END
+        ELSE 'N/A'
+      END as clinical_significance
+    FROM lab_results lr
+    LEFT JOIN patients p ON lr.patient_id = p.id
+    LEFT JOIN users u ON lr.performed_by = u.id
+    LEFT JOIN appointments a ON lr.appointment_id = a.id
+    WHERE 1=1
+  `;
 
-    const queryParams = [];
+  const queryParams = [];
 
-    if (patient_id) {
-      query += ` AND lr.patient_id = ?`;
-      queryParams.push(patient_id);
-    }
-
-    if (test_type) {
-      if (Array.isArray(test_type)) {
-        query += ` AND lr.test_type IN (${test_type.map(() => '?').join(', ')})`;
-        queryParams.push(...test_type);
-      } else {
-        query += ` AND lr.test_type = ?`;
-        queryParams.push(test_type);
-      }
-    }
-
-    if (start_date) {
-      query += ` AND lr.test_date >= ?`;
-      queryParams.push(start_date);
-    }
-
-    if (end_date) {
-      query += ` AND lr.test_date <= ?`;
-      queryParams.push(end_date);
-    }
-
-    if (search) {
-      query += ` AND (
-        p.first_name LIKE ? OR
-        p.last_name LIKE ? OR
-        p.patient_facility_code LIKE ? OR
-        lr.test_type LIKE ? OR
-        lr.result_value LIKE ?
-      )`;
-      const searchPattern = `%${search}%`;
-      queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
-    }
-
-    query += ` ORDER BY lr.test_date DESC, lr.created_at DESC LIMIT ? OFFSET ?`;
-    queryParams.push(parseInt(limit), parseInt(offset));
-
-    const [rows] = await pool.execute(query, queryParams);
-    return rows;
+  if (patient_id) {
+    query += ` AND lr.patient_id = ?`;
+    queryParams.push(patient_id);
   }
+
+  if (test_type) {
+    if (Array.isArray(test_type)) {
+      query += ` AND lr.test_type IN (${test_type.map(() => '?').join(', ')})`;
+      queryParams.push(...test_type);
+    } else {
+      query += ` AND lr.test_type = ?`;
+      queryParams.push(test_type);
+    }
+  }
+
+  if (start_date) {
+    query += ` AND lr.test_date >= ?`;
+    queryParams.push(start_date);
+  }
+
+  if (end_date) {
+    query += ` AND lr.test_date <= ?`;
+    queryParams.push(end_date);
+  }
+
+  if (search) {
+    query += ` AND (
+      p.first_name LIKE ? OR
+      p.last_name LIKE ? OR
+      p.patient_facility_code LIKE ? OR
+      lr.test_type LIKE ? OR
+      lr.result_value LIKE ?
+    )`;
+    const searchPattern = `%${search}%`;
+    queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+  }
+
+  // Add ORDER BY and concatenate LIMIT/OFFSET (not as parameters)
+  query += ` ORDER BY lr.test_date DESC, lr.created_at DESC LIMIT ${limitNum} OFFSET ${offsetNum}`;
+
+  // Execute query - if there are parameters, use them; otherwise execute without params
+  const [rows] = queryParams.length > 0 
+    ? await pool.execute(query, queryParams)
+    : await pool.execute(query);
+    
+  return rows;
+}
 
   static async count(filters = {}) {
     const { patient_id, test_type, start_date, end_date, search } = filters;

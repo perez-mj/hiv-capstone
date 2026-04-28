@@ -4,11 +4,10 @@ import axios from 'axios'
 const API_BASE_URL = 'http://localhost:5000/api'
 const REQUEST_TIMEOUT = 10000
 
-const TOKENS = {
-  ADMIN: 'authToken',
-  PATIENT: 'patientToken',
-  ROLE: 'userRole'
-}
+// Single token storage key for consistency
+const TOKEN_KEY = 'authToken'
+const USER_KEY = 'authUser'
+const REFRESH_TOKEN_KEY = 'refreshToken'
 
 const http = axios.create({
   baseURL: API_BASE_URL,
@@ -16,30 +15,21 @@ const http = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
-// Helper functions
-const getAuthToken = (url) => {
-  const userRole = localStorage.getItem(TOKENS.ROLE)
-  const adminToken = localStorage.getItem(TOKENS.ADMIN)
-  const patientToken = localStorage.getItem(TOKENS.PATIENT)
-  
-  if (url?.includes('/patient/me/') || userRole === 'PATIENT') {
-    return patientToken || adminToken
-  }
-  return adminToken
-}
-
 // Request interceptor
 http.interceptors.request.use(
   (config) => {
-    const token = getAuthToken(config.url)
+    const token = localStorage.getItem(TOKEN_KEY)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     
-    config.params = { ...config.params, _t: Date.now() }
+    // Add cache buster for GET requests
+    if (config.method === 'get') {
+      config.params = { ...config.params, _t: Date.now() }
+    }
     
     if (process.env.NODE_ENV === 'development') {
-      console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`)
+      console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`, config.data)
     }
     
     return config
@@ -47,14 +37,15 @@ http.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor
+// Response interceptor - EXTRACTS response.data automatically
 http.interceptors.response.use(
   (response) => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`✅ ${response.status} ${response.config.url}`)
     }
     
-    // Return the data directly, not the whole response
+    // Return the data property directly (not the whole response)
+    // Response structure: { success, message, timestamp, data, pagination? }
     return response.data
   },
   (error) => {
@@ -62,30 +53,30 @@ http.interceptors.response.use(
       console.error(`❌ ${error.response?.status} ${error.config?.url}`, error.message)
     }
     
-    // Handle 401 Unauthorized and 403 Forbidden (expired token)
+    // Handle 401 Unauthorized and 403 Forbidden
     if (error.response?.status === 401 || error.response?.status === 403) {
-      const isPatientRoute = error.config?.url?.includes('/patient/')
-      const isPatientRole = localStorage.getItem(TOKENS.ROLE) === 'PATIENT'
-      const isPatient = isPatientRoute || isPatientRole
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || ''
+      const isExpired = errorMessage.toLowerCase().includes('expired') || errorMessage.toLowerCase().includes('invalid')
       
-      // Clear tokens based on role
-      localStorage.removeItem(isPatient ? TOKENS.PATIENT : TOKENS.ADMIN)
-      localStorage.removeItem(TOKENS.ROLE)
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('authUser')
-      localStorage.removeItem('refreshToken')
-      
-      const loginPath = isPatient ? '/patient/login' : '/login'
+      // Clear all auth data
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USER_KEY)
+      localStorage.removeItem(REFRESH_TOKEN_KEY)
       
       // Only redirect if not already on login page
-      if (!window.location.pathname.includes(loginPath) && 
-          !window.location.pathname.includes('/auth/check')) {
-        console.log(`🔄 Redirecting to ${loginPath} due to ${error.response.status}`)
-        window.location.href = loginPath
+      const currentPath = window.location.pathname
+      const isLoginPage = currentPath === '/login' || currentPath === '/patient/login'
+      const isAuthCheck = error.config?.url?.includes('/auth/check')
+      
+      if (!isLoginPage && !isAuthCheck) {
+        console.log(`🔄 Redirecting to login due to ${error.response.status}`)
+        window.location.href = '/login'
       }
     }
     
-    return Promise.reject(error)
+    // Throw the error response data for consistent error handling
+    const errorData = error.response?.data || { error: error.message }
+    return Promise.reject(errorData)
   }
 )
 

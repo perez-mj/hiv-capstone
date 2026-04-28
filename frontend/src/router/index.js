@@ -66,22 +66,12 @@ const routes = [
         component: () => import('@/pages/patient/PatientProfile.vue'),
         meta: { title: 'My Profile' }
       },
-      
-      // Messages
       {
-        path: 'messages',
-        name: 'PatientMessages',
-        component: () => import('@/pages/patient/PatientMessages.vue'),
-        meta: { title: 'Messages' }
+        path: 'change-password',
+        name: 'PatientChangePassword',
+        component: () => import('@/pages/patient/ChangePassword.vue'),
+        meta: { title: 'Change Password' }
       }
-      
-      // REMOVED: ChangePassword route - comment out or delete
-      // {
-      //   path: 'change-password',
-      //   name: 'PatientChangePassword',
-      //   component: () => import('@/pages/patient/ChangePassword.vue'),
-      //   meta: { title: 'Change Password' }
-      // }
     ]
   },
   // Kiosk routes (public)

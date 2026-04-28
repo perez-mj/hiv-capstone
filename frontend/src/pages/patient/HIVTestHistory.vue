@@ -58,6 +58,13 @@
             </v-chip>
           </template>
 
+          <!-- Actions Column - FIXED -->
+          <template v-slot:item.actions="{ item }">
+            <v-btn icon variant="text" size="small" @click="viewTestDetails(item)">
+              <v-icon>mdi-eye</v-icon>
+            </v-btn>
+          </template>
+
           <!-- Empty State -->
           <template v-slot:no-data>
             <div class="text-center py-8">
@@ -126,7 +133,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { patientApi } from '@/api'  // FIXED: Added proper import
+import { useSnackbarStore } from '@/stores/snackbar'
 
+const snackbarStore = useSnackbarStore()
 const loading = ref(false)
 const tests = ref([])
 const showTestDialog = ref(false)
@@ -149,15 +159,19 @@ async function loadTestHistory() {
   loading.value = true
   try {
     const response = await patientApi.getTestHistory()
-    tests.value = response.data.tests || []
+    // Handle both paginated and non-paginated responses
+    const data = response.data || response
+    tests.value = Array.isArray(data) ? data : (data.data || data.tests || [])
   } catch (error) {
     console.error('Error loading test history:', error)
+    snackbarStore?.showError('Failed to load test history')
   } finally {
     loading.value = false
   }
 }
 
 function formatDate(dateString) {
+  if (!dateString) return 'N/A'
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -182,8 +196,10 @@ function exportTestHistory() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    snackbarStore?.showSuccess('History exported successfully')
   } catch (error) {
     console.error('Error exporting test history:', error)
+    snackbarStore?.showError('Failed to export history')
   }
 }
 </script>

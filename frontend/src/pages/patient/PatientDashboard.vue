@@ -1,506 +1,426 @@
 <!-- frontend/src/pages/patient/PatientDashboard.vue -->
-<!-- frontend/src/pages/patient/PatientDashboard.vue -->
 <template>
-  <v-container fluid class="pa-6">
+  <div class="patient-dashboard">
     <!-- Welcome Header -->
-    <div class="page-header d-flex justify-space-between align-center mb-6">
-      <div>
-        <h1 class="text-h4 font-weight-bold text-primary">Welcome, {{ patient.first_name || 'Patient' }}</h1>
-        <p class="text-body-1 text-medium-emphasis mt-2">
-          Facility ID: {{ patient.patient_facility_code || patient.patient_id }}
-        </p>
-      </div>
-      <v-btn 
-        color="error" 
-        variant="outlined"
-        @click="logout"
-        :loading="loggingOut"
-        :disabled="loggingOut"
-        prepend-icon="mdi-logout"
-      >
-        Logout
-      </v-btn>
-    </div>
+    <v-card class="welcome-card mb-4" color="primary" dark>
+      <v-card-text class="pa-4">
+        <div class="d-flex align-center">
+          <v-avatar size="56" class="mr-3" color="white">
+            <v-icon large color="primary">mdi-account-circle</v-icon>
+          </v-avatar>
+          <div>
+            <div class="text-subtitle-1">Welcome back,</div>
+            <div class="text-h5 font-weight-bold">{{ patientName }}</div>
+            <div class="text-caption">{{ currentDate }}</div>
+          </div>
+        </div>
+      </v-card-text>
+    </v-card>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="text-center py-12">
-      <v-progress-circular indeterminate color="primary" size="48"></v-progress-circular>
-      <p class="mt-4 text-medium-emphasis">Loading your dashboard...</p>
-    </div>
+    <!-- Stats Cards -->
+    <v-row class="mb-4">
+      <v-col cols="6" sm="3" v-for="stat in stats" :key="stat.title">
+        <v-card :to="stat.link" class="stat-card" elevation="2">
+          <v-card-text class="text-center pa-3">
+            <v-icon size="32" :color="stat.color" class="mb-2">{{ stat.icon }}</v-icon>
+            <div class="text-h6 font-weight-bold">{{ stat.value }}</div>
+            <div class="text-caption text-medium-emphasis">{{ stat.title }}</div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
 
-    <!-- Error State -->
-    <v-alert
-      v-else-if="error"
-      type="error"
-      variant="tonal"
-      class="mb-4"
-      closable
-      @click:close="error = null"
-    >
-      {{ error }}
-    </v-alert>
+    <!-- Next Appointment -->
+    <v-card v-if="nextAppointment" class="mb-4" elevation="2">
+      <v-card-title class="d-flex justify-space-between align-center">
+        <span>Next Appointment</span>
+        <v-chip :color="appointmentStatusColor(nextAppointment.status)" text-color="white" size="small">
+          {{ nextAppointment.status }}
+        </v-chip>
+      </v-card-title>
+      <v-card-text>
+        <v-list lines="two">
+          <v-list-item>
+            <template v-slot:prepend>
+              <v-icon>mdi-calendar</v-icon>
+            </template>
+            <v-list-item-title class="font-weight-bold">
+              {{ formatDate(nextAppointment.scheduled_at) }}
+            </v-list-item-title>
+            <v-list-item-subtitle>
+              {{ formatTime(nextAppointment.scheduled_at) }}
+            </v-list-item-subtitle>
+          </v-list-item>
+          <v-list-item>
+            <template v-slot:prepend>
+              <v-icon>mdi-clipboard-text</v-icon>
+            </template>
+            <v-list-item-title>{{ nextAppointment.type_name || 'Consultation' }}</v-list-item-title>
+            <v-list-item-subtitle>Appointment #{{ nextAppointment.appointment_number }}</v-list-item-subtitle>
+          </v-list-item>
+        </v-list>
+        <v-divider class="my-3"></v-divider>
+        <div class="d-flex gap-3">
+          <v-btn color="error" variant="tonal" block @click="cancelAppointment(nextAppointment)" 
+            :disabled="!canCancel(nextAppointment.scheduled_at)">
+            Cancel Appointment
+          </v-btn>
+          <v-btn color="primary" variant="text" to="/patient/appointments">View All</v-btn>
+        </div>
+      </v-card-text>
+    </v-card>
 
-    <!-- Dashboard Content -->
-    <template v-else>
-      <!-- Quick Stats -->
-      <v-row class="mb-6">
-        <v-col cols="12" sm="6" md="4">
-          <v-card elevation="2" border @click="goToAppointments" class="cursor-pointer">
-            <v-card-text class="text-center">
-              <v-icon color="primary" size="48" class="mb-2">mdi-calendar</v-icon>
-              <div class="text-h5 font-weight-bold">{{ stats.upcomingAppointments }}</div>
-              <div class="text-body-2 text-medium-emphasis">Upcoming Appointments</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" md="4">
-          <v-card elevation="2" border @click="goToProfile" class="cursor-pointer">
-            <v-card-text class="text-center">
-              <v-icon color="info" size="48" class="mb-2">mdi-account-check</v-icon>
-              <div class="text-h5 font-weight-bold">
-                {{ consentStatus }}
-              </div>
-              <div class="text-body-2 text-medium-emphasis">Consent Status</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        <v-col cols="12" sm="6" md="4">
-          <v-card elevation="2" border @click="goToHistory" class="cursor-pointer">
-            <v-card-text class="text-center">
-              <v-icon color="success" size="48" class="mb-2">mdi-history</v-icon>
-              <div class="text-h5 font-weight-bold">{{ stats.totalRecords || 0 }}</div>
-              <div class="text-body-2 text-medium-emphasis">Medical Records</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
+    <!-- Quick Actions -->
+    <v-card class="mb-4" elevation="2">
+      <v-card-title>Quick Actions</v-card-title>
+      <v-card-text>
+        <v-row>
+          <v-col cols="6" sm="3" v-for="action in quickActions" :key="action.title">
+            <v-btn :to="action.link" block variant="outlined" class="quick-action-btn">
+              <v-icon :icon="action.icon" class="mr-2"></v-icon>
+              {{ action.title }}
+            </v-btn>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
 
-      <!-- HIV Status Summary -->
-      <v-row class="mb-6">
-        <v-col cols="12">
-          <v-card elevation="2" border>
-            <v-card-title>HIV Status Summary</v-card-title>
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" md="4">
-                  <div class="text-body-2 text-medium-emphasis">Status</div>
-                  <div class="text-h6" :class="hivStatusClass">
-                    {{ hivStatus }}
-                  </div>
-                </v-col>
-                <v-col cols="12" md="4">
-                  <div class="text-body-2 text-medium-emphasis">Diagnosis Date</div>
-                  <div class="text-h6">{{ formatDate(patient.diagnosis_date) || 'N/A' }}</div>
-                </v-col>
-                <v-col cols="12" md="4">
-                  <div class="text-body-2 text-medium-emphasis">ART Start Date</div>
-                  <div class="text-h6">{{ formatDate(patient.art_start_date) || 'N/A' }}</div>
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
+    <!-- Recent Lab Results -->
+    <v-card v-if="recentLabs.length" class="mb-4" elevation="2">
+      <v-card-title class="d-flex justify-space-between align-center">
+        <span>Recent Lab Results</span>
+        <v-btn variant="text" size="small" to="/patient/history">View All</v-btn>
+      </v-card-title>
+      <v-card-text>
+        <v-list>
+          <v-list-item v-for="lab in recentLabs.slice(0, 3)" :key="lab.id" :to="`/patient/history?tab=labs`">
+            <template v-slot:prepend>
+              <v-icon :color="getLabStatusColor(lab)" size="24">
+                {{ getLabIcon(lab.test_type) }}
+              </v-icon>
+            </template>
+            <v-list-item-title>
+              {{ formatLabType(lab.test_type) }}
+            </v-list-item-title>
+            <v-list-item-subtitle>
+              {{ formatDate(lab.test_date) }} - {{ lab.result_value }} {{ lab.result_unit }}
+            </v-list-item-subtitle>
+            <template v-slot:append>
+              <v-chip :color="getLabStatusColor(lab)" size="x-small" text-color="white">
+                {{ getLabStatus(lab) }}
+              </v-chip>
+            </template>
+          </v-list-item>
+        </v-list>
+      </v-card-text>
+    </v-card>
 
-      <!-- Recent Activity -->
-      <v-row>
-        <v-col cols="12" md="6">
-          <v-card elevation="2" border>
-            <v-card-title class="d-flex justify-space-between align-center">
-              <span>Upcoming Appointments</span>
-              <v-btn variant="text" color="primary" @click="goToAppointments">
-                View All
-              </v-btn>
-            </v-card-title>
-            <v-card-text>
-              <div v-if="recentAppointments.length > 0">
-                <div 
-                  v-for="appointment in recentAppointments" 
-                  :key="appointment.id"
-                  class="appointment-item py-3"
-                >
-                  <div class="d-flex justify-space-between align-center">
-                    <div>
-                      <div class="font-weight-medium">{{ formatDateTime(appointment.scheduled_at) }}</div>
-                      <div class="text-caption text-medium-emphasis">
-                        {{ appointment.type_name || 'Appointment' }}
-                      </div>
-                    </div>
-                    <v-chip size="small" :color="getAppointmentStatusColor(appointment.status)">
-                      {{ appointment.status }}
-                    </v-chip>
-                  </div>
+    <!-- Queue Status -->
+    <v-card v-if="queueStatus" color="info" variant="tonal" class="mb-4">
+      <v-card-text class="pa-4">
+        <div class="d-flex align-center justify-space-between">
+          <div>
+            <v-icon size="28" class="mr-2">mdi-queue-first-in-last-out</v-icon>
+            <span class="font-weight-bold">Current Queue Status</span>
+          </div>
+          <v-chip color="info" text-color="white">Position #{{ queueStatus.position }}</v-chip>
+        </div>
+        <div class="mt-2 text-center">
+          <v-progress-linear :model-value="queueStatus.progress" height="8" rounded></v-progress-linear>
+          <div class="text-caption mt-1">{{ queueStatus.estimatedWait }} estimated wait</div>
+        </div>
+      </v-card-text>
+    </v-card>
+
+    <!-- Recent Encounters -->
+    <v-card v-if="recentEncounters.length" elevation="2">
+      <v-card-title class="d-flex justify-space-between align-center">
+        <span>Recent Visits</span>
+        <v-btn variant="text" size="small" to="/patient/history">View All</v-btn>
+      </v-card-title>
+      <v-card-text>
+        <v-timeline side="end" density="compact">
+          <v-timeline-item v-for="encounter in recentEncounters.slice(0, 3)" :key="encounter.id"
+            :dot-color="getEncounterColor(encounter.type)" size="small">
+            <div class="d-flex justify-space-between">
+              <div>
+                <div class="font-weight-bold">{{ formatEncounterType(encounter.type) }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ formatDate(encounter.encounter_date) }} with Dr. {{ encounter.staff_last_name }}
                 </div>
               </div>
-              <div v-else class="text-center py-4 text-medium-emphasis">
-                <v-icon size="48" color="grey-lighten-1" class="mb-2">mdi-calendar-blank</v-icon>
-                <p>No upcoming appointments</p>
-                <v-btn color="primary" variant="tonal" @click="goToAppointments" class="mt-2">
-                  Book Appointment
-                </v-btn>
-              </div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-
-        <v-col cols="12" md="6">
-          <v-card elevation="2" border>
-            <v-card-title>
-              <span>Quick Links</span>
-            </v-card-title>
-            <v-card-text>
-              <v-list density="compact" class="quick-links-list">
-                <v-list-item 
-                  @click="goToProfile"
-                  prepend-icon="mdi-account"
-                  title="Update Profile"
-                  class="cursor-pointer"
-                />
-                <v-list-item 
-                  @click="goToAppointments"
-                  prepend-icon="mdi-calendar-plus"
-                  title="Book Appointment"
-                  class="cursor-pointer"
-                />
-                <v-list-item 
-                  @click="goToHistory"
-                  prepend-icon="mdi-folder-open"
-                  title="View Medical History"
-                  class="cursor-pointer"
-                />
-                <v-list-item 
-                  @click="showEmergencyDialog = true"
-                  prepend-icon="mdi-alert-circle"
-                  title="Emergency Contact"
-                  class="cursor-pointer text-error"
-                />
-              </v-list>
-            </v-card-text>
-          </v-card>
-        </v-col>
-
-        <!-- Queue Status -->
-        <v-col cols="12" class="mt-4">
-          <v-card elevation="2" border>
-            <v-card-title>Current Queue Status</v-card-title>
-            <v-card-text>
-              <div v-if="queueInfo && queueInfo.in_queue">
-                <v-row>
-                  <v-col cols="12" md="4">
-                    <div class="text-center">
-                      <div class="text-h3 font-weight-bold text-primary">{{ queueInfo.queue_number || '-' }}</div>
-                      <div class="text-body-2 text-medium-emphasis">Queue Number</div>
-                    </div>
-                  </v-col>
-                  <v-col cols="12" md="4">
-                    <div class="text-center">
-                      <div class="text-h3 font-weight-bold text-success">{{ queueInfo.patients_ahead || 0 }}</div>
-                      <div class="text-body-2 text-medium-emphasis">Patients Ahead</div>
-                    </div>
-                  </v-col>
-                  <v-col cols="12" md="4">
-                    <div class="text-center">
-                      <div class="text-h3 font-weight-bold text-warning">{{ queueInfo.estimated_wait_minutes || 0 }} min</div>
-                      <div class="text-body-2 text-medium-emphasis">Est. Wait Time</div>
-                    </div>
-                  </v-col>
-                </v-row>
-              </div>
-              <div v-else class="text-center py-4 text-medium-emphasis">
-                <v-icon size="48" color="grey-lighten-1" class="mb-2">mdi-format-list-numbered</v-icon>
-                <p>You are not currently in queue</p>
-                <v-btn color="primary" variant="tonal" @click="goToAppointments" class="mt-2">
-                  Book Appointment
-                </v-btn>
-              </div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
-    </template>
-
-    <!-- Emergency Contact Dialog -->
-    <v-dialog v-model="showEmergencyDialog" max-width="400">
-      <v-card>
-        <v-card-title class="d-flex justify-space-between align-center bg-error text-white py-2">
-          <span class="text-subtitle-1">Emergency Contact</span>
-          <v-btn icon dark size="small" @click="showEmergencyDialog = false">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </v-card-title>
-        <v-card-text class="pa-3">
-          <div class="text-center mb-3">
-            <v-icon color="error" size="48" class="mb-1">mdi-alert-circle</v-icon>
-            <div class="text-subtitle-1">Need Immediate Assistance?</div>
-            <div class="text-caption text-medium-emphasis">
-              Contact emergency services or your healthcare provider
+              <v-icon size="20" :color="getEncounterColor(encounter.type)">mdi-chevron-right</v-icon>
             </div>
-          </div>
-
-          <v-list density="compact">
-            <v-list-item>
-              <template v-slot:prepend>
-                <v-avatar color="error" size="32">
-                  <v-icon color="white" size="16">mdi-phone</v-icon>
-                </v-avatar>
-              </template>
-              <v-list-item-title class="text-body-2">Emergency Hotline</v-list-item-title>
-              <v-list-item-subtitle class="text-caption">911</v-list-item-subtitle>
-              <template v-slot:append>
-                <v-btn color="error" variant="text" icon="mdi-phone" size="small" href="tel:911" />
-              </template>
-            </v-list-item>
-
-            <v-list-item>
-              <template v-slot:prepend>
-                <v-avatar color="primary" size="32">
-                  <v-icon color="white" size="16">mdi-hospital-building</v-icon>
-                </v-avatar>
-              </template>
-              <v-list-item-title class="text-body-2">Your Clinic</v-list-item-title>
-              <v-list-item-subtitle class="text-caption">{{ clinicContact || '(555) 123-4567' }}</v-list-item-subtitle>
-              <template v-slot:append>
-                <v-btn color="primary" variant="text" icon="mdi-phone" size="small" :href="`tel:${clinicContact || '5551234567'}`" />
-              </template>
-            </v-list-item>
-          </v-list>
-
-          <v-alert
-            type="warning"
-            variant="tonal"
-            class="mt-3 text-caption"
-            density="compact"
-          >
-            <strong>For life-threatening emergencies, call 911 immediately</strong>
-          </v-alert>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
-  </v-container>
+          </v-timeline-item>
+        </v-timeline>
+      </v-card-text>
+    </v-card>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { useSnackbarStore } from '@/stores/snackbar'
 import { patientApi } from '@/api'
 
-const router = useRouter()
+const authStore = useAuthStore()
+const snackbarStore = useSnackbarStore()
 
 // State
 const loading = ref(true)
-const error = ref(null)
-const loggingOut = ref(false)
-const showEmergencyDialog = ref(false)
-const patient = ref({})
-const clinicContact = ref('(555) 123-4567')
-const stats = ref({
-  upcomingAppointments: 0,
-  totalRecords: 0
-})
-const recentAppointments = ref([])
-const queueInfo = ref(null)
+const stats = ref([
+  { title: 'Appointments', value: 0, icon: 'mdi-calendar', color: 'primary', link: '/patient/appointments' },
+  { title: 'Lab Tests', value: 0, icon: 'mdi-microscope', color: 'success', link: '/patient/history?tab=labs' },
+  { title: 'Visits', value: 0, icon: 'mdi-hospital', color: 'info', link: '/patient/history?tab=encounters' },
+  { title: 'Active', value: 0, icon: 'mdi-chart-line', color: 'warning', link: '/patient/history' }
+])
+const nextAppointment = ref(null)
+const recentLabs = ref([])
+const recentEncounters = ref([])
+const queueStatus = ref(null)
 
-// Computed properties
-const consentStatus = computed(() => {
-  if (patient.value.consent === true || patient.value.consent === 1) return 'YES'
-  if (patient.value.consent === false || patient.value.consent === 0) return 'NO'
-  return patient.value.consent_status || 'Pending'
-})
+// Computed
+const patientName = computed(() => authStore.patientName || authStore.userName)
+const currentDate = computed(() => new Date().toLocaleDateString('en-US', { 
+  weekday: 'long', 
+  year: 'numeric', 
+  month: 'long', 
+  day: 'numeric' 
+}))
 
-const hivStatus = computed(() => {
-  return patient.value.hiv_status || 'Unknown'
-})
-
-const hivStatusClass = computed(() => {
-  const status = patient.value.hiv_status?.toLowerCase()
-  if (status === 'reactive') return 'text-error'
-  if (status === 'non-reactive') return 'text-success'
-  return 'text-warning'
-})
-
-// Lifecycle
-onMounted(async () => {
-  await loadPatientData()
-  await loadDashboardData()
-})
+const quickActions = [
+  { title: 'Book Appointment', icon: 'mdi-calendar-plus', link: '/patient/appointments?action=book' },
+  { title: 'View History', icon: 'mdi-history', link: '/patient/history' },
+  { title: 'Update Profile', icon: 'mdi-account-edit', link: '/patient/profile' },
+  { title: 'Change Password', icon: 'mdi-lock-reset', link: '/patient/change-password' }
+]
 
 // Methods
-async function loadPatientData() {
+const formatDate = (dateStr) => {
+  if (!dateStr) return 'N/A'
+  return new Date(dateStr).toLocaleDateString()
+}
+
+const formatTime = (dateStr) => {
+  if (!dateStr) return 'N/A'
+  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+const formatLabType = (type) => {
+  const types = {
+    'CD4': 'CD4 Count',
+    'VIRAL_LOAD': 'Viral Load',
+    'COMPLETE_BLOOD_COUNT': 'CBC',
+    'LIVER_FUNCTION': 'Liver Function',
+    'RENAL_FUNCTION': 'Renal Function',
+    'OTHER': 'Other Test'
+  }
+  return types[type] || type
+}
+
+const formatEncounterType = (type) => {
+  const types = {
+    'CONSULTATION': 'Consultation',
+    'TESTING': 'Testing',
+    'REFILL': 'Medication Refill',
+    'OTHERS': 'Other Visit'
+  }
+  return types[type] || type
+}
+
+const appointmentStatusColor = (status) => {
+  const colors = {
+    'SCHEDULED': 'warning',
+    'CONFIRMED': 'info',
+    'IN_PROGRESS': 'primary',
+    'COMPLETED': 'success',
+    'CANCELLED': 'error',
+    'NO_SHOW': 'grey'
+  }
+  return colors[status] || 'default'
+}
+
+const getLabStatus = (lab) => {
+  if (lab.test_type === 'CD4') {
+    const val = parseInt(lab.result_value)
+    if (val >= 500) return 'Normal'
+    if (val >= 200) return 'Moderate'
+    return 'Low'
+  }
+  if (lab.test_type === 'VIRAL_LOAD') {
+    const val = parseInt(lab.result_value)
+    if (val < 40) return 'Undetectable'
+    if (val < 1000) return 'Low'
+    return 'High'
+  }
+  return 'Normal'
+}
+
+const getLabStatusColor = (lab) => {
+  const status = getLabStatus(lab)
+  if (status === 'Normal' || status === 'Undetectable') return 'success'
+  if (status === 'Moderate' || status === 'Low') return 'warning'
+  if (status === 'High') return 'error'
+  return 'info'
+}
+
+const getLabIcon = (type) => {
+  if (type === 'CD4') return 'mdi-blood-bag'
+  if (type === 'VIRAL_LOAD') return 'mdi-virus'
+  return 'mdi-test-tube'
+}
+
+const getEncounterColor = (type) => {
+  const colors = {
+    'CONSULTATION': 'primary',
+    'TESTING': 'info',
+    'REFILL': 'success',
+    'OTHERS': 'warning'
+  }
+  return colors[type] || 'grey'
+}
+
+const canCancel = (scheduledAt) => {
+  if (!scheduledAt) return false
+  const hoursUntil = (new Date(scheduledAt) - new Date()) / (1000 * 60 * 60)
+  return hoursUntil > 1
+}
+
+const cancelAppointment = async (appointment) => {
+  if (!confirm(`Are you sure you want to cancel your appointment on ${formatDate(appointment.scheduled_at)}?`)) {
+    return
+  }
+
   try {
-    const patientData = localStorage.getItem('patientData')
-    if (patientData) {
-      patient.value = JSON.parse(patientData)
-    }
-    
-    const response = await patientApi.getProfile()
-    if (response.data.success) {
-      patient.value = response.data.data
-      localStorage.setItem('patientData', JSON.stringify(response.data.data))
-    }
-  } catch (err) {
-    console.error('Error loading patient data:', err)
-    if (!patient.value.first_name) {
-      error.value = 'Failed to load patient information'
-    }
+    await patientApi.cancelAppointment(appointment.id)
+    snackbarStore.showSuccess('Appointment cancelled successfully')
+    await loadDashboard()
+  } catch (error) {
+    snackbarStore.showError(error.response?.data?.error || error.message || 'Failed to cancel appointment')
   }
 }
 
-async function loadDashboardData() {
+const loadDashboard = async () => {
+  loading.value = true
   try {
-    loading.value = true
-    error.value = null
-    
-    console.log('Loading patient dashboard data...')
-    
-    // Load appointments only - removed lab results
-    const appointmentsRes = await patientApi.getAppointments({ limit: 3 }).catch(err => {
-      console.error('Appointments error:', err)
-      return { data: { data: [] } }
-    })
-    
-    // Load queue status
-    const queueRes = await patientApi.getQueuePosition().catch(err => {
-      console.error('Queue error:', err)
-      return { data: null }
-    })
-    
-    // Load stats
-    const statsRes = await patientApi.getStats().catch(err => {
-      console.error('Stats error:', err)
-      return { data: { data: {} } }
-    })
+    // Use Promise.all for parallel requests
+    const [profile, statsData, appointments, labResults, encounters, queueData] = await Promise.allSettled([
+      patientApi.getProfile(),
+      patientApi.getStats(),
+      patientApi.getUpcomingAppointments(),
+      patientApi.getLabResults({ limit: 5 }),
+      patientApi.getEncounters({ limit: 5 }),
+      patientApi.getMyQueueStatus()
+    ])
 
-    if (appointmentsRes.data) {
-      const appointmentsData = appointmentsRes.data.data
-      recentAppointments.value = appointmentsData || []
-      stats.value.upcomingAppointments = recentAppointments.value.length
+    // Handle profile (optional - just to verify auth)
+    if (profile.status === 'fulfilled') {
+      console.log('Profile loaded successfully')
+    } else {
+      console.error('Failed to load profile:', profile.reason)
     }
 
-    if (queueRes.data && queueRes.data.data) {
-      queueInfo.value = queueRes.data.data
+    // Handle statistics
+    if (statsData.status === 'fulfilled') {
+      const patientStats = statsData.value.data || statsData.value
+      stats.value[0].value = patientStats.total_appointments || 0
+      stats.value[1].value = patientStats.total_lab_results || 0
+      stats.value[2].value = patientStats.total_encounters || 0
+    } else {
+      console.error('Failed to load statistics:', statsData.reason)
     }
 
-    if (statsRes.data && statsRes.data.data) {
-      const statsData = statsRes.data.data
-      stats.value = {
-        ...stats.value,
-        ...statsData
+    // Handle appointments - get next appointment
+    if (appointments.status === 'fulfilled') {
+      const appointmentsData = appointments.value.data || appointments.value
+      // Get the first upcoming appointment (should be the nearest)
+      if (appointmentsData && appointmentsData.length > 0) {
+        nextAppointment.value = appointmentsData[0]
+      } else {
+        nextAppointment.value = null
       }
+    } else {
+      console.error('Failed to load appointments:', appointments.reason)
+    }
+
+    // Handle lab results
+    if (labResults.status === 'fulfilled') {
+      const labs = labResults.value.data || labResults.value
+      recentLabs.value = labs || []
+    } else {
+      console.error('Failed to load lab results:', labResults.reason)
+      recentLabs.value = []
+    }
+
+    // Handle encounters
+    if (encounters.status === 'fulfilled') {
+      const encountersData = encounters.value.data || encounters.value
+      recentEncounters.value = encountersData || []
+    } else {
+      console.error('Failed to load encounters:', encounters.reason)
+      recentEncounters.value = []
+    }
+
+    // Handle queue status
+    if (queueData.status === 'fulfilled') {
+      const queueInfo = queueData.value.data || queueData.value
+      if (queueInfo && queueInfo.position) {
+        queueStatus.value = {
+          position: queueInfo.position,
+          progress: ((queueInfo.total_before || 0) / ((queueInfo.total_before || 0) + 1)) * 100,
+          estimatedWait: queueInfo.estimated_wait || '~15 minutes'
+        }
+      } else {
+        queueStatus.value = null
+      }
+    } else {
+      console.log('No active queue status')
+      queueStatus.value = null
     }
     
-    // Set total records count from patient data
-    stats.value.totalRecords = 1 // Placeholder for medical records count
-
-    console.log('Dashboard data loaded successfully')
-  } catch (err) {
-    console.error('Error loading dashboard data:', err)
-    error.value = 'Unable to load some dashboard data. Please refresh the page.'
+  } catch (error) {
+    console.error('Failed to load dashboard:', error)
+    snackbarStore.showError('Failed to load dashboard data')
   } finally {
     loading.value = false
   }
 }
 
-// Navigation methods
-function goToAppointments() {
-  router.push('/patient/appointments')
-}
-
-function goToHistory() {
-  router.push('/patient/history')
-}
-
-function goToProfile() {
-  router.push('/patient/profile')
-}
-
-// Utility methods
-function getAppointmentStatusColor(status) {
-  const colors = {
-    'SCHEDULED': 'primary',
-    'CONFIRMED': 'success',
-    'IN_PROGRESS': 'warning',
-    'COMPLETED': 'info',
-    'CANCELLED': 'error',
-    'NO_SHOW': 'grey'
-  }
-  return colors[status] || 'grey'
-}
-
-function formatDate(dateString) {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
-function formatDateTime(dateString) {
-  if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// Logout function
-async function logout() {
-  if (loggingOut.value) return
-  
-  loggingOut.value = true
-  console.log('Logging out...')
-  
-  try {
-    localStorage.removeItem('patientToken')
-    localStorage.removeItem('patientData')
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('authUser')
-    localStorage.removeItem('userRole')
-    sessionStorage.clear()
-    console.log('Storage cleared, redirecting to login...')
-    window.location.href = '/patient/login'
-  } catch (error) {
-    console.error('Logout error:', error)
-    window.location.href = '/patient/login'
-  }
-}
+onMounted(() => {
+  loadDashboard()
+})
 </script>
 
 <style scoped>
-.cursor-pointer {
+.patient-dashboard {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.welcome-card {
+  background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+}
+
+.stat-card {
+  transition: transform 0.2s;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
 }
-.cursor-pointer:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+
+.stat-card:hover {
+  transform: translateY(-4px);
 }
-.appointment-item {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  transition: background-color 0.2s;
+
+.quick-action-btn {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.appointment-item:hover {
-  background-color: rgba(0, 0, 0, 0.02);
-}
-.appointment-item:last-child {
-  border-bottom: none;
-}
-.quick-links-list .v-list-item {
-  border-radius: 8px;
-  margin-bottom: 4px;
-}
-.quick-links-list .v-list-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
-}
+
 @media (max-width: 600px) {
-  .v-container {
-    padding: 12px !important;
-  }
-  .text-h4 {
-    font-size: 1.5rem !important;
+  .quick-action-btn {
+    font-size: 12px;
+    padding: 8px 4px;
   }
 }
 </style>

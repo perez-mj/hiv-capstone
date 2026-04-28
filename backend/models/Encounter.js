@@ -11,26 +11,22 @@ class Encounter {
     const offsetNum = parseInt(offset) || 0;
 
     let query = `
-      SELECT 
-        ce.*,
-        p.patient_facility_code,
-        p.first_name as patient_first_name,
-        p.last_name as patient_last_name,
-        p.middle_name as patient_middle_name,
-        p.date_of_birth,
-        p.sex,
-        s.first_name as staff_first_name,
-        s.last_name as staff_last_name,
-        s.position as staff_position,
-        u.username as created_by_username,
-        creator.username as creator_name
-      FROM clinical_encounters ce
-      LEFT JOIN patients p ON ce.patient_id = p.id
-      LEFT JOIN staff s ON ce.staff_id = s.id
-      LEFT JOIN users u ON ce.created_by = u.id
-      LEFT JOIN users creator ON ce.created_by = creator.id
-      WHERE 1=1
-    `;
+    SELECT 
+      ce.*,
+      p.patient_facility_code,
+      p.first_name as patient_first_name,
+      p.last_name as patient_last_name,
+      p.middle_name as patient_middle_name,
+      p.date_of_birth,
+      p.sex,
+      s.first_name as staff_first_name,
+      s.last_name as staff_last_name,
+      s.position as staff_position
+    FROM clinical_encounters ce
+    LEFT JOIN patients p ON ce.patient_id = p.id
+    LEFT JOIN staff s ON ce.staff_id = s.id
+    WHERE 1=1
+  `;
 
     const queryParams = [];
 
@@ -61,11 +57,11 @@ class Encounter {
 
     if (search) {
       query += ` AND (
-        p.first_name LIKE ? OR
-        p.last_name LIKE ? OR
-        p.patient_facility_code LIKE ? OR
-        ce.notes LIKE ?
-      )`;
+      p.first_name LIKE ? OR
+      p.last_name LIKE ? OR
+      p.patient_facility_code LIKE ? OR
+      ce.notes LIKE ?
+    )`;
       const searchPattern = `%${search}%`;
       queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
     }
@@ -138,30 +134,24 @@ class Encounter {
   static async findById(id) {
     const [rows] = await pool.execute(
       `SELECT 
-        ce.*,
-        p.patient_facility_code,
-        p.first_name as patient_first_name,
-        p.last_name as patient_last_name,
-        p.middle_name as patient_middle_name,
-        p.date_of_birth,
-        p.sex,
-        p.hiv_status,
-        p.diagnosis_date,
-        p.art_start_date,
-        s.first_name as staff_first_name,
-        s.last_name as staff_last_name,
-        s.position as staff_position,
-        s.contact_number as staff_contact,
-        u.username as created_by_username,
-        creator.username as creator_name,
-        updater.username as updater_name
-      FROM clinical_encounters ce
-      LEFT JOIN patients p ON ce.patient_id = p.id
-      LEFT JOIN staff s ON ce.staff_id = s.id
-      LEFT JOIN users u ON ce.created_by = u.id
-      LEFT JOIN users creator ON ce.created_by = creator.id
-      LEFT JOIN users updater ON ce.updated_by = updater.id
-      WHERE ce.id = ?`,
+      ce.*,
+      p.patient_facility_code,
+      p.first_name as patient_first_name,
+      p.last_name as patient_last_name,
+      p.middle_name as patient_middle_name,
+      p.date_of_birth,
+      p.sex,
+      p.hiv_status,
+      p.diagnosis_date,
+      p.art_start_date,
+      s.first_name as staff_first_name,
+      s.last_name as staff_last_name,
+      s.position as staff_position,
+      s.contact_number as staff_contact
+    FROM clinical_encounters ce
+    LEFT JOIN patients p ON ce.patient_id = p.id
+    LEFT JOIN staff s ON ce.staff_id = s.id
+    WHERE ce.id = ?`,
       [id]
     );
     return rows[0];
@@ -176,17 +166,15 @@ class Encounter {
     const offsetNum = parseInt(offset) || 0;
 
     let query = `
-      SELECT 
-        ce.*,
-        s.first_name as staff_first_name,
-        s.last_name as staff_last_name,
-        s.position as staff_position,
-        u.username as created_by_username
-      FROM clinical_encounters ce
-      LEFT JOIN staff s ON ce.staff_id = s.id
-      LEFT JOIN users u ON ce.created_by = u.id
-      WHERE ce.patient_id = ?
-    `;
+    SELECT 
+      ce.*,
+      s.first_name as staff_first_name,
+      s.last_name as staff_last_name,
+      s.position as staff_position
+    FROM clinical_encounters ce
+    LEFT JOIN staff s ON ce.staff_id = s.id
+    WHERE ce.patient_id = ?
+  `;
 
     const params = [patientId];
 
@@ -409,7 +397,7 @@ class Encounter {
   static async getPreviousEncounters(patientId, excludeId, limit = 5) {
     // Convert limit to integer
     const limitNum = parseInt(limit) || 5;
-    
+
     const query = `
       SELECT 
         id, encounter_date, type, notes,
@@ -421,7 +409,7 @@ class Encounter {
       ORDER BY ce.encounter_date DESC
       LIMIT ${limitNum}
     `;
-    
+
     const [rows] = await pool.execute(query, [patientId, excludeId]);
     return rows;
   }

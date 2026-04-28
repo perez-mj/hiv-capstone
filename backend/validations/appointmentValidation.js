@@ -1,9 +1,19 @@
 // backend/validations/appointmentValidation.js
 const Joi = require('joi');
 
+const validatePatientSelfAppointment = (data) => {
+  const schema = Joi.object({
+    appointment_type_id: Joi.number().integer().positive().required(),
+    scheduled_at: Joi.date().iso().greater('now').required(),
+    notes: Joi.string().max(500).optional().allow('', null)
+  });
+  
+  return schema.validate(data);
+};
+
 const validateAppointmentCreate = (data) => {
   const schema = Joi.object({
-    patient_id: Joi.number().integer().positive().required(),
+    patient_id: Joi.number().integer().positive().optional(), // Changed from required to optional
     appointment_type_id: Joi.number().integer().positive().required(),
     scheduled_at: Joi.date().iso().greater('now').required(),
     notes: Joi.string().max(500).optional().allow('', null)
@@ -48,5 +58,6 @@ module.exports = {
   validateAppointmentCreate,
   validateAppointmentUpdate,
   validateAppointmentTypeCreate,
-  validateAppointmentTypeUpdate
+  validateAppointmentTypeUpdate,
+  validatePatientSelfAppointment
 };

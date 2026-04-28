@@ -198,10 +198,16 @@ const authorize = (...roles) => {
       });
     }
     
-    if (!roles.includes(req.user.role)) {
+    // Case-insensitive role comparison
+    const userRoleUpper = req.user.role?.toUpperCase();
+    const hasRole = roles.some(role => role.toUpperCase() === userRoleUpper);
+    
+    if (!hasRole) {
       return res.status(403).json({ 
         success: false, 
-        error: `Access denied. Required roles: ${roles.join(', ')}` 
+        error: `Access denied. Required roles: ${roles.join(', ')}`,
+        user_role: req.user.role,
+        required_roles: roles
       });
     }
     

@@ -6,7 +6,6 @@
  */
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
-    // Check if user is authenticated
     if (!req.user) {
       return res.status(401).json({ 
         success: false,
@@ -14,8 +13,11 @@ const authorize = (...allowedRoles) => {
       });
     }
 
-    // Check if user's role is in allowed roles
-    if (!allowedRoles.includes(req.user.role)) {
+    // Case-insensitive role comparison
+    const userRoleUpper = req.user.role?.toUpperCase();
+    const hasRole = allowedRoles.some(role => role.toUpperCase() === userRoleUpper);
+    
+    if (!hasRole) {
       return res.status(403).json({ 
         success: false,
         error: 'Access denied. Insufficient permissions.',
