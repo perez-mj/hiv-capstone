@@ -1,91 +1,74 @@
 <!-- frontend/src/pages/patient/PatientAppointments.vue -->
 <template>
   <div class="patient-appointments">
-    <!-- Header Section -->
-    <div class="appointments-header">
-      <div>
-        <h1 class="header-title">My Appointments</h1>
-        <p class="header-subtitle">Manage and track your upcoming visits</p>
-      </div>
-      <v-btn
-        class="book-btn"
-        color="primary"
-        rounded="lg"
-        @click="openBookingDialog"
-        prepend-icon="mdi-calendar-plus"
-      >
-        Book New
-      </v-btn>
-    </div>
+    <v-card>
+      <v-card-title class="d-flex justify-space-between align-center">
+        <span>My Appointments</span>
+        <v-btn color="primary" variant="text" @click="openBookingDialog" prepend-icon="mdi-calendar-plus">
+          Book New
+        </v-btn>
+      </v-card-title>
 
-    <!-- Tabs -->
-    <v-card class="appointments-card" elevation="0" variant="outlined">
-      <v-tabs v-model="activeTab" color="primary" class="px-4 pt-3">
-        <v-tab value="upcoming" class="text-none">
-          <v-icon start size="18" class="mr-1">mdi-calendar-clock</v-icon>
-          Upcoming
-          <v-chip v-if="upcomingCount" size="xs" color="primary" class="ml-2" variant="flat">{{ upcomingCount }}</v-chip>
-        </v-tab>
-        <v-tab value="past" class="text-none">
-          <v-icon start size="18" class="mr-1">mdi-calendar-check</v-icon>
-          Past
-        </v-tab>
-      </v-tabs>
+      <v-card-text>
+        <!-- Tabs -->
+        <v-tabs v-model="activeTab" color="primary" class="mb-4">
+          <v-tab value="upcoming">
+            Upcoming
+            <v-chip v-if="upcomingCount" size="x-small" color="primary" class="ml-2">{{ upcomingCount }}</v-chip>
+          </v-tab>
+          <v-tab value="past">Past</v-tab>
+        </v-tabs>
 
-      <v-divider />
-
-      <v-card-text class="pa-4">
         <v-window v-model="activeTab">
           <!-- Upcoming Appointments -->
           <v-window-item value="upcoming">
-            <div v-if="loading" class="d-flex justify-center py-8">
+            <div v-if="loading" class="text-center py-8">
               <v-progress-circular indeterminate color="primary" size="40" />
             </div>
-            
-            <div v-else-if="upcomingAppointments.length" class="appointments-list">
-              <div
-                v-for="appointment in upcomingAppointments"
-                :key="appointment.id"
-                class="appointment-card"
-              >
-                <div class="appointment-date-badge">
-                  <div class="date-day">{{ getDayOfMonth(appointment.scheduled_at) }}</div>
-                  <div class="date-month">{{ getMonthAbbr(appointment.scheduled_at) }}</div>
-                </div>
-                
-                <div class="appointment-details">
-                  <div class="details-header">
-                    <span class="appointment-type">{{ appointment.type_name || 'Consultation' }}</span>
-                    <v-chip :color="appointmentStatusColor(appointment.status)" size="small" variant="light">
-                      {{ appointment.status }}
-                    </v-chip>
+
+            <div v-else-if="upcomingAppointments.length">
+              <v-card v-for="appointment in upcomingAppointments" :key="appointment.id" variant="outlined" class="mb-3 appointment-card">
+                <v-card-item>
+                  <div class="d-flex align-center">
+                    <!-- Date Badge -->
+                    <div class="date-badge text-center mr-4">
+                      <div class="text-h6 font-weight-bold text-primary">{{ getDayOfMonth(appointment.scheduled_at) }}</div>
+                      <div class="text-caption text-medium-emphasis">{{ getMonthAbbr(appointment.scheduled_at) }}</div>
+                    </div>
+
+                    <!-- Appointment Details -->
+                    <div class="flex-grow-1">
+                      <div class="d-flex align-center ga-2 mb-1 flex-wrap">
+                        <span class="font-weight-medium">{{ appointment.type_name || 'Consultation' }}</span>
+                        <v-chip :color="appointmentStatusColor(appointment.status)" size="x-small">
+                          {{ appointment.status }}
+                        </v-chip>
+                      </div>
+                      
+                      <div class="d-flex align-center ga-2 mt-1">
+                        <v-icon size="14">mdi-calendar</v-icon>
+                        <span class="text-body-2">{{ formatDate(appointment.scheduled_at) }}</span>
+                        <v-icon size="14" class="ml-2">mdi-clock</v-icon>
+                        <span class="text-body-2">{{ formatTime(appointment.scheduled_at) }}</span>
+                      </div>
+                      
+                      <div v-if="appointment.notes" class="text-caption text-medium-emphasis mt-1">
+                        <v-icon size="12">mdi-note-text</v-icon>
+                        {{ truncateText(appointment.notes, 60) }}
+                      </div>
+                    </div>
+
+                    <!-- Cancel Button -->
+                    <div v-if="canCancel(appointment.scheduled_at) && appointment.status !== 'CANCELLED'">
+                      <v-btn color="error" variant="tonal" size="small" @click="cancelAppointment(appointment)" prepend-icon="mdi-close">
+                        Cancel
+                      </v-btn>
+                    </div>
                   </div>
-                  <div class="details-time">
-                    <v-icon size="16" class="mr-1" color="grey">mdi-clock-outline</v-icon>
-                    {{ formatTime(appointment.scheduled_at) }}
-                  </div>
-                  <div class="details-notes" v-if="appointment.notes">
-                    <v-icon size="14" class="mr-1" color="grey">mdi-note-text-outline</v-icon>
-                    {{ truncateText(appointment.notes, 60) }}
-                  </div>
-                </div>
-                
-                <div class="appointment-actions">
-                  <v-btn
-                    v-if="canCancel(appointment.scheduled_at) && appointment.status !== 'CANCELLED'"
-                    icon
-                    variant="text"
-                    color="error"
-                    size="small"
-                    @click="cancelAppointment(appointment)"
-                  >
-                    <v-icon size="20">mdi-close</v-icon>
-                    <v-tooltip activator="parent" location="top">Cancel appointment</v-tooltip>
-                  </v-btn>
-                </div>
-              </div>
+                </v-card-item>
+              </v-card>
             </div>
-            
+
             <v-alert v-else type="info" variant="tonal" class="mt-2">
               No upcoming appointments.
               <a href="#" class="alert-link" @click.prevent="openBookingDialog">Book one now</a>
@@ -94,222 +77,140 @@
 
           <!-- Past Appointments -->
           <v-window-item value="past">
-            <div v-if="loading" class="d-flex justify-center py-8">
+            <div v-if="loading" class="text-center py-8">
               <v-progress-circular indeterminate color="primary" size="40" />
             </div>
-            
-            <div v-else-if="pastAppointments.length" class="appointments-list">
-              <div
-                v-for="appointment in pastAppointments"
-                :key="appointment.id"
-                class="appointment-card past-card"
-              >
-                <div class="appointment-date-badge past-badge">
-                  <div class="date-day">{{ getDayOfMonth(appointment.scheduled_at) }}</div>
-                  <div class="date-month">{{ getMonthAbbr(appointment.scheduled_at) }}</div>
-                </div>
-                
-                <div class="appointment-details">
-                  <div class="details-header">
-                    <span class="appointment-type">{{ appointment.type_name || 'Consultation' }}</span>
-                    <v-chip :color="appointmentStatusColor(appointment.status)" size="small" variant="light">
-                      {{ appointment.status }}
-                    </v-chip>
+
+            <div v-else-if="pastAppointments.length">
+              <v-card v-for="appointment in pastAppointments" :key="appointment.id" variant="outlined" class="mb-2 past-card">
+                <v-card-item>
+                  <div class="d-flex align-center">
+                    <!-- Date Badge -->
+                    <div class="date-badge text-center mr-4">
+                      <div class="text-h6 font-weight-bold">{{ getDayOfMonth(appointment.scheduled_at) }}</div>
+                      <div class="text-caption">{{ getMonthAbbr(appointment.scheduled_at) }}</div>
+                    </div>
+
+                    <!-- Appointment Details -->
+                    <div class="flex-grow-1">
+                      <div class="d-flex align-center ga-2 mb-1 flex-wrap">
+                        <span class="font-weight-medium">{{ appointment.type_name || 'Consultation' }}</span>
+                        <v-chip :color="appointmentStatusColor(appointment.status)" size="x-small" variant="light">
+                          {{ appointment.status }}
+                        </v-chip>
+                      </div>
+                      
+                      <div class="d-flex align-center ga-2 mt-1">
+                        <v-icon size="14">mdi-calendar</v-icon>
+                        <span class="text-body-2">{{ formatDate(appointment.scheduled_at) }}</span>
+                        <v-icon size="14" class="ml-2">mdi-clock</v-icon>
+                        <span class="text-body-2">{{ formatTime(appointment.scheduled_at) }}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div class="details-time">
-                    <v-icon size="16" class="mr-1" color="grey">mdi-clock-outline</v-icon>
-                    {{ formatTime(appointment.scheduled_at) }}
-                  </div>
-                </div>
+                </v-card-item>
+              </v-card>
+
+              <!-- Pagination -->
+              <div v-if="totalPages > 1" class="d-flex justify-center mt-4">
+                <v-pagination v-model="currentPage" :length="totalPages" :total-visible="5" color="primary"
+                  @update:model-value="loadPastAppointments" />
               </div>
             </div>
-            
+
             <v-alert v-else type="info" variant="tonal" class="mt-2">
               No past appointments found.
             </v-alert>
           </v-window-item>
         </v-window>
-
-        <!-- Pagination -->
-        <div v-if="activeTab === 'past' && totalPages > 1" class="pagination-wrapper mt-4">
-          <v-pagination
-            v-model="currentPage"
-            :length="totalPages"
-            :total-visible="5"
-            color="primary"
-            variant="text"
-            @update:model-value="loadPastAppointments"
-          />
-        </div>
       </v-card-text>
     </v-card>
 
     <!-- Booking Dialog -->
-    <v-dialog v-model="showBookingDialog" max-width="560px" persistent>
-      <v-card class="booking-dialog" rounded="xl">
-        <div class="dialog-header">
-          <div>
-            <h3 class="dialog-title">Book New Appointment</h3>
-            <p class="dialog-subtitle">Schedule your next visit with us</p>
-          </div>
-          <v-btn icon variant="text" @click="closeBookingDialog">
-            <v-icon size="22">mdi-close</v-icon>
-          </v-btn>
-        </div>
+    <v-dialog v-model="showBookingDialog" max-width="600px">
+      <v-card>
+        <v-card-title class="d-flex justify-space-between align-center">
+          <span>Book New Appointment</span>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="closeBookingDialog"></v-btn>
+        </v-card-title>
 
-        <v-divider />
+        <v-divider></v-divider>
 
-        <v-card-text class="pa-5">
+        <v-card-text class="mt-4">
           <!-- Capacity Alert -->
-          <v-alert
-            v-if="isSelectedDateAtCapacity"
-            type="warning"
-            variant="tonal"
-            class="mb-4"
-            density="comfortable"
-            rounded="lg"
-          >
+          <v-alert v-if="isSelectedDateAtCapacity" type="warning" variant="tonal" class="mb-4" density="compact">
             <div class="d-flex align-center">
-              <v-icon class="mr-2" size="20">mdi-calendar-alert</v-icon>
+              <v-icon class="mr-2">mdi-calendar-alert</v-icon>
               <span>This date has reached maximum capacity ({{ MAX_DAILY_APPOINTMENTS }}/{{ MAX_DAILY_APPOINTMENTS }} appointments)</span>
             </div>
           </v-alert>
 
           <v-form ref="bookingFormRef" v-model="bookingFormValid">
-            <!-- Appointment Type -->
-            <div class="form-field">
-              <label class="form-label">Appointment Type</label>
-              <v-select
-                v-model="bookingData.appointment_type_id"
-                :items="appointmentTypes"
-                item-title="type_name"
-                item-value="id"
-                density="comfortable"
-                :rules="[v => !!v || 'Required']"
-                variant="outlined"
-                placeholder="Select type"
-                @update:model-value="onAppointmentTypeChange"
-              >
-                <template v-slot:item="{ props, item }">
-                  <v-list-item v-bind="props">
-                    <template v-slot:prepend>
-                      <v-icon :icon="getTypeIcon(item.raw.type_name)" class="mr-2" color="primary" size="20" />
-                    </template>
-                    <v-list-item-title>{{ item.raw.type_name }}</v-list-item-title>
-                    <v-list-item-subtitle>{{ item.raw.duration_minutes }} minutes</v-list-item-subtitle>
-                  </v-list-item>
-                </template>
-              </v-select>
-            </div>
+            <v-select v-model="bookingData.appointment_type_id" :items="appointmentTypes" item-title="type_name"
+              item-value="id" label="Appointment Type" :rules="[v => !!v || 'Required']" variant="outlined"
+              density="comfortable" @update:model-value="onAppointmentTypeChange">
+              <template v-slot:item="{ props, item }">
+                <v-list-item v-bind="props">
+                  <template v-slot:prepend>
+                    <v-icon :icon="getTypeIcon(item.raw.type_name)" class="mr-2" color="primary"></v-icon>
+                  </template>
+                  <v-list-item-title>{{ item.raw.type_name }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ item.raw.duration_minutes }} minutes</v-list-item-subtitle>
+                </v-list-item>
+              </template>
+            </v-select>
 
-            <!-- Date Picker -->
-            <div class="form-field">
-              <label class="form-label">Select Date</label>
-              <v-text-field
-                v-model="bookingData.scheduled_date"
-                type="date"
-                density="comfortable"
-                :rules="[v => !!v || 'Required']"
-                :min="minDate"
-                variant="outlined"
-                @update:model-value="checkAvailability"
-              />
-            </div>
+            <v-text-field v-model="bookingData.scheduled_date" type="date" label="Select Date"
+              :rules="[v => !!v || 'Required']" :min="minDate" variant="outlined" density="comfortable"
+              @update:model-value="checkAvailability" class="mt-2" />
 
-            <!-- Time Picker -->
-            <div class="form-field">
-              <label class="form-label">Select Time</label>
-              <v-select
-                v-model="bookingData.scheduled_time"
-                :items="availableTimeSlots"
-                item-title="display"
-                item-value="time"
-                density="comfortable"
-                :rules="[v => !!v || 'Required']"
-                :disabled="!bookingData.scheduled_date || checkingAvailability || isSelectedDateAtCapacity"
-                :loading="checkingAvailability"
-                variant="outlined"
-                placeholder="Choose available time"
-              />
-            </div>
+            <v-select v-model="bookingData.scheduled_time" :items="availableTimeSlots" item-title="display"
+              item-value="time" label="Select Time" :rules="[v => !!v || 'Required']"
+              :disabled="!bookingData.scheduled_date || checkingAvailability || isSelectedDateAtCapacity"
+              :loading="checkingAvailability" variant="outlined" density="comfortable" class="mt-2" />
 
-            <!-- Notes -->
-            <div class="form-field">
-              <label class="form-label">Additional Notes</label>
-              <v-textarea
-                v-model="bookingData.notes"
-                rows="3"
-                variant="outlined"
-                placeholder="Any specific concerns or requests? (optional)"
-                counter
-                maxlength="500"
-                density="comfortable"
-              />
-            </div>
+            <v-textarea v-model="bookingData.notes" label="Additional Notes" rows="3" variant="outlined"
+              placeholder="Any specific concerns or requests? (optional)" counter maxlength="500" density="comfortable"
+              class="mt-2" />
 
             <!-- Availability Message -->
-            <v-alert
-              v-if="availabilityMessage && !isSelectedDateAtCapacity"
-              :type="availabilityType"
-              variant="light"
-              class="mt-2"
-              rounded="lg"
-              density="comfortable"
-            >
+            <v-alert v-if="availabilityMessage && !isSelectedDateAtCapacity" :type="availabilityType" variant="light"
+              class="mt-4" density="compact">
               <div class="d-flex align-center">
+                <v-icon :icon="availabilityIcon" class="mr-2" size="18" />
                 <span>{{ availabilityMessage }}</span>
               </div>
             </v-alert>
           </v-form>
         </v-card-text>
 
-        <v-divider />
+        <v-divider></v-divider>
 
-        <v-card-actions class="pa-4 dialog-actions">
-          <v-btn variant="text" @click="closeBookingDialog" size="large">
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            size="large"
-            rounded="lg"
-            :loading="bookingLoading"
-            :disabled="!bookingFormValid || !isSlotAvailable || isSelectedDateAtCapacity"
-            @click="submitBooking"
-          >
+        <v-card-actions class="pa-4">
+          <v-spacer></v-spacer>
+          <v-btn variant="outlined" @click="closeBookingDialog">Cancel</v-btn>
+          <v-btn color="primary" variant="flat" :loading="bookingLoading"
+            :disabled="!bookingFormValid || !isSlotAvailable || isSelectedDateAtCapacity" @click="submitBooking">
             Confirm Booking
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Snackbar -->
-    <v-snackbar
-      v-model="snackbar.show"
-      :color="snackbar.color"
-      :timeout="4000"
-      location="top right"
-      variant="flat"
-      rounded="lg"
-    >
-      <div class="d-flex align-center">
-        <v-icon :icon="getSnackbarIcon(snackbar.color)" class="mr-2" size="20" />
-        {{ snackbar.text }}
-      </div>
-      <template v-slot:actions>
-        <v-btn color="white" variant="text" size="small" @click="snackbar.show = false">
-          Dismiss
-        </v-btn>
-      </template>
-    </v-snackbar>
+    <!-- Loading Overlay -->
+    <v-overlay v-model="loading" class="align-center justify-center">
+      <v-progress-circular indeterminate size="48" color="primary"></v-progress-circular>
+    </v-overlay>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useSnackbarStore } from '@/stores/snackbar'
 import { patientApi, appointmentsApi } from '@/api'
 import { format, parseISO, addDays } from 'date-fns'
+
+const snackbarStore = useSnackbarStore()
 
 // State
 const loading = ref(false)
@@ -337,12 +238,6 @@ const bookingData = ref({
   notes: ''
 })
 
-const snackbar = ref({
-  show: false,
-  text: '',
-  color: 'info'
-})
-
 const MAX_DAILY_APPOINTMENTS = 16
 
 // Computed
@@ -356,7 +251,7 @@ const minDate = computed(() => {
 const isSelectedDateAtCapacity = computed(() => {
   if (!bookingData.value.scheduled_date) return false
   const dateStr = bookingData.value.scheduled_date
-  const appointmentsOnDate = upcomingAppointments.value.filter(a => 
+  const appointmentsOnDate = upcomingAppointments.value.filter(a =>
     format(parseISO(a.scheduled_at), 'yyyy-MM-dd') === dateStr
   )
   return appointmentsOnDate.length >= MAX_DAILY_APPOINTMENTS
@@ -364,7 +259,7 @@ const isSelectedDateAtCapacity = computed(() => {
 
 const isSlotAvailable = computed(() => {
   if (!bookingData.value.scheduled_time || checkingAvailability.value) return false
-  return availableTimeSlots.value.some(slot => 
+  return availableTimeSlots.value.some(slot =>
     slot.time === bookingData.value.scheduled_time && slot.available !== false
   )
 })
@@ -443,24 +338,10 @@ const getTypeIcon = (type) => {
   return icons[type] || 'mdi-calendar'
 }
 
-const getSnackbarIcon = (color) => {
-  const icons = {
-    success: 'mdi-check-circle',
-    error: 'mdi-alert-circle',
-    warning: 'mdi-alert',
-    info: 'mdi-information'
-  }
-  return icons[color] || 'mdi-information'
-}
-
 const canCancel = (scheduledAt) => {
   if (!scheduledAt) return false
   const hoursUntil = (new Date(scheduledAt) - new Date()) / (1000 * 60 * 60)
   return hoursUntil > 1
-}
-
-const showSnackbar = (text, color = 'info') => {
-  snackbar.value = { show: true, text, color }
 }
 
 const loadAppointmentTypes = async () => {
@@ -469,11 +350,10 @@ const loadAppointmentTypes = async () => {
     appointmentTypes.value = response.data || response
   } catch (error) {
     console.error('Failed to load appointment types:', error)
-    showSnackbar('Failed to load appointment types', 'error')
+    snackbarStore.showError('Failed to load appointment types')
   }
 }
 
-// FIXED: Use getUpcomingAppointments() instead of getAppointments()
 const loadUpcomingAppointments = async () => {
   loading.value = true
   try {
@@ -482,20 +362,19 @@ const loadUpcomingAppointments = async () => {
     upcomingAppointments.value = Array.isArray(data) ? data : (data.data || [])
   } catch (error) {
     console.error('Failed to load upcoming appointments:', error)
-    showSnackbar('Failed to load upcoming appointments', 'error')
+    snackbarStore.showError('Failed to load upcoming appointments')
   } finally {
     loading.value = false
   }
 }
 
-// FIXED: Keep using getAppointments() for past appointments with status filter
 const loadPastAppointments = async () => {
   loading.value = true
   try {
-    const response = await patientApi.getAppointments({ 
-      status: 'COMPLETED,CANCELLED,NO_SHOW', 
-      page: currentPage.value, 
-      limit: 10 
+    const response = await patientApi.getAppointments({
+      status: 'COMPLETED,CANCELLED,NO_SHOW',
+      page: currentPage.value,
+      limit: 10
     })
     const data = response.data || response
     pastAppointments.value = data.data || data
@@ -503,7 +382,7 @@ const loadPastAppointments = async () => {
     totalPages.value = data.total_pages || Math.ceil(totalItems.value / 10) || 1
   } catch (error) {
     console.error('Failed to load past appointments:', error)
-    showSnackbar('Failed to load past appointments', 'error')
+    snackbarStore.showError('Failed to load past appointments')
   } finally {
     loading.value = false
   }
@@ -535,7 +414,7 @@ const checkAvailability = async () => {
     } else if (response?.data?.slots && Array.isArray(response.data.slots)) {
       slots = response.data.slots
     }
-    
+
     const now = new Date()
     const today = new Date().toISOString().split('T')[0]
     const isToday_ = bookingData.value.scheduled_date === today
@@ -557,14 +436,14 @@ const checkAvailability = async () => {
         available: slot.available
       }))
 
-    if (bookingData.value.scheduled_time && 
-        !availableTimeSlots.value.some(slot => slot.time === bookingData.value.scheduled_time)) {
+    if (bookingData.value.scheduled_time &&
+      !availableTimeSlots.value.some(slot => slot.time === bookingData.value.scheduled_time)) {
       bookingData.value.scheduled_time = ''
     }
   } catch (error) {
     console.error('Error checking availability:', error)
     availableTimeSlots.value = []
-    showSnackbar('Failed to check availability', 'error')
+    snackbarStore.showError('Failed to check availability')
   } finally {
     checkingAvailability.value = false
   }
@@ -606,38 +485,38 @@ const submitBooking = async () => {
   }
 
   if (!bookingData.value.scheduled_time) {
-    showSnackbar('Please select a time slot', 'warning')
+    snackbarStore.showWarning('Please select a time slot')
     return
   }
 
   if (isSelectedDateAtCapacity.value) {
-    showSnackbar('This date is fully booked', 'error')
+    snackbarStore.showError('This date is fully booked')
     return
   }
 
   if (!isSlotAvailable.value) {
-    showSnackbar('Selected time slot is not available', 'error')
+    snackbarStore.showError('Selected time slot is not available')
     return
   }
 
   bookingLoading.value = true
   try {
     const scheduledDateTime = `${bookingData.value.scheduled_date}T${bookingData.value.scheduled_time}:00`
-    
+
     await patientApi.bookAppointment({
       appointment_type_id: parseInt(bookingData.value.appointment_type_id),
       scheduled_at: scheduledDateTime,
       notes: bookingData.value.notes || null
     })
-    
-    showSnackbar('Appointment booked successfully!', 'success')
+
+    snackbarStore.showSuccess('Appointment booked successfully!')
     closeBookingDialog()
     await loadAppointments()
-    
+
   } catch (error) {
     console.error('Booking error:', error)
     const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to book appointment'
-    showSnackbar(errorMessage, 'error')
+    snackbarStore.showError(errorMessage)
   } finally {
     bookingLoading.value = false
   }
@@ -645,14 +524,14 @@ const submitBooking = async () => {
 
 const cancelAppointment = async (appointment) => {
   if (!confirm(`Cancel appointment on ${formatDate(appointment.scheduled_at)}?`)) return
-  
+
   try {
     await patientApi.cancelAppointment(appointment.id)
-    showSnackbar('Appointment cancelled', 'success')
+    snackbarStore.showSuccess('Appointment cancelled successfully')
     await loadAppointments()
   } catch (error) {
     console.error('Cancel error:', error)
-    showSnackbar(error.response?.data?.error || 'Failed to cancel appointment', 'error')
+    snackbarStore.showError(error.response?.data?.error || 'Failed to cancel appointment')
   }
 }
 
@@ -686,272 +565,34 @@ onMounted(async () => {
 
 <style scoped>
 .patient-appointments {
-  max-width: 1000px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 24px;
 }
 
-/* Header */
-.appointments-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.header-title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1a2a3a;
-  margin: 0 0 4px 0;
-  letter-spacing: -0.3px;
-}
-
-.header-subtitle {
-  font-size: 14px;
-  color: #6b7a8a;
-  margin: 0;
-}
-
-.book-btn {
-  text-transform: none;
-  font-weight: 500;
-  letter-spacing: normal;
-  padding: 0 20px;
-}
-
-/* Card */
-.appointments-card {
-  border-radius: 20px;
-  border: 1px solid #eef2f6;
-  overflow: hidden;
-}
-
-/* Appointment Cards */
-.appointments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.date-badge {
+  min-width: 60px;
 }
 
 .appointment-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #eef2f6;
   transition: all 0.2s ease;
 }
 
 .appointment-card:hover {
-  border-color: #d0dae4;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 
 .past-card {
-  background: #fafbfc;
+  opacity: 0.85;
 }
 
-/* Date Badge */
-.appointment-date-badge {
-  min-width: 56px;
-  width: 56px;
-  text-align: center;
-  background: #f5f7fa;
-  border-radius: 14px;
-  padding: 8px 4px;
-}
-
-.past-badge {
-  background: #f0f2f5;
-}
-
-.date-day {
-  font-size: 22px;
-  font-weight: 600;
-  color: #1a4d3a;
-  line-height: 1.2;
-}
-
-.date-month {
-  font-size: 11px;
-  font-weight: 500;
-  color: #6b7a8a;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-/* Details */
-.appointment-details {
-  flex: 1;
-}
-
-.details-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
-}
-
-.appointment-type {
-  font-weight: 600;
-  font-size: 15px;
-  color: #1a2a3a;
-}
-
-.details-time {
-  font-size: 13px;
-  color: #6b7a8a;
-  display: flex;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.details-notes {
-  font-size: 12px;
-  color: #8f9eae;
-  display: flex;
-  align-items: center;
-}
-
-/* Actions */
-.appointment-actions {
-  opacity: 0.6;
-  transition: opacity 0.2s;
-}
-
-.appointment-card:hover .appointment-actions {
-  opacity: 1;
-}
-
-/* Pagination */
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  padding-top: 8px;
-}
-
-/* Dialog */
-.booking-dialog {
-  border-radius: 24px !important;
-}
-
-.dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 20px 24px 12px 24px;
-}
-
-.dialog-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1a2a3a;
-  margin: 0 0 4px 0;
-}
-
-.dialog-subtitle {
-  font-size: 13px;
-  color: #6b7a8a;
-  margin: 0;
-}
-
-.dialog-actions {
-  gap: 12px;
-}
-
-/* Form */
-.form-field {
-  margin-bottom: 20px;
-}
-
-.form-field:last-child {
-  margin-bottom: 0;
-}
-
-.form-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: #34495e;
-  margin-bottom: 6px;
-}
-
-/* Alert Link */
 .alert-link {
-  color: #1a4d3a;
+  color: #1976d2;
   text-decoration: none;
   font-weight: 500;
 }
 
 .alert-link:hover {
   text-decoration: underline;
-}
-
-/* Responsive */
-@media (max-width: 640px) {
-  .patient-appointments {
-    padding: 16px;
-  }
-  
-  .appointments-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  
-  .header-title {
-    font-size: 24px;
-  }
-  
-  .appointment-card {
-    padding: 12px;
-    gap: 12px;
-  }
-  
-  .appointment-date-badge {
-    min-width: 48px;
-    width: 48px;
-  }
-  
-  .date-day {
-    font-size: 18px;
-  }
-  
-  .dialog-header {
-    padding: 16px 20px;
-  }
-  
-  .dialog-title {
-    font-size: 18px;
-  }
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .appointment-card {
-    background: #1e1e2a;
-    border-color: #2a2a35;
-  }
-  
-  .appointment-card:hover {
-    border-color: #3a3a48;
-  }
-  
-  .appointment-date-badge {
-    background: #2a2a35;
-  }
-  
-  .date-day {
-    color: #4c9f8a;
-  }
-  
-  .appointment-type {
-    color: #e0e0e0;
-  }
 }
 </style>

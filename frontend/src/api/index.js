@@ -14,7 +14,7 @@ export const patientApi = {
   
   // Appointments - FIXED endpoints
   getAppointments: (params) => http.get('/patients/me/appointments', { params }),
-  getUpcomingAppointments: () => http.get('/patients/me/appointments/upcoming'),
+  getUpcomingAppointments: (params) => http.get('/patients/me/appointments/upcoming'),
   getNextAppointment: () => http.get('/patients/me/appointments/next'),
   bookAppointment: (data) => http.post('/patients/me/appointments/book', data),
   cancelAppointment: (id) => http.put(`/patients/me/appointments/${id}/cancel`),
@@ -219,6 +219,23 @@ export const blockchainApi = {
   diagnostics: () => http.get('/blockchain/diagnostics')
 }
 
+export const kioskApi = {
+  // Public: Check device status and auto-register if needed
+  checkStatus: (deviceId) => http.get(`/kiosk/status/${deviceId}`),
+  getQueueStats: (deviceId) => http.get('/kiosk/queue-stats', {
+    params: { device: deviceId }
+  }),
+  getQueueData: (deviceId) => http.get('/kiosk/queue-data', {
+    params: { device: deviceId }
+  }),
+  getDevices: () => http.get('/kiosk/admin/devices'),
+  authorizeDevice: (deviceId) => http.post(`/kiosk/admin/devices/${deviceId}/authorize`),
+  deauthorizeDevice: (deviceId) => http.post(`/kiosk/admin/devices/${deviceId}/deauthorize`),
+  // Admin: Update device name/information
+  updateDevice: (deviceId, data) => http.put(`/kiosk/admin/devices/${deviceId}`, data),
+  deleteDevice: (deviceId) => http.delete(`/kiosk/admin/devices/${deviceId}`)
+}
+
 // ==========================================================================================================
 // EXPORT ALL
 // ==========================================================================================================
@@ -234,5 +251,6 @@ export default {
   labResults: labResultsApi,
   staff: staffApi,
   dashboard: dashboardApi,
-  blockchain: blockchainApi
+  blockchain: blockchainApi,
+  kiosk: kioskApi,
 }

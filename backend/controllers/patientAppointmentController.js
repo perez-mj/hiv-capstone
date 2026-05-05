@@ -67,35 +67,65 @@ const patientAppointmentController = {
 
   // Get patient's appointment history (self-service)
   async getMyHistory(req, res, next) {
-    try {
-      const { page = 1, limit = 100 } = req.query;
-      const offset = (page - 1) * limit;
+  try {
+    const { page = 1, limit = 100 } = req.query;
+    
+    // Convert to integers
+    const limitNum = parseInt(limit) || 100;
+    const offsetNum = (parseInt(page) - 1) * limitNum;
+    const currentPage = parseInt(page) || 1;
 
-      const patient = await getPatientFromUser(req.user.id);
-      if (!patient) {
-        return sendNotFound(res, 'Patient record not found for this user. Please contact administrator.');
-      }
-
-      const filters = {
-        patient_id: patient.id,
-        status: ['COMPLETED', 'CANCELLED', 'NO_SHOW']
-      };
-
-      const appointments = await Appointment.findAll(filters, { limit, offset });
-      const total = await Appointment.count(filters);
-
-      const safeAppointments = Array.isArray(appointments) ? appointments : [];
-
-      sendPaginated(res, safeAppointments, {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: total || 0,
-        total_pages: Math.ceil((total || 0) / parseInt(limit))
-      }, 'Appointment history retrieved successfully');
-    } catch (error) {
-      next(error);
+    const patient = await getPatientFromUser(req.user.id);
+    if (!patient) {
+      return sendNotFound(res, 'Patient record not found for this user. Please contact administrator.');
     }
-  },
+
+    // Get database connection
+    const db = await Appointment.getConnection();
+    
+    // Query for past appointments
+    let query = `
+      SELECT 
+        a.*,
+        at.type_name,
+        at.duration_minutes,
+        q.queue_number,
+        q.status as queue_status
+      FROM appointments a
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN queue q ON a.id = q.appointment_id
+      WHERE a.patient_id = ? 
+        AND a.status IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+      ORDER BY a.scheduled_at DESC
+      LIMIT ${limitNum} OFFSET ${offsetNum}
+    `;
+    
+    const [appointments] = await db.execute(query, [patient.id]);
+    
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM appointments a
+      WHERE a.patient_id = ? 
+        AND a.status IN ('COMPLETED', 'CANCELLED', 'NO_SHOW')
+    `;
+    
+    const [totalResult] = await db.execute(countQuery, [patient.id]);
+    const total = totalResult[0].total;
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    
+    sendPaginated(res, appointments, {
+      page: currentPage,
+      limit: limitNum,
+      total: total,
+      total_pages: totalPages
+    }, 'Appointment history retrieved successfully');
+    
+  } catch (error) {
+    console.error('Error in getMyHistory:', error);
+    next(error);
+  }
+},
 
   // Get patient's lab results (admin/staff use)
   async getPatientLabResults(req, res, next) {
@@ -223,10 +253,20 @@ const patientAppointmentController = {
     try {
       const patient = await getPatientFromUser(req.user.id);
       if (!patient) {
-        return sendNotFound(res, 'Patient record not found for this user. Please contact administrator.');
+        return sendNotFound(res, 'Patient record not found');
       }
 
+      // Only get queue for CONFIRMED or IN_PROGRESS appointments
       const queue = await Queue.getPatientCurrentQueue(patient.id);
+
+      // Optional: Also check appointment status
+      if (queue && queue.appointment_id) {
+        const appointment = await Appointment.findById(queue.appointment_id);
+        if (appointment && !['CONFIRMED', 'IN_PROGRESS'].includes(appointment.status)) {
+          return sendSuccess(res, 'No active queue status', null);
+        }
+      }
+
       sendSuccess(res, 'Your queue status retrieved successfully', queue);
     } catch (error) {
       next(error);
@@ -237,28 +277,69 @@ const patientAppointmentController = {
   async getMyUpcoming(req, res, next) {
     try {
       const { page = 1, limit = 100 } = req.query;
-      const offset = (page - 1) * limit;
+
+      // Convert to integers
+      const limitNum = parseInt(limit) || 100;
+      const offsetNum = (parseInt(page) - 1) * limitNum;
+      const currentPage = parseInt(page) || 1;
 
       const patient = await getPatientFromUser(req.user.id);
       if (!patient) {
         return sendNotFound(res, 'Patient record not found for this user. Please contact administrator.');
       }
 
-      const filters = {
-        patient_id: patient.id,
-        status: ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS']
-      };
+      // Get current PH time for comparison
+      const now = new Date();
+      const phNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
+      const phNowStr = phNow.toISOString().slice(0, 19).replace('T', ' ');
 
-      const appointments = await Appointment.findAll(filters, { limit, offset });
-      const total = await Appointment.count(filters);
+      // Get database connection
+      const db = await Appointment.getConnection();
 
+      // Build query with parameterized WHERE clause but concatenated LIMIT/OFFSET
+      let query = `
+      SELECT 
+        a.*,
+        at.type_name,
+        at.duration_minutes,
+        q.queue_number,
+        q.status as queue_status
+      FROM appointments a
+      LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
+      LEFT JOIN queue q ON a.id = q.appointment_id
+      WHERE a.patient_id = ? 
+        AND a.status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')
+        AND a.scheduled_at >= ?
+      ORDER BY a.scheduled_at ASC
+      LIMIT ${limitNum} OFFSET ${offsetNum}
+    `;
+
+      // Execute with parameters
+      const [appointments] = await db.execute(query, [patient.id, phNowStr]);
+
+      // Get total count with same conditions
+      const countQuery = `
+      SELECT COUNT(*) as total 
+      FROM appointments a
+      WHERE a.patient_id = ? 
+        AND a.status IN ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS')
+        AND a.scheduled_at >= ?
+    `;
+
+      const [totalResult] = await db.execute(countQuery, [patient.id, phNowStr]);
+      const total = totalResult[0].total;
+      const totalPages = Math.ceil(total / limitNum) || 1;
+
+      // Use sendPaginated with the correct structure
       sendPaginated(res, appointments, {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        total_pages: Math.ceil(total / limit)
+        page: currentPage,
+        limit: limitNum,
+        total: total,
+        total_pages: totalPages
       }, 'Upcoming appointments retrieved successfully');
+
     } catch (error) {
+      console.error('Error in getMyUpcoming:', error);
       next(error);
     }
   },
@@ -369,7 +450,6 @@ const patientAppointmentController = {
         created_by: req.user.id
       });
 
-      await Queue.createForAppointment(appointmentId);
       const newAppointment = await Appointment.findById(appointmentId);
 
       // Blockchain audit logging (non-blocking)

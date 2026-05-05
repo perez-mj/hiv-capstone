@@ -12,7 +12,7 @@ const { validatePatientSelfAppointment } = require('../validations/appointmentVa
 // PROFILE ROUTES 
 router.get('/profile', protect, authorize('PATIENT'), patientController.getMyProfile);
 router.put('/profile', protect, authorize('PATIENT'), validate(validatePatientUpdate), patientController.updateMyProfile);
-router.get('/statistics', protect, authorize('PATIENT'), patientController.getStatistics); // ✅ Fixed
+router.get('/statistics', protect, authorize('PATIENT'), patientController.getStatistics); 
 
 // APPOINTMENTS 
 router.get('/appointments', protect, authorize('PATIENT'), patientAppointmentController.getMyHistory);

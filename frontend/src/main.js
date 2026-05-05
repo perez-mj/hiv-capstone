@@ -6,15 +6,8 @@ import 'vue-toastification/dist/index.css'
 import App from './App.vue'
 import router from './router'
 
-import '@mdi/font/css/materialdesignicons.css'
-
 // Import Vuetify setup
 import vuetify from '@/plugins/vuetify'
-
-// Import global styles
-import '@/styles/variables.css'
-import '@/styles/global.css'
-import '@/styles/style.css'
 
 // Create app instance
 const app = createApp(App)
