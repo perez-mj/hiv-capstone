@@ -264,6 +264,32 @@ export const kioskApi = {
 }
 
 // ==========================================================================================================
+// REPORTS API
+// ==========================================================================================================
+export const reportsApi = {
+  // Report generation endpoints
+  getAppointmentReport: (params) => http.get('/reports/appointments', { params }),
+  getPatientReport: (params) => http.get('/reports/patients', { params }),
+  getQueueReport: (params) => http.get('/reports/queue', { params }),
+  getLabResultsReport: (params) => http.get('/reports/lab-results', { params }),
+  getStaffPerformanceReport: (params) => http.get('/reports/staff-performance', { params }),
+  getHIVSummaryReport: (params) => http.get('/reports/hiv-summary', { params }),
+  getDashboardSummaryReport: (params) => http.get('/reports/dashboard-summary', { params }),
+  
+  // Export endpoints
+  exportReportCSV: (type, params) => http.get(`/reports/export/${type}/csv`, { 
+    params,
+    responseType: 'blob'
+  }),
+  exportReportPDF: (type, params) => http.get(`/reports/export/${type}/pdf`, { 
+    params,
+    responseType: 'blob'
+  }),
+  
+  getAvailableReportTypes: () => http.get('/reports/available-types')
+};
+
+// ==========================================================================================================
 // EXPORT ALL
 // ==========================================================================================================
 export default {
@@ -280,4 +306,6 @@ export default {
   dashboard: dashboardApi,
   blockchain: blockchainApi,
   kiosk: kioskApi,
+  reports: reportsApi,
+
 }

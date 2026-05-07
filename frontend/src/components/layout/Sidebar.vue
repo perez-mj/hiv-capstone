@@ -261,6 +261,11 @@ const systemMenu = ref([
     to: '/admin/blockchain-status', 
     icon: 'mdi-book-variant',
   },
+  { 
+    title: 'Reports', 
+    to: '/admin/reports', 
+    icon: 'mdi-file-chart',
+  },
 ])
 
 // Auth computed properties

@@ -1,3 +1,4 @@
+<!-- frontend/src/pages/admin/AdminDashboard.vue -->
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- Welcome Header -->
@@ -57,7 +58,7 @@
       </v-col>
     </v-row>
 
-    <template v-else>
+    <template v-else-if="dashboardData">
       <!-- Key Metrics Cards -->
       <v-row class="mb-6">
         <v-col cols="12" sm="6" md="3" v-for="metric in keyMetrics" :key="metric.title">
@@ -435,7 +436,7 @@
                   <div class="text-caption">Total Staff</div>
                   <div class="d-flex align-center">
                     <v-icon size="small" color="success" class="mr-1">mdi-circle</v-icon>
-                    <span class="text-caption">8 Active now</span>
+                    <span class="text-caption">{{ activeStaff }} Active now</span>
                   </div>
                 </div>
               </div>
@@ -447,7 +448,6 @@
                 rounded
                 class="mb-4"
               ></v-progress-linear>
-
             </v-card-text>
 
             <v-card-actions>
@@ -517,7 +517,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { format, formatDistanceToNow } from 'date-fns'
 import Chart from 'chart.js/auto'
@@ -542,59 +542,14 @@ let monthlyChartInstance = null
 let hivChartInstance = null
 let timeInterval = null
 
-// Default empty data structure
-const defaultDashboardData = {
-  overview: {
-    total_patients: 0,
-    total_staff: 0,
-    patients_by_status: [],
-    today_appointments: {
-      count: 0,
-      completed: '0',
-      scheduled: '0',
-      confirmed: '0',
-      cancelled: '0',
-      no_show: '0'
-    },
-    current_queue: {
-      total_in_queue: 0,
-      waiting: 0,
-      called: 0,
-      serving: 0,
-      completed: 0
-    }
-  },
-  recent_appointments: [],
-  monthly_statistics: [],
-  today_queue: []
-}
+// Dashboard data
+const dashboardData = ref(null)
 
-const dashboardData = ref({
-  data: { ...defaultDashboardData }
-})
-
-// Helper function to safely extract data
-const safeGetData = () => {
-  if (!dashboardData.value) {
-    return { ...defaultDashboardData }
-  }
-  
-  // Handle different response structures
-  if (dashboardData.value.data && dashboardData.value.data.overview) {
-    return dashboardData.value.data
-  }
-  
-  if (dashboardData.value.overview) {
-    return dashboardData.value
-  }
-  
-  return { ...defaultDashboardData }
-}
-
-// Computed properties from dashboard data with safe access
+// Computed properties from dashboard data
 const keyMetrics = computed(() => {
-  const data = safeGetData()
-  const overview = data.overview || {}
+  if (!dashboardData.value) return []
+  
+  const overview = dashboardData.value.overview || {}
   const todayAppointments = overview.today_appointments || {}
   
   return [
@@ -638,23 +593,22 @@ const keyMetrics = computed(() => {
 })
 
 const queueStats = computed(() => {
-  const data = safeGetData()
-  return data.overview?.current_queue || { total_in_queue: 0, waiting: 0, called: 0, serving: 0, completed: 0 }
+  if (!dashboardData.value) return { total_in_queue: 0, waiting: 0, called: 0, serving: 0, completed: 0 }
+  return dashboardData.value.overview?.current_queue || { total_in_queue: 0, waiting: 0, called: 0, serving: 0, completed: 0 }
 })
 
 const currentQueue = computed(() => {
-  const data = safeGetData()
-  return data.today_queue || []
+  return dashboardData.value?.today_queue || []
 })
 
 const recentAppointments = computed(() => {
-  const data = safeGetData()
-  return data.recent_appointments || []
+  return dashboardData.value?.recent_appointments || []
 })
 
 const appointmentStats = computed(() => {
-  const data = safeGetData()
-  const today = data.overview?.today_appointments || {}
+  if (!dashboardData.value) return []
+  
+  const today = dashboardData.value.overview?.today_appointments || {}
   const total = today.count || 1
   
   return [
@@ -665,13 +619,13 @@ const appointmentStats = computed(() => {
 })
 
 const totalPatients = computed(() => {
-  const data = safeGetData()
-  return data.overview?.total_patients || 0
+  return dashboardData.value?.overview?.total_patients || 0
 })
 
 const patientStatusList = computed(() => {
-  const data = safeGetData()
-  const statuses = data.overview?.patients_by_status || []
+  if (!dashboardData.value) return []
+  
+  const statuses = dashboardData.value.overview?.patients_by_status || []
   const total = totalPatients.value || 1
   
   const statusMap = {
@@ -688,12 +642,17 @@ const patientStatusList = computed(() => {
 })
 
 const totalStaff = computed(() => {
-  const data = safeGetData()
-  return data.overview?.total_staff || 0
+  return dashboardData.value?.overview?.total_staff || 0
+})
+
+const activeStaff = computed(() => {
+  // Calculate active staff - placeholder
+  return Math.floor(totalStaff.value * 0.75)
 })
 
 const staffAvailability = computed(() => {
-  return 75 // Placeholder - calculate from actual data
+  if (totalStaff.value === 0) return 0
+  return (activeStaff.value / totalStaff.value) * 100
 })
 
 const recentActivities = ref([
@@ -726,52 +685,47 @@ const fetchDashboardData = async () => {
   try {
     const response = await dashboardApi.getAdminDashboard()
     
-    // Handle different response structures
-    let dashboardContent = { ...defaultDashboardData }
+    // The http.js interceptor returns response.data directly
+    // So response should be the actual dashboard data
+    console.log('Dashboard data received:', response)
     
-    if (response && response.data) {
-      if (response.data.data && response.data.data.overview) {
-        // Response has nested data property
-        dashboardContent = response.data.data
-      } else if (response.data.overview) {
-        // Response data is directly the dashboard content
-        dashboardContent = response.data
-      } else if (response.data.success && response.data.data) {
-        // Another common pattern
-        dashboardContent = response.data.data
-      }
+    // Check if response has the expected structure
+    if (response && response.overview) {
+      dashboardData.value = response
+    } else if (response && response.data && response.data.overview) {
+      // Handle nested data structure
+      dashboardData.value = response.data
+    } else {
+      console.warn('Unexpected response structure:', response)
+      dashboardData.value = response
     }
     
-    dashboardData.value = {
-      data: dashboardContent
-    }
-    
-    // Extract admin name from auth store or response
+    // Extract admin name from auth store
     adminName.value = authStore.user?.username || authStore.user?.name || 'Head Nurse'
     
-    // Initialize charts after data is loaded
+    // Initialize charts after data is loaded and DOM is updated
+    await nextTick()
     setTimeout(() => {
       initMonthlyChart()
       initHivChart()
     }, 100)
   } catch (err) {
     console.error('Failed to fetch dashboard data:', err)
-    error.value = 'Failed to load dashboard data. Please try again.'
-    
-    // Set default data on error
-    dashboardData.value = {
-      data: { ...defaultDashboardData }
-    }
+    error.value = err.message || 'Failed to load dashboard data. Please try again.'
   } finally {
     loading.value = false
   }
 }
 
 const initMonthlyChart = () => {
-  if (!monthlyChart.value) return
+  if (!monthlyChart.value || !dashboardData.value) return
   
-  const data = safeGetData()
-  const monthlyStats = data.monthly_statistics || []
+  const monthlyStats = dashboardData.value.monthly_statistics || []
+  
+  if (monthlyStats.length === 0) {
+    console.warn('No monthly statistics data available')
+    return
+  }
   
   // Destroy existing chart instance
   if (monthlyChartInstance) {
@@ -831,10 +785,14 @@ const initMonthlyChart = () => {
 }
 
 const initHivChart = () => {
-  if (!hivChart.value) return
+  if (!hivChart.value || !dashboardData.value) return
   
-  const data = safeGetData()
-  const statuses = data.overview?.patients_by_status || []
+  const statuses = dashboardData.value.overview?.patients_by_status || []
+  
+  if (statuses.length === 0) {
+    console.warn('No patient status data available')
+    return
+  }
   
   // Destroy existing chart instance
   if (hivChartInstance) {
@@ -900,6 +858,7 @@ const getAppointmentStatusColor = (status) => {
 }
 
 const formatWaitingTime = (minutes) => {
+  if (!minutes) return '0 min'
   if (minutes < 60) return `${minutes} min`
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
@@ -934,7 +893,9 @@ const viewAppointment = (appointment) => {
 }
 
 const handleQuickAction = (action) => {
-  router.push(action.route)
+  if (action.route) {
+    router.push(action.route)
+  }
 }
 
 const manageStaff = () => {
@@ -1015,5 +976,17 @@ onBeforeUnmount(() => {
 
 .queue-list::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary);
+}
+
+.text-success {
+  color: var(--color-success) !important;
+}
+
+.text-warning {
+  color: var(--color-warning) !important;
+}
+
+.text-error {
+  color: var(--color-error) !important;
 }
 </style>

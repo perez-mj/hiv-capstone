@@ -39,6 +39,7 @@ const routes = [
       { path: 'queue', name: 'QueueManagement', component: () => import('@/pages/admin/QueueManagement.vue') },
       { path: 'administration', name: 'Administartion', component: () => import('@/pages/admin/Administration.vue'), meta: { allowedRoles: ['ADMIN'] } },
       { path: 'blockchain-status', name: 'BlockchainStatus', component: () => import('@/pages/admin/BlockchainStatus.vue'), meta: { title: 'Blockchain Status', allowedRoles: ['ADMIN'] }},
+      { path: 'reports',name: 'Reports',component: () => import('@/pages/admin/Reports.vue'),meta: { allowedRoles: ['ADMIN', 'NURSE'] }},
     ]
   },
   {

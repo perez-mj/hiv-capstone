@@ -5,7 +5,7 @@
     <v-row class="mb-6 align-center">
       <v-col cols="12" md="8">
         <div class="d-flex align-center">
-          <v-avatar :color="'primary'" size="48" class="mr-3">
+          <v-avatar color="primary" size="48" class="mr-3">
             <span class="text-h5 font-weight-bold text-white">
               {{ nurseInitials }}
             </span>
@@ -22,7 +22,7 @@
       </v-col>
       <v-col cols="12" md="4" class="text-md-right">
         <v-chip
-          :color="'primary'"
+          color="primary"
           variant="flat"
           size="large"
           prepend-icon="mdi-calendar"
@@ -31,7 +31,7 @@
           {{ currentDate }}
         </v-chip>
         <v-chip
-          :color="'secondary'"
+          color="secondary"
           variant="flat"
           size="large"
           prepend-icon="mdi-clock-outline"
@@ -52,14 +52,14 @@
     <v-row v-else-if="error">
       <v-col cols="12">
         <v-alert
-          :color="'error'"
+          color="error"
           variant="tonal"
           icon="mdi-alert-circle"
           class="mb-4"
         >
           {{ error }}
           <template v-slot:append>
-            <v-btn :color="'error'" variant="text" @click="fetchDashboardData">
+            <v-btn color="error" variant="text" @click="fetchDashboardData">
               <v-icon left>mdi-refresh</v-icon> Retry
             </v-btn>
           </template>
@@ -67,15 +67,15 @@
       </v-col>
     </v-row>
 
-    <template v-else>
+    <template v-else-if="dashboardData">
       <!-- Queue Management Section -->
       <v-row class="mb-6">
         <v-col cols="12">
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'primary'" variant="tonal" size="40">
-                  <v-icon :color="'primary'">mdi-format-list-group</v-icon>
+                <v-avatar color="primary" variant="tonal" size="40">
+                  <v-icon color="primary">mdi-format-list-group</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Queue Management</v-card-title>
@@ -83,7 +83,7 @@
               
               <template v-slot:append>
                 <v-btn
-                  :color="'success'"
+                  color="success"
                   variant="flat"
                   prepend-icon="mdi-plus"
                   size="small"
@@ -166,7 +166,7 @@
                   <div class="d-flex gap-2">
                     <v-btn
                       v-if="item.status === 'WAITING'"
-                      :color="'info'"
+                      color="info"
                       variant="text"
                       size="small"
                       icon
@@ -178,7 +178,7 @@
                     
                     <v-btn
                       v-if="item.status === 'CALLED'"
-                      :color="'warning'"
+                      color="warning"
                       variant="text"
                       size="small"
                       icon
@@ -190,7 +190,7 @@
                     
                     <v-btn
                       v-if="item.status === 'SERVING'"
-                      :color="'success'"
+                      color="success"
                       variant="text"
                       size="small"
                       icon
@@ -201,7 +201,7 @@
                     </v-btn>
                     
                     <v-btn
-                      :color="'primary'"
+                      color="primary"
                       variant="text"
                       size="small"
                       icon
@@ -213,7 +213,7 @@
                     
                     <v-btn
                       v-if="item.status !== 'COMPLETED'"
-                      :color="'error'"
+                      color="error"
                       variant="text"
                       size="small"
                       icon
@@ -233,7 +233,7 @@
                       No patients in queue at the moment
                     </div>
                     <v-btn
-                      :color="'primary'"
+                      color="primary"
                       variant="flat"
                       prepend-icon="mdi-plus"
                       @click="openAddToQueueDialog"
@@ -255,8 +255,8 @@
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'secondary'" variant="tonal" size="40">
-                  <v-icon :color="'secondary'">mdi-calendar-check</v-icon>
+                <v-avatar color="secondary" variant="tonal" size="40">
+                  <v-icon color="secondary">mdi-calendar-check</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Today's Appointments</v-card-title>
@@ -326,7 +326,7 @@
 
                 <template v-slot:item.actions="{ item }">
                   <v-btn
-                    :color="'primary'"
+                    color="primary"
                     variant="text"
                     size="small"
                     icon
@@ -336,7 +336,7 @@
                   </v-btn>
                   <v-btn
                     v-if="!item.queue_number && ['SCHEDULED', 'CONFIRMED'].includes(item.status)"
-                    :color="'success'"
+                    color="success"
                     variant="text"
                     size="small"
                     icon
@@ -394,8 +394,8 @@
           <v-card class="h-100">
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'warning'" variant="tonal" size="40">
-                  <v-icon :color="'warning'">mdi-flask</v-icon>
+                <v-avatar color="warning" variant="tonal" size="40">
+                  <v-icon color="warning">mdi-flask</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Pending Lab Results</v-card-title>
@@ -413,8 +413,8 @@
                   class="mb-2 rounded-lg cursor-pointer"
                 >
                   <template v-slot:prepend>
-                    <v-avatar :color="'warning'" size="36" variant="tonal">
-                      <v-icon :color="'warning'">mdi-flask</v-icon>
+                    <v-avatar color="warning" size="36" variant="tonal">
+                      <v-icon color="warning">mdi-flask</v-icon>
                     </v-avatar>
                   </template>
                   
@@ -430,7 +430,7 @@
 
                   <template v-slot:append>
                     <v-btn
-                      :color="'primary'"
+                      color="primary"
                       variant="text"
                       size="small"
                       icon
@@ -452,7 +452,7 @@
 
             <v-card-actions>
               <v-btn
-                :color="'primary'"
+                color="primary"
                 variant="text"
                 block
                 @click="viewAllLabs"
@@ -472,8 +472,8 @@
           <v-card>
             <v-card-item>
               <template v-slot:prepend>
-                <v-avatar :color="'info'" variant="tonal" size="40">
-                  <v-icon :color="'info'">mdi-stethoscope</v-icon>
+                <v-avatar color="info" variant="tonal" size="40">
+                  <v-icon color="info">mdi-stethoscope</v-icon>
                 </v-avatar>
               </template>
               <v-card-title class="text-h6">Recent Encounters</v-card-title>
@@ -515,7 +515,7 @@
 
                 <template v-slot:item.actions="{ item }">
                   <v-btn
-                    :color="'primary'"
+                    color="primary"
                     variant="text"
                     size="small"
                     icon
@@ -537,8 +537,8 @@
               <v-card>
                 <v-card-item>
                   <template v-slot:prepend>
-                    <v-avatar :color="'success'" variant="tonal" size="40">
-                      <v-icon :color="'success'">mdi-lightning-bolt</v-icon>
+                    <v-avatar color="success" variant="tonal" size="40">
+                      <v-icon color="success">mdi-lightning-bolt</v-icon>
                     </v-avatar>
                   </template>
                   <v-card-title class="text-h6">Quick Actions</v-card-title>
@@ -569,8 +569,8 @@
               <v-card>
                 <v-card-item>
                   <template v-slot:prepend>
-                    <v-avatar :color="'accent'" variant="tonal" size="40">
-                      <v-icon :color="'accent'">mdi-chart-box</v-icon>
+                    <v-avatar color="accent" variant="tonal" size="40">
+                      <v-icon color="accent">mdi-chart-box</v-icon>
                     </v-avatar>
                   </template>
                   <v-card-title class="text-h6">Today's Stats</v-card-title>
@@ -579,9 +579,9 @@
                 <v-card-text>
                   <v-list lines="one" density="compact">
                     <v-list-item>
-                      <v-template v-slot:prepend>
+                      <template v-slot:prepend>
                         <v-icon color="primary">mdi-calendar-check</v-icon>
-                      </v-template>
+                      </template>
                       <v-list-item-title>Appointments</v-list-item-title>
                       <template v-slot:append>
                         <span class="font-weight-bold">{{ todayAppointments.length }}</span>
@@ -589,9 +589,9 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <v-template v-slot:prepend>
+                      <template v-slot:prepend>
                         <v-icon color="warning">mdi-format-list-group</v-icon>
-                      </v-template>
+                      </template>
                       <v-list-item-title>Patients Served</v-list-item-title>
                       <template v-slot:append>
                         <span class="font-weight-bold">{{ patientsServedToday }}</span>
@@ -599,9 +599,9 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <v-template v-slot:prepend>
+                      <template v-slot:prepend>
                         <v-icon color="success">mdi-clock-outline</v-icon>
-                      </v-template>
+                      </template>
                       <v-list-item-title>Avg. Wait Time</v-list-item-title>
                       <template v-slot:append>
                         <span class="font-weight-bold">{{ averageWaitTime }}</span>
@@ -609,9 +609,9 @@
                     </v-list-item>
 
                     <v-list-item>
-                      <v-template v-slot:prepend>
+                      <template v-slot:prepend>
                         <v-icon color="info">mdi-flask</v-icon>
-                      </v-template>
+                      </template>
                       <v-list-item-title>Labs Pending</v-list-item-title>
                       <template v-slot:append>
                         <span class="font-weight-bold">{{ pendingLabs.length }}</span>
@@ -799,7 +799,7 @@
 
     <!-- Refresh Button -->
     <v-btn
-      :color="'primary'"
+      color="primary"
       variant="flat"
       fab
       fixed
@@ -817,7 +817,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { format, formatDistanceToNow, formatDistance } from 'date-fns'
+import { format } from 'date-fns'
 import { dashboardApi, queueApi, labResultsApi } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from 'vue-toastification'
@@ -865,52 +865,6 @@ const priorityOptions = [
   { title: 'Emergency', value: 2 }
 ]
 
-// Computed properties
-const nurseInfo = computed(() => {
-  return dashboardData.value?.data.nurse || {}
-})
-
-const currentQueue = computed(() => {
-  return dashboardData.value?.data.current_queue || []
-})
-
-const todayAppointments = computed(() => {
-  return dashboardData.value?.data.today_appointments || []
-})
-
-const pendingLabs = computed(() => {
-  return dashboardData.value?.data.pending_lab_results || []
-})
-
-const recentEncounters = computed(() => {
-  return dashboardData.value?.data.recent_encounters || []
-})
-
-const queueSummary = computed(() => {
-  const summary = dashboardData.value?.data.queue_summary || {}
-  return [
-    { label: 'Waiting', value: summary.waiting || 0, color: 'warning' },
-    { label: 'Called', value: summary.called || 0, color: 'info' },
-    { label: 'Serving', value: summary.serving || 0, color: 'success' },
-    { label: 'Total', value: summary.total || 0, color: 'primary' }
-  ]
-})
-
-const availableAppointments = computed(() => {
-  return todayAppointments.value.filter(a => 
-    ['SCHEDULED', 'CONFIRMED'].includes(a.status) && !a.queue_number
-  )
-})
-
-const patientsServedToday = computed(() => {
-  return todayAppointments.value.filter(a => a.status === 'COMPLETED').length
-})
-
-const averageWaitTime = computed(() => {
-  // Calculate from completed queue items
-  return '15 min'
-})
-
 // Table headers
 const queueHeaders = [
   { title: 'Queue #', key: 'queue_number', width: '100' },
@@ -945,6 +899,65 @@ const nurseQuickActions = [
   { title: 'View Schedule', icon: 'mdi-calendar', color: 'success', route: '/schedule' }
 ]
 
+// Computed properties from dashboard data
+const nurseInfo = computed(() => {
+  return dashboardData.value?.nurse || {}
+})
+
+const currentQueue = computed(() => {
+  return dashboardData.value?.current_queue || []
+})
+
+const todayAppointments = computed(() => {
+  return dashboardData.value?.today_appointments || []
+})
+
+const pendingLabs = computed(() => {
+  return dashboardData.value?.pending_lab_results || []
+})
+
+const recentEncounters = computed(() => {
+  return dashboardData.value?.recent_encounters || []
+})
+
+const queueSummary = computed(() => {
+  const summary = dashboardData.value?.queue_summary || {}
+  return [
+    { label: 'Waiting', value: summary.waiting || 0, color: 'warning' },
+    { label: 'Called', value: summary.called || 0, color: 'info' },
+    { label: 'Serving', value: summary.serving || 0, color: 'success' },
+    { label: 'Total', value: summary.total || 0, color: 'primary' }
+  ]
+})
+
+const availableAppointments = computed(() => {
+  if (!todayAppointments.value) return []
+  return todayAppointments.value.filter(a => 
+    ['SCHEDULED', 'CONFIRMED'].includes(a.status) && !a.queue_number
+  )
+})
+
+const patientsServedToday = computed(() => {
+  if (!todayAppointments.value) return 0
+  return todayAppointments.value.filter(a => a.status === 'COMPLETED').length
+})
+
+const averageWaitTime = computed(() => {
+  // Calculate from current queue or default
+  if (!currentQueue.value || currentQueue.value.length === 0) return '0 min'
+  
+  const waitTimes = currentQueue.value
+    .filter(q => q.waiting_minutes > 0)
+    .map(q => q.waiting_minutes)
+  
+  if (waitTimes.length === 0) return '0 min'
+  
+  const avgMinutes = Math.round(waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length)
+  return formatWaitingTime(avgMinutes)
+})
+
+let timeInterval = null
+
 // Methods
 const fetchDashboardData = async () => {
   loading.value = true
@@ -952,23 +965,41 @@ const fetchDashboardData = async () => {
   
   try {
     const response = await dashboardApi.getNurseDashboard()
-    dashboardData.value = response.data
     
-    // Set nurse info
-    const nurse = response.data.data.nurse
+    // The http.js interceptor returns response.data directly
+    // So response should be the actual dashboard data
+    console.log('Nurse dashboard data received:', response)
+    
+    // Check if response has the expected structure
+    if (response && response.current_queue !== undefined) {
+      dashboardData.value = response
+    } else if (response && response.data && response.data.current_queue !== undefined) {
+      // Handle nested data structure
+      dashboardData.value = response.data
+    } else {
+      console.warn('Unexpected response structure:', response)
+      dashboardData.value = response
+    }
+    
+    // Set nurse info from response
+    const nurse = dashboardData.value?.nurse
     if (nurse) {
-      nurseName.value = nurse.name
-      nursePosition.value = nurse.position
-      nurseInitials.value = nurse.name
+      nurseName.value = nurse.name || ''
+      nursePosition.value = nurse.position || 'Nurse'
+      nurseInitials.value = nurseName.value
         .split(' ')
         .map(n => n[0])
         .join('')
         .toUpperCase()
         .substring(0, 2)
+    } else if (authStore.user) {
+      // Fallback to auth store
+      nurseName.value = authStore.user.username || authStore.user.name || 'Nurse'
+      nurseInitials.value = nurseName.value.charAt(0).toUpperCase()
     }
   } catch (err) {
     console.error('Failed to fetch dashboard data:', err)
-    error.value = 'Failed to load dashboard data. Please try again.'
+    error.value = err.message || 'Failed to load dashboard data. Please try again.'
     toast.error('Failed to load dashboard data')
   } finally {
     loading.value = false
@@ -1005,10 +1036,10 @@ const confirmAddToQueue = async () => {
     queueNotes.value = ''
     
     // Refresh data
-    fetchDashboardData()
+    await fetchDashboardData()
   } catch (err) {
     console.error('Failed to add to queue:', err)
-    toast.error('Failed to add patient to queue')
+    toast.error(err.message || 'Failed to add patient to queue')
   } finally {
     addingToQueue.value = false
   }
@@ -1024,10 +1055,10 @@ const confirmCallPatient = async () => {
     await queueApi.callPatient(selectedPatient.value.id)
     toast.success(`Called patient #${selectedPatient.value.queue_number}`)
     showCallDialog.value = false
-    fetchDashboardData()
+    await fetchDashboardData()
   } catch (err) {
     console.error('Failed to call patient:', err)
-    toast.error('Failed to call patient')
+    toast.error(err.message || 'Failed to call patient')
   }
 }
 
@@ -1035,10 +1066,10 @@ const startServing = async (patient) => {
   try {
     await queueApi.startServing(patient.id)
     toast.success(`Now serving patient #${patient.queue_number}`)
-    fetchDashboardData()
+    await fetchDashboardData()
   } catch (err) {
     console.error('Failed to start serving:', err)
-    toast.error('Failed to start serving')
+    toast.error(err.message || 'Failed to start serving')
   }
 }
 
@@ -1046,10 +1077,10 @@ const completeServing = async (patient) => {
   try {
     await queueApi.completeServing(patient.id)
     toast.success(`Completed serving patient #${patient.queue_number}`)
-    fetchDashboardData()
+    await fetchDashboardData()
   } catch (err) {
     console.error('Failed to complete serving:', err)
-    toast.error('Failed to complete serving')
+    toast.error(err.message || 'Failed to complete serving')
   }
 }
 
@@ -1058,10 +1089,10 @@ const skipPatient = async (patient) => {
     try {
       await queueApi.skipPatient(patient.id)
       toast.info(`Skipped patient #${patient.queue_number}`)
-      fetchDashboardData()
+      await fetchDashboardData()
     } catch (err) {
       console.error('Failed to skip patient:', err)
-      toast.error('Failed to skip patient')
+      toast.error(err.message || 'Failed to skip patient')
     }
   }
 }
@@ -1090,10 +1121,10 @@ const saveLabResult = async () => {
     toast.success('Lab result saved successfully')
     showLabDialog.value = false
     resetLabForm()
-    fetchDashboardData()
+    await fetchDashboardData()
   } catch (err) {
     console.error('Failed to save lab result:', err)
-    toast.error('Failed to save lab result')
+    toast.error(err.message || 'Failed to save lab result')
   } finally {
     savingLabResult.value = false
   }
@@ -1181,12 +1212,14 @@ const getEncounterTypeColor = (type) => {
 }
 
 const getWaitTimeClass = (minutes) => {
+  if (!minutes) return ''
   if (minutes > 30) return 'text-error'
   if (minutes > 15) return 'text-warning'
   return 'text-success'
 }
 
 const getWaitTimeColor = (minutes) => {
+  if (!minutes) return 'success'
   if (minutes > 30) return 'error'
   if (minutes > 15) return 'warning'
   return 'success'
@@ -1201,14 +1234,17 @@ const formatWaitingTime = (minutes) => {
 }
 
 const formatTime = (datetime) => {
+  if (!datetime) return 'N/A'
   return format(new Date(datetime), 'hh:mm a')
 }
 
 const formatDateTime = (datetime) => {
+  if (!datetime) return 'N/A'
   return format(new Date(datetime), 'MMM d, hh:mm a')
 }
 
 const formatDateShort = (date) => {
+  if (!date) return 'N/A'
   return format(new Date(date), 'MMM d, yyyy')
 }
 
@@ -1239,12 +1275,13 @@ const updateTime = () => {
 onMounted(() => {
   fetchDashboardData()
   updateTime()
-  const timer = setInterval(updateTime, 1000)
-  
-  // Cleanup on unmount
-  onBeforeUnmount(() => {
-    clearInterval(timer)
-  })
+  timeInterval = setInterval(updateTime, 1000)
+})
+
+onBeforeUnmount(() => {
+  if (timeInterval) {
+    clearInterval(timeInterval)
+  }
 })
 </script>
 

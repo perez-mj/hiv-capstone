@@ -15,7 +15,8 @@ const kioskRoutes = require('./kioskRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const blockchainRoutes = require('./blockchainRoutes');
 const verificationRoutes = require('./verificationRoutes');
-
+const reportRoutes = require('./reportRoutes');
+router.use('/reports', reportRoutes);
 // Public routes
 // backend/routes/index.js - Correct ordering
 router.use('/auth', authRoutes);

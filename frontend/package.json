@@ -12,6 +12,7 @@
     "@mdi/font": "^7.4.47",
     "@mdi/js": "^7.4.47",
     "axios": "^1.13.4",
+    "chart.js": "^4.5.1",
     "fontawesome-free": "^1.0.4",
     "lodash": "^4.17.23",
     "papaparse": "^5.5.3",
