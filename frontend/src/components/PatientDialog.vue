@@ -467,6 +467,13 @@ function formatDateForInput(dateString) {
   return `${year}-${month}-${day}`
 }
 
+// Helper function to validate date
+function isValidDate(dateString) {
+  if (!dateString) return true
+  const date = new Date(dateString)
+  return !isNaN(date.getTime())
+}
+
 // Options
 const hivStatusOptions = [
   { title: 'Reactive', value: 'REACTIVE' },
@@ -547,33 +554,80 @@ const closeDialog = () => {
 }
 
 const savePatient = async () => {
+  // Validate form
   const { valid } = await form.value.validate()
   if (!valid) return
   
+  // Additional validation for dates
+  if (!isValidDate(formData.value.date_of_birth)) {
+    alert('Please enter a valid date of birth')
+    return
+  }
+  
+  if (formData.value.diagnosis_date && !isValidDate(formData.value.diagnosis_date)) {
+    alert('Please enter a valid diagnosis date')
+    return
+  }
+  
+  if (formData.value.art_start_date && !isValidDate(formData.value.art_start_date)) {
+    alert('Please enter a valid ART start date')
+    return
+  }
+  
   loading.value = true
+  
   try {
+    // Prepare patient data - exactly matching backend validation schema
     const patientData = {
-      patient_facility_code: formData.value.patient_facility_code || undefined,
-      first_name: formData.value.first_name,
-      last_name: formData.value.last_name,
+      // Required fields
+      first_name: formData.value.first_name.trim(),
+      last_name: formData.value.last_name.trim(),
       date_of_birth: formData.value.date_of_birth,
       sex: formData.value.sex,
       hiv_status: formData.value.hiv_status,
-      middle_name: formData.value.middle_name || null,
-      address: formData.value.address || null,
-      contact_number: formData.value.contact_number || null,
+      
+      // Optional fields with proper null handling
+      patient_facility_code: formData.value.patient_facility_code?.trim() || undefined,
+      middle_name: formData.value.middle_name?.trim() || null,
+      address: formData.value.address?.trim() || null,
+      contact_number: formData.value.contact_number?.trim() || null,
       diagnosis_date: formData.value.diagnosis_date || null,
       art_start_date: formData.value.art_start_date || null,
       latest_cd4_count: formData.value.latest_cd4_count ? parseInt(formData.value.latest_cd4_count) : null,
       latest_viral_load: formData.value.latest_viral_load ? parseInt(formData.value.latest_viral_load) : null
     }
     
+    // Add user account data if requested (create mode only)
     if (props.mode === 'create' && formData.value.create_user_account) {
+      // Validate user account fields
+      if (!formData.value.username?.trim()) {
+        alert('Username is required when creating a user account')
+        loading.value = false
+        return
+      }
+      if (!formData.value.password) {
+        alert('Password is required when creating a user account')
+        loading.value = false
+        return
+      }
+      if (formData.value.password !== formData.value.confirm_password) {
+        alert('Passwords do not match')
+        loading.value = false
+        return
+      }
+      if (formData.value.password.length < 6) {
+        alert('Password must be at least 6 characters')
+        loading.value = false
+        return
+      }
+      
       patientData.create_user_account = true
-      patientData.username = formData.value.username
-      patientData.email = formData.value.email || null
-      patientData.password_hash = formData.value.password
+      patientData.username = formData.value.username.trim()
+      patientData.email = formData.value.email?.trim() || null
+      patientData.password = formData.value.password  // Note: backend expects 'password' not 'password_hash'
     }
+    
+    console.log('Sending patient data:', patientData)
     
     let response
     if (props.mode === 'create') {
@@ -582,11 +636,39 @@ const savePatient = async () => {
       response = await patientsApi.update(props.patient.id, patientData)
     }
     
-    emit('saved', response?.data?.patient)
-    closeDialog()
+    if (response?.data?.patient) {
+      emit('saved', response.data.patient)
+      closeDialog()
+    } else if (response?.data) {
+      emit('saved', response.data)
+      closeDialog()
+    } else {
+      emit('saved', true)
+      closeDialog()
+    }
+    
   } catch (error) {
     console.error('Error saving patient:', error)
-    const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Failed to save patient'
+    
+    // Better error handling
+    let errorMessage = 'Failed to save patient'
+    
+    if (error.response?.data?.error) {
+      errorMessage = error.response.data.error
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message
+    } else if (error.response?.data?.details) {
+      // Joi validation details
+      const details = error.response.data.details
+      if (Array.isArray(details)) {
+        errorMessage = details.map(d => d.message).join(', ')
+      } else {
+        errorMessage = details
+      }
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
     alert(errorMessage)
   } finally {
     loading.value = false

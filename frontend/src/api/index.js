@@ -1,9 +1,8 @@
-
-// frontend/src/api/http.js
-import http from './http'
+// frontend/src/api/index.js
+import http from './http'  // FIXED: Now properly imports the axios instance
 
 // ==========================================================================================================
-// PATIENT API
+// PATIENT API (Patient portal - for logged in patients)
 // ==========================================================================================================
 
 export const patientApi = {
@@ -35,7 +34,7 @@ export const patientApi = {
   checkAvailability: (datetime, typeId) => http.get('/appointments/availability/check', {
     params: { datetime, type_id: typeId }
   })
-};
+}
 
 // ==========================================================================================================
 // APPOINTMENT TYPES API (Admin)
@@ -220,6 +219,9 @@ export const blockchainApi = {
   diagnostics: () => http.get('/blockchain/diagnostics')
 }
 
+// ==========================================================================================================
+// KIOSK API
+// ==========================================================================================================
 export const kioskApi = {
   // Public: Check device status and auto-register if needed
   checkStatus: (deviceId) => http.get(`/kiosk/status/${deviceId}`),
