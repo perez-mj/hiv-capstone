@@ -8,13 +8,13 @@
             <div class="brand-content-group text-center">
               
               <div class="brand-logo-container mb-10 d-flex flex-column align-center">
-                <img src="@/assets/images/logo.png" alt="OMPH HIV AQMS Logo" class="logo-img mb-6" />
+                <img src="@/assets/images/logo.png" alt="OMPH HIV CARE Logo" class="logo-img mb-6" />
                 
                 <div class="d-flex align-center mb-2 justify-center">
                   <h1 class="text-h3 font-weight-black text-white ls-tight">
                     OMPH <span class="text-green-accent">HIV</span>
                   </h1>
-                  <v-chip color="green-darken-2" variant="flat" density="comfortable" class="ml-3 font-weight-black px-4">AQMS</v-chip>
+                  <v-chip color="green-darken-2" variant="flat" density="comfortable" class="ml-3 font-weight-black px-4">CARE</v-chip>
                 </div>
                 
                 <div class="brand-identity-line mb-6 flex-column align-center">

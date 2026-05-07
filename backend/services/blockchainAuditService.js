@@ -1,4 +1,3 @@
-// backend/services/blockchainAuditService.js
 const MultiChainHTTPClient = require('../config/multichain-http');
 const encryptionService = require('./encryptionService');
 
@@ -102,8 +101,8 @@ class BlockchainAuditService {
       const dataHash = encryptionService.hashData(auditEntry);
       encryptedEntry.data_hash = dataHash;
 
-      // Create a unique key for this audit entry
-      const key = `${tableName}:${recordId || 'system'}:${Date.now()}`;
+      // Create a unique key for this audit entry (using _ instead of :)
+      const key = `${tableName}_${recordId || 'system'}_${Date.now()}`;
       
       const result = await this.client.publishToStream(
         STREAMS.AUDIT_LOG,
@@ -145,10 +144,73 @@ class BlockchainAuditService {
     }
 
     try {
+      // Import verification service to use the same hash function
+      const verificationService = require('./verificationService');
+      
+      // DEBUG: Log what we received
+      console.log(`📝 Storing ${recordType} record for patient ${patientId}`);
+      console.log(`   Record data keys: ${Object.keys(recordData).join(', ')}`);
+      
+      // Extract the actual patient data for hashing
+      let patientDataForHash = null;
+      
+      // Check different possible structures
+      if (recordData.enrollment_data) {
+        // From patientController.createPatient
+        patientDataForHash = recordData.enrollment_data;
+        console.log(`   Using enrollment_data for hash`);
+      } else if (recordData.snapshot_data) {
+        // From verificationService.storePatientSnapshot
+        patientDataForHash = recordData.snapshot_data;
+        console.log(`   Using snapshot_data for hash`);
+      } else if (recordData.record_data && recordData.record_data.enrollment_data) {
+        // Nested structure
+        patientDataForHash = recordData.record_data.enrollment_data;
+        console.log(`   Using nested enrollment_data for hash`);
+      } else if (recordData.record_data && recordData.record_data.snapshot_data) {
+        // Nested snapshot structure
+        patientDataForHash = recordData.record_data.snapshot_data;
+        console.log(`   Using nested snapshot_data for hash`);
+      } else if (recordData.patient_id && recordData.first_name) {
+        // Direct patient data
+        patientDataForHash = recordData;
+        console.log(`   Using direct patient data for hash`);
+      } else {
+        // Fallback: try to find any patient-like data
+        console.log(`   Warning: Unknown data structure, attempting to extract...`);
+        patientDataForHash = recordData.record_data || recordData;
+      }
+      
+      // Ensure we have the required fields for hash generation
+      if (!patientDataForHash || !patientDataForHash.id) {
+        console.error(`   ERROR: Cannot extract patient data for hashing. Patient ID: ${patientId}`);
+        console.error(`   patientDataForHash:`, JSON.stringify(patientDataForHash, null, 2).substring(0, 500));
+        
+        // Try to fetch current patient data from database as fallback
+        const pool = require('../db');
+        const [patientRows] = await pool.execute(
+          'SELECT * FROM patients WHERE id = ?',
+          [patientId]
+        );
+        if (patientRows[0]) {
+          patientDataForHash = patientRows[0];
+          console.log(`   Using database fallback for patient data`);
+        } else {
+          throw new Error(`Cannot generate hash for patient ${patientId}: No patient data available`);
+        }
+      }
+      
+      // Generate hash using the SAME method as verification service
+      const dataHash = verificationService.generatePatientDataHash(patientDataForHash);
+      
+      console.log(`   Generated hash: ${dataHash.substring(0, 16)}...`);
+      console.log(`   Patient data sample: ID=${patientDataForHash.id}, Name=${patientDataForHash.first_name} ${patientDataForHash.last_name}`);
+      
       const patientRecord = {
         patient_id: String(patientId),
-        record_type: recordType, // e.g., 'MEDICAL_HISTORY', 'DEMOGRAPHICS', 'HIV_STATUS'
+        record_type: recordType,
         record_data: recordData,
+        data_hash: dataHash,  // Store the hash of just the patient data
         timestamp: new Date().toISOString(),
         recorded_by: req?.user?.id || null,
         recorded_by_name: req?.user?.username || 'system',
@@ -159,11 +221,9 @@ class BlockchainAuditService {
       const encryptedRecord = encryptionService.encryptSensitiveFields(patientRecord, 
         ['patient_id', 'record_data', 'recorded_by_name']
       );
-      
-      // Store hash for verification
-      encryptedRecord.data_hash = encryptionService.hashData(patientRecord);
 
-      const key = `patient:${patientId}:${recordType}:${Date.now()}`;
+      // Create key with _ instead of :
+      const key = `patient_${patientId}_${recordType}_${Date.now()}`;
       
       const result = await this.client.publishToStream(
         STREAMS.PATIENT_RECORDS,
@@ -178,10 +238,11 @@ class BlockchainAuditService {
         txid: result.txid,
         key: key,
         timestamp: result.timestamp,
-        data_hash: encryptedRecord.data_hash
+        data_hash: dataHash
       };
     } catch (error) {
       console.error('Failed to store patient record:', error.message);
+      console.error(error.stack);
       return { success: false, error: error.message };
     }
   }
@@ -201,6 +262,9 @@ class BlockchainAuditService {
     }
 
     try {
+      const verificationService = require('./verificationService');
+      const dataHash = verificationService.generateAppointmentHash(appointmentData);
+      
       const snapshot = {
         appointment_id: appointmentData.id,
         appointment_number: appointmentData.appointment_number,
@@ -212,17 +276,17 @@ class BlockchainAuditService {
         snapshot_action: action, // CREATE, UPDATE, STATUS_CHANGE, COMPLETE, CANCEL
         snapshot_time: new Date().toISOString(),
         captured_by: req?.user?.id || null,
-        captured_by_name: req?.user?.username || 'system'
+        captured_by_name: req?.user?.username || 'system',
+        data_hash: dataHash
       };
 
       // Encrypt sensitive data (patient_id and notes)
       const encryptedSnapshot = encryptionService.encryptSensitiveFields(snapshot, 
         ['patient_id', 'notes', 'captured_by_name']
       );
-      
-      encryptedSnapshot.data_hash = encryptionService.hashData(snapshot);
 
-      const key = `appointment:${appointmentData.id}:${Date.now()}`;
+      // Create key with _ instead of :
+      const key = `appointment_${appointmentData.id}_${Date.now()}`;
       
       const result = await this.client.publishToStream(
         STREAMS.APPOINTMENTS,
@@ -236,7 +300,8 @@ class BlockchainAuditService {
         success: true,
         txid: result.txid,
         key: key,
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
+        data_hash: dataHash
       };
     } catch (error) {
       console.error('Failed to store appointment snapshot:', error.message);
@@ -259,6 +324,9 @@ class BlockchainAuditService {
     }
 
     try {
+      const verificationService = require('./verificationService');
+      const dataHash = verificationService.generateLabResultHash(labResultData);
+      
       const labRecord = {
         lab_result_id: labResultData.id,
         patient_id: String(labResultData.patient_id),
@@ -273,17 +341,17 @@ class BlockchainAuditService {
         performed_by: labResultData.performed_by,
         blockchain_timestamp: new Date().toISOString(),
         verified_by: req?.user?.username || 'system',
-        verified_by_id: req?.user?.id || null
+        verified_by_id: req?.user?.id || null,
+        data_hash: dataHash
       };
 
       // Encrypt sensitive lab data (interpretation and results)
       const encryptedLabRecord = encryptionService.encryptSensitiveFields(labRecord, 
         ['patient_id', 'result_value', 'interpretation', 'file_path']
       );
-      
-      encryptedLabRecord.data_hash = encryptionService.hashData(labRecord);
 
-      const key = `lab:${labResultData.patient_id}:${labResultData.id}:${Date.now()}`;
+      // Create key with _ instead of :
+      const key = `lab_${labResultData.patient_id}_${labResultData.id}_${Date.now()}`;
       
       const result = await this.client.publishToStream(
         STREAMS.LAB_RESULTS,
@@ -297,7 +365,8 @@ class BlockchainAuditService {
         success: true,
         txid: result.txid,
         key: key,
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
+        data_hash: dataHash
       };
     } catch (error) {
       console.error('Failed to store lab result:', error.message);
@@ -346,11 +415,11 @@ class BlockchainAuditService {
     try {
       let keyPattern = null;
       if (tableName && recordId) {
-        keyPattern = `${tableName}:${recordId}`;
+        keyPattern = `${tableName}_${recordId}`;
       } else if (tableName) {
-        keyPattern = `${tableName}:`;
+        keyPattern = `${tableName}_`;
       } else if (patientId) {
-        keyPattern = `patient:${patientId}`;
+        keyPattern = `patient_${patientId}`;
       }
 
       const items = await this.client.getStreamItems(
@@ -382,9 +451,11 @@ class BlockchainAuditService {
     }
 
     try {
-      let keyPattern = recordType 
-        ? `patient:${patientId}:${recordType}`
-        : `patient:${patientId}:`;
+      // Use key pattern with _ instead of :
+      let keyPattern = `patient_${patientId}_`;
+      if (recordType) {
+        keyPattern = `patient_${patientId}_${recordType}_`;
+      }
       
       const items = await this.client.getStreamItems(
         STREAMS.PATIENT_RECORDS,
@@ -393,11 +464,19 @@ class BlockchainAuditService {
         offset
       );
 
-      return items.map(item => ({
-        ...encryptionService.decrypt(item.data),
-        blockchain_txid: item.txid,
-        blockchain_time: item.time
-      }));
+      const decryptedResults = items.map(item => {
+        const decrypted = encryptionService.decrypt(item.data);
+        return {
+          ...decrypted,
+          blockchain_txid: item.txid,
+          blockchain_time: item.time,
+          confirmations: item.confirmations
+        };
+      });
+      
+      console.log(`📦 Retrieved ${decryptedResults.length} patient records from blockchain`);
+      
+      return decryptedResults;
     } catch (error) {
       console.error('Failed to get patient records:', error.message);
       return [];
@@ -413,7 +492,8 @@ class BlockchainAuditService {
     }
 
     try {
-      const keyPattern = `appointment:${appointmentId}:`;
+      // Use key pattern with _ instead of :
+      let keyPattern = appointmentId ? `appointment_${appointmentId}_` : 'appointment_';
       
       const items = await this.client.getStreamItems(
         STREAMS.APPOINTMENTS,
@@ -423,11 +503,16 @@ class BlockchainAuditService {
         true // reverse chronological
       );
 
-      return items.map(item => ({
+      const decryptedItems = items.map(item => ({
         ...encryptionService.decrypt(item.data),
         blockchain_txid: item.txid,
-        blockchain_time: item.time
+        blockchain_time: item.time,
+        confirmations: item.confirmations
       }));
+      
+      console.log(`📅 Retrieved ${decryptedItems.length} appointment records${appointmentId ? ` for appointment ${appointmentId}` : ''}`);
+      
+      return decryptedItems;
     } catch (error) {
       console.error('Failed to get appointment history:', error.message);
       return [];
@@ -443,7 +528,8 @@ class BlockchainAuditService {
     }
 
     try {
-      let keyPattern = patientId ? `lab:${patientId}:` : 'lab:';
+      // Use key pattern with _ instead of :
+      let keyPattern = patientId ? `lab_${patientId}_` : 'lab_';
       
       const items = await this.client.getStreamItems(
         STREAMS.LAB_RESULTS,
@@ -453,11 +539,16 @@ class BlockchainAuditService {
         true // reverse chronological
       );
 
-      return items.map(item => ({
+      const decryptedItems = items.map(item => ({
         ...encryptionService.decrypt(item.data),
         blockchain_txid: item.txid,
-        blockchain_time: item.time
+        blockchain_time: item.time,
+        confirmations: item.confirmations
       }));
+      
+      console.log(`🔬 Retrieved ${decryptedItems.length} lab results${patientId ? ` for patient ${patientId}` : ''}`);
+      
+      return decryptedItems;
     } catch (error) {
       console.error('Failed to get lab results:', error.message);
       return [];
@@ -487,7 +578,7 @@ class BlockchainAuditService {
         timeline: []
       };
 
-      allLogs.forEach(log => {
+      for (const log of allLogs) {
         const decrypted = encryptionService.decrypt(log.data);
         const actionType = decrypted.action_type;
         stats.by_action_type[actionType] = (stats.by_action_type[actionType] || 0) + 1;
@@ -501,9 +592,10 @@ class BlockchainAuditService {
         stats.timeline.push({
           date: decrypted.timestamp,
           action: decrypted.action_type,
-          table: decrypted.table_name
+          table: decrypted.table_name,
+          txid: log.txid
         });
-      });
+      }
 
       return stats;
     } catch (error) {
@@ -517,6 +609,30 @@ class BlockchainAuditService {
       return [];
     }
     return await this.client.listStreams();
+  }
+
+  /**
+   * Get blockchain status
+   */
+  async getBlockchainStatus() {
+    if (!this.enabled || !this.initialized || !this.client) {
+      return { enabled: false, initialized: false, message: 'Blockchain service is disabled' };
+    }
+    
+    try {
+      const info = await this.client.getBlockchainInfo();
+      return {
+        enabled: true,
+        initialized: true,
+        blockchain_name: info.chainname,
+        block_count: info.blocks,
+        connections: info.connections,
+        version: info.version
+      };
+    } catch (error) {
+      console.error('Failed to get blockchain status:', error.message);
+      return { enabled: true, initialized: true, error: error.message };
+    }
   }
 }
 

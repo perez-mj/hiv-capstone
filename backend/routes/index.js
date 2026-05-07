@@ -14,6 +14,7 @@ const staffRoutes = require('./staffRoutes');
 const kioskRoutes = require('./kioskRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const blockchainRoutes = require('./blockchainRoutes');
+const verificationRoutes = require('./verificationRoutes');
 
 // Public routes
 // backend/routes/index.js - Correct ordering
@@ -31,5 +32,7 @@ router.use('/queue', queueRoutes);
 router.use('/staff', staffRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/blockchain', blockchainRoutes);
+router.use('/verification', verificationRoutes);
+
 
 module.exports = router;

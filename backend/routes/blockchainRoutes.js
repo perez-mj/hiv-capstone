@@ -1,4 +1,4 @@
-// backend/routes/blockchainRoutes.js - Update to allow public access for basic info
+// backend/routes/blockchainRoutes.js
 
 const express = require('express');
 const router = express.Router();

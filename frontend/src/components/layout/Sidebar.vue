@@ -15,9 +15,9 @@
     <!-- Header with Logo - Click to toggle rail mode -->
     <div class="sidebar-header" :class="{ 'rail-mode': railMode }" @click="toggleRail">
       <div class="logo-container">
-        <img src="@/assets/images/logo.png" alt="OMPH HIV AQMS Logo" class="logo" />
+        <img src="@/assets/images/logo.png" alt="OMPH HIV CARE Logo" class="logo" />
         <div class="logo-text" v-if="!railMode">
-          <div class="logo-title">OMPH HIV AQMS</div>
+          <div class="logo-title">OMPH HIV CARE</div>
           <div class="logo-subtitle">Appointment & Queue System</div>
         </div>
       </div>

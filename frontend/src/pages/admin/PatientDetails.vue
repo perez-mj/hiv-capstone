@@ -1,3 +1,4 @@
+<!-- frontend/src/pages/admin/PatientDetails.vue -->
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- Header with Back Button -->
@@ -113,93 +114,118 @@
         </v-card-text>
       </v-card>
 
-      <!-- Main Content Grid -->
-      <v-row>
-        <!-- Left Column - Personal Information -->
-        <v-col cols="12" md="6">
-          <v-card elevation="0" variant="outlined" class="h-100">
-            <v-card-title class="py-3 px-4 text-subtitle-1 font-weight-medium">
-              Personal Information
-            </v-card-title>
-            <v-divider />
-            <v-card-text class="pa-4">
-              <div class="info-grid">
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">Sex</div>
-                  <div class="info-value">{{ formatSex(patient.sex) }}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">Contact Number</div>
-                  <div class="info-value">{{ patient.contact_number || '—' }}</div>
-                </div>
-                <div class="info-item full-width">
-                  <div class="info-label text-caption text-medium-emphasis">Address</div>
-                  <div class="info-value">{{ patient.address || '—' }}</div>
-                </div>
-              </div>
-            </v-card-text>
-          </v-card>
-        </v-col>
+      <!-- Tabs Navigation -->
+      <v-tabs v-model="activeTab" color="primary" class="mb-4" density="comfortable">
+        <v-tab value="overview">
+          <v-icon icon="mdi-account-details" size="18" class="mr-1" />
+          Overview
+        </v-tab>
+        <v-tab value="verification">
+          <v-icon icon="mdi-shield-check" size="18" class="mr-1" />
+          Verification
+        </v-tab>
+      </v-tabs>
 
-        <!-- Right Column - Medical Information -->
-        <v-col cols="12" md="6">
-          <v-card elevation="0" variant="outlined" class="h-100">
-            <v-card-title class="py-3 px-4 text-subtitle-1 font-weight-medium">
-              Medical Information
-            </v-card-title>
-            <v-divider />
-            <v-card-text class="pa-4">
-              <div class="info-grid">
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">HIV Status</div>
+      <!-- Tab Panels -->
+      <v-window v-model="activeTab">
+        <!-- Overview Tab -->
+        <v-window-item value="overview">
+          <v-row>
+            <!-- Left Column - Personal Information -->
+            <v-col cols="12" md="6">
+              <v-card elevation="0" variant="outlined" class="h-100">
+                <v-card-title class="py-3 px-4 text-subtitle-1 font-weight-medium">
+                  Personal Information
+                </v-card-title>
+                <v-divider />
+                <v-card-text class="pa-4">
+                  <div class="info-grid">
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">Sex</div>
+                      <div class="info-value">{{ formatSex(patient.sex) }}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">Contact Number</div>
+                      <div class="info-value">{{ patient.contact_number || '—' }}</div>
+                    </div>
+                    <div class="info-item full-width">
+                      <div class="info-label text-caption text-medium-emphasis">Address</div>
+                      <div class="info-value">{{ patient.address || '—' }}</div>
+                    </div>
+                  </div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+
+            <!-- Right Column - Medical Information -->
+            <v-col cols="12" md="6">
+              <v-card elevation="0" variant="outlined" class="h-100">
+                <v-card-title class="py-3 px-4 text-subtitle-1 font-weight-medium">
+                  Medical Information
+                </v-card-title>
+                <v-divider />
+                <v-card-text class="pa-4">
+                  <div class="info-grid">
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">HIV Status</div>
+                      <div>
+                        <v-chip size="small" :color="getHivStatusColor(patient.hiv_status)" variant="flat"
+                          :prepend-icon="getHivStatusIcon(patient.hiv_status)">
+                          {{ formatHivStatus(patient.hiv_status) }}
+                        </v-chip>
+                      </div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">Diagnosis Date</div>
+                      <div class="info-value">{{ formatDate(patient.diagnosis_date) || '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">ART Start Date</div>
+                      <div class="info-value">{{ formatDate(patient.art_start_date) || '—' }}</div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">Latest CD4 Count</div>
+                      <div class="info-value">{{ patient.latest_cd4_count ? patient.latest_cd4_count + ' cells/mm³' : '—' }}
+                      </div>
+                    </div>
+                    <div class="info-item">
+                      <div class="info-label text-caption text-medium-emphasis">Latest Viral Load</div>
+                      <div class="info-value">{{ patient.latest_viral_load ? patient.latest_viral_load + ' copies/mL' : '—'
+                        }}
+                      </div>
+                    </div>
+                  </div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <!-- Quick Stats Cards -->
+          <v-row class="mt-4">
+            <v-col cols="12" sm="6" md="3" v-for="stat in quickStats" :key="stat.label">
+              <v-card elevation="0" variant="outlined">
+                <v-card-text class="pa-3 d-flex align-center">
+                  <v-avatar size="40" :color="stat.color" class="mr-3">
+                    <v-icon :icon="stat.icon" size="24" color="white"></v-icon>
+                  </v-avatar>
                   <div>
-                    <v-chip size="small" :color="getHivStatusColor(patient.hiv_status)" variant="flat"
-                      :prepend-icon="getHivStatusIcon(patient.hiv_status)">
-                      {{ formatHivStatus(patient.hiv_status) }}
-                    </v-chip>
+                    <div class="text-h6 font-weight-bold">{{ stat.value }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ stat.label }}</div>
                   </div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">Diagnosis Date</div>
-                  <div class="info-value">{{ formatDate(patient.diagnosis_date) || '—' }}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">ART Start Date</div>
-                  <div class="info-value">{{ formatDate(patient.art_start_date) || '—' }}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">Latest CD4 Count</div>
-                  <div class="info-value">{{ patient.latest_cd4_count ? patient.latest_cd4_count + ' cells/mm³' : '—' }}
-                  </div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label text-caption text-medium-emphasis">Latest Viral Load</div>
-                  <div class="info-value">{{ patient.latest_viral_load ? patient.latest_viral_load + ' copies/mL' : '—'
-                    }}
-                  </div>
-                </div>
-              </div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </v-window-item>
 
-      <!-- Quick Stats Cards -->
-      <v-row class="mt-2">
-        <v-col cols="12" sm="6" md="3" v-for="stat in quickStats" :key="stat.label">
-          <v-card elevation="0" variant="outlined">
-            <v-card-text class="pa-3 d-flex align-center">
-              <v-avatar size="40" :color="stat.color" class="mr-3">
-                <v-icon :icon="stat.icon" size="24" color="white"></v-icon>
-              </v-avatar>
-              <div>
-                <div class="text-h6 font-weight-bold">{{ stat.value }}</div>
-                <div class="text-caption text-medium-emphasis">{{ stat.label }}</div>
-              </div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
+        <!-- Verification Tab -->
+        <v-window-item value="verification">
+          <PatientVerification :patient-id="patient.id" 
+            @verified="onVerificationComplete"
+            @restored="onDataRestored"
+            @error="onVerificationError" />
+        </v-window-item>
+      </v-window>
     </template>
 
     <!-- Create Account Dialog -->
@@ -463,9 +489,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { patientsApi, usersApi } from '@/api'
+import PatientVerification from '@/components/verification/PatientVerification.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -476,6 +503,7 @@ const checkingAccount = ref(false)
 const error = ref('')
 const patient = ref(null)
 const userAccount = ref(null)
+const activeTab = ref('overview')
 
 // Form refs
 const accountFormRef = ref(null)
@@ -665,11 +693,25 @@ function validateResetPasswordMatch() {
   }
 }
 
-// Load patient data
-onMounted(async () => {
-  await loadPatientData()
-})
+// Verification event handlers
+function onVerificationComplete(result) {
+  if (!result.overall_integrity) {
+    showToast(`Verification completed with ${result.tamper_alerts?.length || 0} issues`, 'warning')
+  } else {
+    showToast('Patient data verified successfully', 'success')
+  }
+}
 
+function onDataRestored(result) {
+  showToast('Patient data restored from blockchain successfully', 'success')
+  loadPatientData() // Reload patient data
+}
+
+function onVerificationError(error) {
+  showToast(error.message || 'Verification failed', 'error')
+}
+
+// Load patient data
 async function loadPatientData() {
   const patientId = route.params.id
   
@@ -684,7 +726,6 @@ async function loadPatientData() {
   try {
     const response = await patientsApi.getById(patientId)
     
-    // Handle backend response structure: { success, message, timestamp, data }
     if (response && response.success && response.data) {
       patient.value = response.data
       await checkUserAccount()
@@ -710,7 +751,6 @@ async function checkUserAccount() {
 
   try {
     const response = await usersApi.getById(patient.value.user_id)
-    // Handle backend response structure: { success, message, data }
     if (response && response.success && response.data) {
       userAccount.value = response.data
     } else {
@@ -785,7 +825,6 @@ async function saveAccount() {
   const { valid } = await accountFormRef.value.validate()
   if (!valid) return
 
-  // Prevent creating account if patient already has one
   if (patient.value.user_id) {
     showToast('This patient already has a user account', 'warning')
     showAccountDialog.value = false
@@ -795,7 +834,6 @@ async function saveAccount() {
   accountLoading.value = true
 
   try {
-    // Step 1: Create the user account
     const createResponse = await usersApi.create({
       username: accountFormData.value.username,
       email: accountFormData.value.email,
@@ -803,32 +841,22 @@ async function saveAccount() {
       role: 'PATIENT'
     })
     
-    console.log('Create response:', createResponse)
-    
-    // Check if creation was successful
     if (!createResponse || !createResponse.success) {
       throw new Error(createResponse?.message || 'Failed to create user account')
     }
     
-    // Extract user ID from response.data
     const newUserId = createResponse.data?.id
     
     if (!newUserId) {
       throw new Error('No user ID returned from creation')
     }
     
-    console.log('New user ID:', newUserId)
-    
-    // Step 2: Link the user account to the patient
     const linkResponse = await patientsApi.linkUserAccount(patient.value.id, newUserId)
-    
-    console.log('Link response:', linkResponse)
     
     if (!linkResponse || !linkResponse.success) {
       throw new Error(linkResponse?.message || 'Failed to link account to patient')
     }
     
-    // Step 3: Refresh patient data to show the linked account
     await loadPatientData()
     
     showToast(`Account successfully created and linked to ${patient.value.first_name} ${patient.value.last_name}`, 'success')
@@ -976,235 +1004,23 @@ function formatDateTime(dateString) {
     minute: '2-digit'
   })
 }
+
+// Check URL hash for tab selection
+function checkUrlHash() {
+  const hash = window.location.hash.slice(1)
+  if (hash && ['overview', 'verification'].includes(hash)) {
+    activeTab.value = hash
+  }
+}
+
+// Watch for tab changes to update URL hash
+watch(activeTab, (newTab) => {
+  window.location.hash = newTab
+})
+
+// Lifecycle
+onMounted(() => {
+  loadPatientData()
+  checkUrlHash()
+})
 </script>
-
-<style scoped>
-/* ===== LAYOUT UTILITIES ===== */
-.gap-2 {
-  gap: 8px;
-}
-
-.gap-3 {
-  gap: 16px;
-}
-
-.gap-1 {
-  gap: 4px;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-/* ===== INFO GRID ===== */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.info-item.full-width {
-  grid-column: 1 / -1;
-}
-
-.info-label {
-  margin-bottom: 4px;
-  font-size: 0.75rem;
-}
-
-.info-value {
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-/* ===== UTILITIES ===== */
-.h-100 {
-  height: 100%;
-}
-
-.cursor-pointer {
-  cursor: pointer;
-}
-
-.flex-grow-1 {
-  flex-grow: 1;
-}
-
-.rounded {
-  border-radius: 8px;
-}
-
-/* ===== DIALOG STYLES ===== */
-.dialog-card {
-  border-radius: 16px !important;
-  overflow: hidden;
-}
-
-.dialog-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.generate-btn {
-  height: 56px !important;
-  min-width: 100px !important;
-  border-radius: 8px !important;
-}
-
-.cancel-btn {
-  min-width: 100px !important;
-  border-radius: 8px !important;
-}
-
-.save-btn {
-  min-width: 140px !important;
-  border-radius: 8px !important;
-}
-
-.reset-btn {
-  border-radius: 8px !important;
-  height: 48px !important;
-}
-
-/* ===== BACKGROUND COLOR UTILITIES ===== */
-.bg-grey-lighten-4 {
-  background-color: #f5f5f5;
-}
-
-/* ===== TOAST NOTIFICATIONS ===== */
-.toast-container {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  pointer-events: none;
-}
-
-.toast {
-  position: relative;
-  min-width: 360px;
-  max-width: 420px;
-  padding: 16px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-  cursor: pointer;
-  pointer-events: auto;
-  overflow: hidden;
-  animation: toast-slide-in 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  border-left: 4px solid;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.toast:hover {
-  transform: translateX(-4px);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
-}
-
-.toast-success {
-  border-left-color: #4CAF50;
-  background: linear-gradient(135deg, #f0f9f0 0%, #ffffff 100%);
-}
-
-.toast-error {
-  border-left-color: #B00020;
-  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
-}
-
-.toast-warning {
-  border-left-color: #FB8C00;
-  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
-}
-
-.toast-info {
-  border-left-color: #2196F3;
-  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
-}
-
-.toast-content {
-  display: flex;
-  align-items: flex-start;
-  position: relative;
-  z-index: 1;
-}
-
-.toast-message {
-  flex: 1;
-}
-
-.toast-title {
-  font-weight: 600;
-  font-size: 0.875rem;
-  margin-bottom: 4px;
-}
-
-.toast-description {
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
-.toast-progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 3px;
-  background: rgba(0, 0, 0, 0.1);
-  animation: toast-progress linear forwards;
-}
-
-.toast-success .toast-progress {
-  background: #4CAF50;
-}
-
-.toast-error .toast-progress {
-  background: #B00020;
-}
-
-.toast-warning .toast-progress {
-  background: #FB8C00;
-}
-
-.toast-info .toast-progress {
-  background: #2196F3;
-}
-
-@keyframes toast-slide-in {
-  from {
-    transform: translateX(100%) scale(0.8);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0) scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes toast-progress {
-  from {
-    width: 100%;
-  }
-  to {
-    width: 0%;
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  transform: translateX(100%) scale(0.8);
-  opacity: 0;
-}
-</style>

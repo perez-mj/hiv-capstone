@@ -138,37 +138,46 @@ class MultiChainHTTPClient {
     }
   }
 
-  async getStreamItems(streamName, key = null, count = 100, start = 0) {
-    if (!this.initialized) {
-      throw new Error('MultiChain client not initialized');
-    }
-
-    try {
-      let items;
-      
-      if (key) {
-        try {
-          items = await this.call('liststreamkeyitems', [streamName, key, true, count, start]);
-        } catch (error) {
-          const allItems = await this.call('liststreamitems', [streamName, true, count, start]);
-          items = allItems.filter(item => item.keys && item.keys.includes(key));
-        }
-      } else {
-        items = await this.call('liststreamitems', [streamName, true, count, start]);
-      }
-      
-      return items.map(item => ({
-        txid: item.txid,
-        key: item.keys ? item.keys[0] : 'unknown',
-        data: this.parseData(item.data),
-        time: item.time,
-        confirmations: item.confirmations
-      }));
-    } catch (error) {
-      console.error('Error getting stream items:', error.message);
-      return [];
-    }
+async getStreamItems(streamName, key = null, count = 100, start = 0) {
+  if (!this.initialized) {
+    throw new Error('MultiChain client not initialized');
   }
+
+  try {
+    let items;
+    
+    if (key) {
+      // Always use pattern matching - get all items and filter client-side
+      // This is more reliable than trying exact matches
+      const allItems = await this.call('liststreamitems', [streamName, true, count * 3, start]);
+      
+      // Filter items where key starts with the search pattern
+      items = allItems.filter(item => {
+        const itemKey = item.keys ? item.keys[0] : '';
+        return itemKey.startsWith(key);
+      });
+      
+      // Apply pagination manually
+      items = items.slice(0, count);
+    } else {
+      items = await this.call('liststreamitems', [streamName, true, count, start]);
+    }
+    
+    // Ensure items is an array
+    if (!items) items = [];
+    
+    return items.map(item => ({
+      txid: item.txid,
+      key: item.keys ? item.keys[0] : 'unknown',
+      data: this.parseData(item.data),
+      time: item.time,
+      confirmations: item.confirmations
+    }));
+  } catch (error) {
+    console.error(`Error getting stream items from ${streamName}:`, error.message);
+    return [];
+  }
+}
 
   // NEW METHOD: Publish to stream
   async publishToStream(streamName, key, data, options = {}) {
