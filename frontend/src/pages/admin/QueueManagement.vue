@@ -9,7 +9,7 @@
             Queue Management
           </h1>
           <p class="text-body-2 text-medium-emphasis mt-1">
-            Manage patient queue and service flow
+            Manage patient queue and service flow (Testing & Consultation streams)
           </p>
         </div>
       </div>
@@ -24,52 +24,122 @@
       </div>
     </div>
 
-    <!-- Queue Stats -->
+    <!-- Queue Stats - Updated for dual stream -->
     <v-row class="mb-4">
-      <v-col cols="6" sm="6" md="3">
+      <v-col cols="6" sm="3" md="3">
         <v-card elevation="0" variant="outlined" class="stat-card" color="warning">
           <v-card-text class="text-center pa-3">
             <v-icon color="warning" size="28" class="mb-1">mdi-clock-outline</v-icon>
-            <div class="text-subtitle-2 text-medium-emphasis">Waiting</div>
+            <div class="text-subtitle-2 text-medium-emphasis">Testing Waiting</div>
             <div class="text-h3 font-weight-bold text-warning">
-              {{ stats.waiting_count || 0 }}
+              {{ testingStats.waiting || 0 }}
             </div>
           </v-card-text>
         </v-card>
       </v-col>
 
-      <v-col cols="6" sm="6" md="3">
+      <v-col cols="6" sm="3" md="3">
         <v-card elevation="0" variant="outlined" class="stat-card" color="info">
           <v-card-text class="text-center pa-3">
-            <v-icon color="info" size="28" class="mb-1">mdi-phone</v-icon>
-            <div class="text-subtitle-2 text-medium-emphasis">Called</div>
+            <v-icon color="info" size="28" class="mb-1">mdi-clock-outline</v-icon>
+            <div class="text-subtitle-2 text-medium-emphasis">Consultation Waiting</div>
             <div class="text-h3 font-weight-bold text-info">
-              {{ stats.called_count || 0 }}
+              {{ consultationStats.waiting || 0 }}
             </div>
           </v-card-text>
         </v-card>
       </v-col>
 
-      <v-col cols="6" sm="6" md="3">
-        <v-card elevation="0" variant="outlined" class="stat-card">
+      <v-col cols="6" sm="3" md="3">
+        <v-card elevation="0" variant="outlined" class="stat-card" color="purple">
           <v-card-text class="text-center pa-3">
             <v-icon color="purple" size="28" class="mb-1">mdi-account-check</v-icon>
             <div class="text-subtitle-2 text-medium-emphasis">In Service</div>
             <div class="text-h3 font-weight-bold text-purple">
-              {{ stats.serving_count || 0 }}
+              {{ totalServing }}
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              T:{{ testingStats.serving || 0 }} | C:{{ consultationStats.serving || 0 }}
             </div>
           </v-card-text>
         </v-card>
       </v-col>
 
-      <v-col cols="6" sm="6" md="3">
+      <v-col cols="12" sm="3" md="3">
         <v-card elevation="0" variant="outlined" class="stat-card" color="success">
           <v-card-text class="text-center pa-3">
             <v-icon color="success" size="28" class="mb-1">mdi-timer</v-icon>
             <div class="text-subtitle-2 text-medium-emphasis">Est. Wait Time</div>
             <div class="text-h5 font-weight-bold text-success">
-              {{ estimatedWaitTime }} min
+              {{ avgWaitTime }} min
             </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Dual Stream Now Serving Cards -->
+    <v-row class="mb-4">
+      <!-- Testing Stream Now Serving -->
+      <v-col cols="12" md="6">
+        <v-card v-if="testingNowServing" class="now-serving-card testing-card" elevation="0">
+          <v-card-text class="d-flex flex-wrap align-center justify-space-between pa-4">
+            <div class="d-flex align-center">
+              <v-icon size="48" color="white" class="mr-4">mdi-flask</v-icon>
+              <div>
+                <div class="text-h6 text-white">Testing - Now Serving</div>
+                <div class="text-h3 font-weight-bold text-white">{{ testingNowServing.queue_code || testingNowServing.queue_number }}</div>
+                <div class="text-h6 text-white">{{ testingNowServing.patient_first_name }} {{ testingNowServing.patient_last_name }}</div>
+              </div>
+            </div>
+            <v-btn color="success" size="small" class="mt-2 mt-sm-0" prepend-icon="mdi-check"
+              @click="completeServing(testingNowServing)" :loading="actionLoading === testingNowServing.id">
+              Complete Service
+            </v-btn>
+          </v-card-text>
+        </v-card>
+        
+        <v-card v-else class="now-serving-card testing-card idle" elevation="0">
+          <v-card-text class="text-center pa-4">
+            <v-icon size="48" color="white" class="mb-2">mdi-flask</v-icon>
+            <div class="text-h6 text-white">Testing Stream</div>
+            <div class="text-body-1 text-white">Waiting for patient</div>
+            <v-btn v-if="testingWaitingCount > 0" color="success" size="small" class="mt-2" 
+              @click="callTestingPatient" :loading="actionLoading === 'testing'">
+              Call Next Patient
+            </v-btn>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Consultation Stream Now Serving -->
+      <v-col cols="12" md="6">
+        <v-card v-if="consultationNowServing" class="now-serving-card consultation-card" elevation="0">
+          <v-card-text class="d-flex flex-wrap align-center justify-space-between pa-4">
+            <div class="d-flex align-center">
+              <v-icon size="48" color="white" class="mr-4">mdi-stethoscope</v-icon>
+              <div>
+                <div class="text-h6 text-white">Consultation - Now Serving</div>
+                <div class="text-h3 font-weight-bold text-white">{{ consultationNowServing.queue_code || consultationNowServing.queue_number }}</div>
+                <div class="text-h6 text-white">{{ consultationNowServing.patient_first_name }} {{ consultationNowServing.patient_last_name }} - {{ consultationNowServing.type_name }}</div>
+              </div>
+            </div>
+            <v-btn color="success" size="small" class="mt-2 mt-sm-0" prepend-icon="mdi-check"
+              @click="completeServing(consultationNowServing)" :loading="actionLoading === consultationNowServing.id">
+              Complete Service
+            </v-btn>
+          </v-card-text>
+        </v-card>
+        
+        <v-card v-else class="now-serving-card consultation-card idle" elevation="0">
+          <v-card-text class="text-center pa-4">
+            <v-icon size="48" color="white" class="mb-2">mdi-stethoscope</v-icon>
+            <div class="text-h6 text-white">Consultation Stream</div>
+            <div class="text-body-1 text-white">Waiting for patient</div>
+            <v-btn v-if="consultationWaitingCount > 0" color="success" size="small" class="mt-2" 
+              @click="callConsultationPatient" :loading="actionLoading === 'consultation'">
+              Call Next Patient
+            </v-btn>
           </v-card-text>
         </v-card>
       </v-col>
@@ -97,28 +167,6 @@
       </v-col>
     </v-row>
 
-    <!-- Now Serving Banner -->
-    <v-row v-if="nowServing" class="mb-4">
-      <v-col cols="12">
-        <v-card class="now-serving-card" elevation="0" color="primary">
-          <v-card-text class="d-flex flex-wrap align-center justify-space-between pa-4">
-            <div class="d-flex align-center">
-              <v-icon size="48" color="white" class="mr-4">mdi-account-check</v-icon>
-              <div>
-                <div class="text-h6 text-white">Now Serving</div>
-                <div class="text-h3 font-weight-bold text-white">{{ nowServing.queue_number }}</div>
-                <div class="text-h6 text-white">{{ nowServing.patient_first_name }} {{ nowServing.patient_last_name }} - {{ nowServing.type_name }}</div>
-              </div>
-            </div>
-            <v-btn color="success" size="small" class="mt-2 mt-sm-0" prepend-icon="mdi-check"
-              @click="completeServing(nowServing)" :loading="actionLoading === nowServing.id">
-              Complete Service
-            </v-btn>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
     <!-- Search and Filters Card -->
     <v-card elevation="0" variant="outlined" class="mb-4">
       <v-card-text class="pa-3">
@@ -130,6 +178,19 @@
           </div>
 
           <div class="d-flex align-center ga-1" style="flex-wrap: nowrap;">
+            <span class="text-caption text-medium-emphasis mr-1">Stream:</span>
+            <v-btn-toggle v-model="filters.stream" mandatory="false" density="compact" color="primary"
+              variant="outlined" @update:model-value="handleFilterChange">
+              <v-btn value="TESTING" size="small">
+                <v-icon start size="14">mdi-flask</v-icon> Testing
+              </v-btn>
+              <v-btn value="CONSULTATION" size="small">
+                <v-icon start size="14">mdi-stethoscope</v-icon> Consultation
+              </v-btn>
+            </v-btn-toggle>
+          </div>
+
+          <div class="d-flex align-center ga-1" style="flex-wrap: nowrap;">
             <span class="text-caption text-medium-emphasis mr-1">Priority:</span>
             <v-btn-toggle v-model="filters.priority" mandatory="false" density="compact" color="primary"
               variant="outlined" @update:model-value="handleFilterChange">
@@ -138,19 +199,6 @@
               </v-btn>
               <v-btn value="regular" size="small">
                 <v-icon start size="14">mdi-check</v-icon> Regular
-              </v-btn>
-            </v-btn-toggle>
-          </div>
-
-          <div class="d-flex align-center ga-1" style="flex-wrap: nowrap;">
-            <span class="text-caption text-medium-emphasis mr-1">Type:</span>
-            <v-btn-toggle v-model="filters.is_walkin" mandatory="false" density="compact" color="primary"
-              variant="outlined" @update:model-value="handleFilterChange">
-              <v-btn :value="true" size="small">
-                <v-icon start size="14">mdi-walk</v-icon> Walk-in
-              </v-btn>
-              <v-btn :value="false" size="small">
-                <v-icon start size="14">mdi-calendar</v-icon> Scheduled
               </v-btn>
             </v-btn-toggle>
           </div>
@@ -171,31 +219,26 @@
       </v-card-text>
     </v-card>
 
-    <!-- Main Queue Display -->
+    <!-- Main Queue Display - Split by Stream -->
     <v-row>
-      <!-- Waiting Queue -->
-      <v-col cols="12" md="4">
+      <!-- Testing Stream Queue -->
+      <v-col cols="12" md="6">
         <v-card elevation="0" variant="outlined" class="queue-column">
-          <v-card-title class="d-flex align-center py-3 px-4 bg-warning-lighten-5">
-            <v-icon color="warning" class="mr-2">mdi-clock-outline</v-icon>
-            <span class="text-subtitle-1 font-weight-medium">Waiting</span>
-            <v-chip size="x-small" color="warning" class="ml-2">{{ filteredWaiting.length }}</v-chip>
-            <v-spacer />
-            <v-btn v-if="filteredWaiting.length > 0 && !nowServing" color="success" size="x-small"
-              prepend-icon="mdi-phone" @click="callNextPatient" :loading="actionLoading === 'next'">
-              Call Next
-            </v-btn>
+          <v-card-title class="d-flex align-center py-3 px-4 bg-blue-lighten-5">
+            <v-icon color="blue" class="mr-2">mdi-flask</v-icon>
+            <span class="text-subtitle-1 font-weight-medium">Testing Queue</span>
+            <v-chip size="x-small" color="blue" class="ml-2">{{ filteredTestingWaiting.length }}</v-chip>
           </v-card-title>
 
           <v-divider />
 
           <v-card-text class="pa-0 queue-list-container">
             <v-list class="queue-list" lines="two" bg-color="transparent">
-              <v-list-item v-for="(patient, index) in filteredWaiting" :key="patient.id"
+              <v-list-item v-for="(patient, index) in filteredTestingWaiting" :key="patient.id"
                 :class="{ 'priority-high': patient.priority > 0 }" @click="(e) => openPatientActions(e, patient)">
                 <template v-slot:prepend>
                   <v-avatar :color="getPriorityColor(patient.priority)" size="36" class="mr-2">
-                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.queue_number }}</span>
+                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.stream_queue_number || patient.queue_number }}</span>
                   </v-avatar>
                 </template>
 
@@ -207,10 +250,7 @@
                   <div class="d-flex align-center flex-wrap">
                     <v-icon size="12" class="mr-1">mdi-calendar</v-icon>
                     {{ formatTime(patient.scheduled_at) }}
-                    <v-chip size="x-small" class="ml-1">{{ patient.type_name }}</v-chip>
-                    <v-chip v-if="patient.is_walkin" size="x-small" color="success" class="ml-1">
-                      Walk-in
-                    </v-chip>
+                    <v-chip size="x-small" class="ml-1">{{ patient.type_name || 'Testing' }}</v-chip>
                   </div>
                   <div v-if="patient.priority > 0" class="text-error d-flex align-center mt-1">
                     <v-icon size="12">mdi-alert</v-icon>
@@ -225,7 +265,7 @@
                     </div>
                     <div class="d-flex">
                       <v-btn icon="mdi-phone" size="x-small" color="info" class="mr-1" 
-                        @click.stop="callPatient(patient)" :disabled="!!nowServing" 
+                        @click.stop="callPatient(patient)" :disabled="!!testingNowServing" 
                         :loading="actionLoading === patient.id" />
                       <v-btn icon="mdi-skip-next" size="x-small" color="warning" 
                         @click.stop="showSkipDialog(patient)" />
@@ -234,36 +274,98 @@
                 </template>
               </v-list-item>
 
-              <v-list-item v-if="!filteredWaiting.length" class="text-center py-8">
+              <v-list-item v-if="!filteredTestingWaiting.length" class="text-center py-8">
                 <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-account-off</v-icon>
-                <div class="text-body-2 text-grey">No patients waiting</div>
-                <div v-if="hasActiveFilters" class="text-caption text-grey mt-1">
-                  Try adjusting your filters
-                </div>
+                <div class="text-body-2 text-grey">No patients in Testing queue</div>
               </v-list-item>
             </v-list>
           </v-card-text>
         </v-card>
       </v-col>
 
-      <!-- Called Queue -->
-      <v-col cols="12" md="4">
+      <!-- Consultation Stream Queue -->
+      <v-col cols="12" md="6">
         <v-card elevation="0" variant="outlined" class="queue-column">
-          <v-card-title class="d-flex align-center py-3 px-4 bg-info-lighten-5">
-            <v-icon color="info" class="mr-2">mdi-phone</v-icon>
-            <span class="text-subtitle-1 font-weight-medium">Called</span>
-            <v-chip size="x-small" color="info" class="ml-2">{{ filteredCalled.length }}</v-chip>
+          <v-card-title class="d-flex align-center py-3 px-4 bg-green-lighten-5">
+            <v-icon color="green" class="mr-2">mdi-stethoscope</v-icon>
+            <span class="text-subtitle-1 font-weight-medium">Consultation Queue</span>
+            <v-chip size="x-small" color="green" class="ml-2">{{ filteredConsultationWaiting.length }}</v-chip>
           </v-card-title>
 
           <v-divider />
 
           <v-card-text class="pa-0 queue-list-container">
             <v-list class="queue-list" lines="two" bg-color="transparent">
+              <v-list-item v-for="(patient, index) in filteredConsultationWaiting" :key="patient.id"
+                :class="{ 'priority-high': patient.priority > 0 }" @click="(e) => openPatientActions(e, patient)">
+                <template v-slot:prepend>
+                  <v-avatar :color="getPriorityColor(patient.priority)" size="36" class="mr-2">
+                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.stream_queue_number || patient.queue_number }}</span>
+                  </v-avatar>
+                </template>
+
+                <v-list-item-title class="font-weight-medium text-body-2">
+                  {{ patient.patient_first_name }} {{ patient.patient_last_name }}
+                </v-list-item-title>
+
+                <v-list-item-subtitle class="text-caption">
+                  <div class="d-flex align-center flex-wrap">
+                    <v-icon size="12" class="mr-1">mdi-calendar</v-icon>
+                    {{ formatTime(patient.scheduled_at) }}
+                    <v-chip size="x-small" class="ml-1">{{ patient.type_name || 'Consultation' }}</v-chip>
+                  </div>
+                  <div v-if="patient.priority > 0" class="text-error d-flex align-center mt-1">
+                    <v-icon size="12">mdi-alert</v-icon>
+                    <span class="ml-1">Priority Patient</span>
+                  </div>
+                </v-list-item-subtitle>
+
+                <template v-slot:append>
+                  <div class="d-flex flex-column align-end">
+                    <div class="text-caption text-medium-emphasis mb-1">
+                      Est: {{ (index + 1) * 15 }} min
+                    </div>
+                    <div class="d-flex">
+                      <v-btn icon="mdi-phone" size="x-small" color="info" class="mr-1" 
+                        @click.stop="callPatient(patient)" :disabled="!!consultationNowServing" 
+                        :loading="actionLoading === patient.id" />
+                      <v-btn icon="mdi-skip-next" size="x-small" color="warning" 
+                        @click.stop="showSkipDialog(patient)" />
+                    </div>
+                  </div>
+                </template>
+              </v-list-item>
+
+              <v-list-item v-if="!filteredConsultationWaiting.length" class="text-center py-8">
+                <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-account-off</v-icon>
+                <div class="text-body-2 text-grey">No patients in Consultation queue</div>
+              </v-list-item>
+            </v-list>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Called & Serving Section (Stream-specific) -->
+    <v-row class="mt-4">
+      <!-- Called Patients -->
+      <v-col cols="12" md="6">
+        <v-card elevation="0" variant="outlined">
+          <v-card-title class="d-flex align-center py-3 px-4 bg-info-lighten-5">
+            <v-icon color="info" class="mr-2">mdi-phone</v-icon>
+            <span class="text-subtitle-1 font-weight-medium">Called Patients</span>
+            <v-chip size="x-small" color="info" class="ml-2">{{ filteredCalled.length }}</v-chip>
+          </v-card-title>
+
+          <v-divider />
+
+          <v-card-text class="pa-0">
+            <v-list class="queue-list" lines="two" bg-color="transparent" style="max-height: 300px; overflow-y: auto;">
               <v-list-item v-for="patient in filteredCalled" :key="patient.id" 
                 @click="(e) => openPatientActions(e, patient)">
                 <template v-slot:prepend>
-                  <v-avatar color="info" size="36" class="mr-2">
-                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.queue_number }}</span>
+                  <v-avatar :color="patient.queue_stream === 'TESTING' ? 'blue' : 'green'" size="36" class="mr-2">
+                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.stream_queue_number || patient.queue_number }}</span>
                   </v-avatar>
                 </template>
 
@@ -274,6 +376,9 @@
                 <v-list-item-subtitle class="text-caption">
                   <v-icon size="12" class="mr-1">mdi-clock</v-icon>
                   Called: {{ formatTime(patient.called_at) }}
+                  <v-chip size="x-small" :color="patient.queue_stream === 'TESTING' ? 'blue' : 'green'" class="ml-1">
+                    {{ patient.queue_stream === 'TESTING' ? 'Testing' : (patient.type_name || 'Consultation') }}
+                  </v-chip>
                 </v-list-item-subtitle>
 
                 <template v-slot:append>
@@ -286,8 +391,7 @@
                 </template>
               </v-list-item>
 
-              <v-list-item v-if="!filteredCalled.length" class="text-center py-8">
-                <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-phone-off</v-icon>
+              <v-list-item v-if="!filteredCalled.length" class="text-center py-4">
                 <div class="text-body-2 text-grey">No patients called</div>
               </v-list-item>
             </v-list>
@@ -295,60 +399,8 @@
         </v-card>
       </v-col>
 
-      <!-- Serving Queue -->
-      <v-col cols="12" md="4">
-        <v-card elevation="0" variant="outlined" class="queue-column">
-          <v-card-title class="d-flex align-center py-3 px-4 bg-purple-lighten-5">
-            <v-icon color="purple" class="mr-2">mdi-account-check</v-icon>
-            <span class="text-subtitle-1 font-weight-medium">In Service</span>
-            <v-chip size="x-small" color="purple" class="ml-2">{{ filteredServing.length }}</v-chip>
-          </v-card-title>
-
-          <v-divider />
-
-          <v-card-text class="pa-0 queue-list-container">
-            <v-list class="queue-list" lines="two" bg-color="transparent">
-              <v-list-item v-for="patient in filteredServing" :key="patient.id"
-                @click="(e) => openPatientActions(e, patient)">
-                <template v-slot:prepend>
-                  <v-avatar color="purple" size="36" class="mr-2">
-                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.queue_number }}</span>
-                  </v-avatar>
-                </template>
-
-                <v-list-item-title class="font-weight-medium text-body-2">
-                  {{ patient.patient_first_name }} {{ patient.patient_last_name }}
-                </v-list-item-title>
-
-                <v-list-item-subtitle class="text-caption">
-                  <div>
-                    <v-icon size="12" class="mr-1">mdi-clock-start</v-icon>
-                    Started: {{ formatTime(patient.served_at) }}
-                  </div>
-                  <div v-if="patient.served_at" class="text-caption text-medium-emphasis">
-                    Elapsed: {{ getElapsedTime(patient.served_at) }}
-                  </div>
-                </v-list-item-subtitle>
-
-                <template v-slot:append>
-                  <v-btn icon="mdi-check" size="x-small" color="success" 
-                    @click.stop="completeServing(patient)" :loading="actionLoading === patient.id" />
-                </template>
-              </v-list-item>
-
-              <v-list-item v-if="!filteredServing.length" class="text-center py-8">
-                <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-account-off</v-icon>
-                <div class="text-body-2 text-grey">No patients in service</div>
-              </v-list-item>
-            </v-list>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- History Section -->
-    <v-row class="mt-6">
-      <v-col cols="12">
+      <!-- History Section -->
+      <v-col cols="12" md="6">
         <v-card elevation="0" variant="outlined">
           <v-card-title class="d-flex align-center py-3 px-4">
             <v-icon color="primary" class="mr-2">mdi-history</v-icon>
@@ -369,32 +421,30 @@
                   <th class="text-caption font-weight-bold">Queue #</th>
                   <th class="text-caption font-weight-bold">Patient</th>
                   <th class="text-caption font-weight-bold">Type</th>
+                  <th class="text-caption font-weight-bold">Stream</th>
                   <th class="text-caption font-weight-bold">Called</th>
-                  <th class="text-caption font-weight-bold">Served</th>
-                  <th class="text-caption font-weight-bold">Completed</th>
                   <th class="text-caption font-weight-bold">Status</th>
-                  <th class="text-caption font-weight-bold">Wait Time</th>
-                  <th class="text-caption font-weight-bold">Service Time</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="entry in history" :key="entry.id">
-                  <td class="text-body-2 font-weight-medium">#{{ entry.queue_number }}</td>
+                  <td class="text-body-2 font-weight-medium">#{{ entry.stream_queue_number || entry.queue_number }}</td>
                   <td class="text-body-2">{{ entry.patient_first_name }} {{ entry.patient_last_name }}</td>
-                  <td class="text-body-2">{{ entry.type_name }}</td>
+                  <td class="text-body-2">{{ entry.type_name || '-' }}</td>
+                  <td>
+                    <v-chip :color="entry.queue_stream === 'TESTING' ? 'blue' : 'green'" size="x-small">
+                      {{ entry.queue_stream === 'TESTING' ? 'Testing' : 'Consultation' }}
+                    </v-chip>
+                  </td>
                   <td class="text-caption">{{ entry.called_at ? formatShortTime(entry.called_at) : '-' }}</td>
-                  <td class="text-caption">{{ entry.served_at ? formatShortTime(entry.served_at) : '-' }}</td>
-                  <td class="text-caption">{{ entry.completed_at ? formatShortTime(entry.completed_at) : '-' }}</td>
                   <td>
                     <v-chip :color="getHistoryStatusColor(entry.status)" size="x-small">
                       {{ entry.status }}
                     </v-chip>
                   </td>
-                  <td class="text-body-2">{{ entry.wait_duration || 0 }} min</td>
-                  <td class="text-body-2">{{ entry.service_duration || 0 }} min</td>
                 </tr>
                 <tr v-if="!history.length">
-                  <td colspan="9" class="text-center py-4 text-grey text-body-2">
+                  <td colspan="6" class="text-center py-4 text-grey text-body-2">
                     No queue history for today
                   </td>
                 </tr>
@@ -558,9 +608,9 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { format, parseISO, formatDistanceToNow } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { queueApi, appointmentsApi, patientsApi } from '@/api'
 import debounce from 'lodash/debounce'
 
@@ -595,16 +645,21 @@ export default {
     // State Management
     const loading = ref(false)
     const actionLoading = ref(null)
-    const queue = shallowRef({ waiting: [], called: [], serving: [] })
-    const nowServing = shallowRef(null)
-    const stats = shallowRef({ waiting_count: 0, called_count: 0, serving_count: 0 })
-    const history = shallowRef([])
+    
+    // Stream-based queue data
+    const queueData = ref({
+      testing: { waiting: [], called: [], serving: [], now_serving: null },
+      consultation: { waiting: [], called: [], serving: [], now_serving: null },
+      stats: {}
+    })
+    
+    const history = ref([])
     
     // UI State
     const search = ref('')
-    const sortBy = ref('queue_number_asc')
+    const sortBy = ref('stream_queue_number_asc')
     const sortOrder = ref('asc')
-    const filters = ref({ priority: null, is_walkin: null })
+    const filters = ref({ stream: null, priority: null })
     
     // Dialog State
     const skipDialog = ref(false)
@@ -625,136 +680,152 @@ export default {
     // Patient Menu
     const patientMenu = reactive({ show: false, x: 0, y: 0, patient: null })
 
-    // Cache Management
-    let lastQueueFetch = 0
-    let lastHistoryFetch = 0
-    let cachedFilteredData = new Map()
-    const QUEUE_CACHE_DURATION = 8000
-    const HISTORY_CACHE_DURATION = 60000
+    // Computed Properties
+    const testingNowServing = computed(() => queueData.value.testing?.now_serving || null)
+    const consultationNowServing = computed(() => queueData.value.consultation?.now_serving || null)
+    
+    const testingWaitingCount = computed(() => queueData.value.testing?.waiting?.length || 0)
+    const consultationWaitingCount = computed(() => queueData.value.consultation?.waiting?.length || 0)
+    
+    const testingStats = computed(() => ({
+      waiting: queueData.value.testing?.waiting?.length || 0,
+      serving: queueData.value.testing?.serving?.length || 0,
+      called: queueData.value.testing?.called?.length || 0
+    }))
+    
+    const consultationStats = computed(() => ({
+      waiting: queueData.value.consultation?.waiting?.length || 0,
+      serving: queueData.value.consultation?.serving?.length || 0,
+      called: queueData.value.consultation?.called?.length || 0
+    }))
+    
+    const totalServing = computed(() => testingStats.value.serving + consultationStats.value.serving)
+    
+    const avgWaitTime = computed(() => {
+      const totalWaiting = testingWaitingCount.value + consultationWaitingCount.value
+      return totalWaiting * 15
+    })
 
-    // Sort Fields
-    const sortFields = [
-      { title: 'Queue Number (Asc)', value: 'queue_number_asc' },
-      { title: 'Queue Number (Desc)', value: 'queue_number_desc' },
-      { title: 'Scheduled Time (Earliest)', value: 'scheduled_at_asc' },
-      { title: 'Scheduled Time (Latest)', value: 'scheduled_at_desc' }
-    ]
-
-    // Computed Properties with Caching
-    const filteredWaiting = computed(() => {
-      const currentQueue = queue.value.waiting || []
-      if (!currentQueue.length) return []
+    const filteredTestingWaiting = computed(() => {
+      let waiting = [...(queueData.value.testing?.waiting || [])]
       
-      const cacheKey = `${search.value}|${filters.value.priority}|${filters.value.is_walkin}|${sortBy.value}|${currentQueue.length}`
-      
-      if (cachedFilteredData.has(cacheKey)) {
-        return cachedFilteredData.get(cacheKey)
-      }
-      
-      let filtered = [...currentQueue]
-
       if (search.value) {
         const term = search.value.toLowerCase()
-        filtered = filtered.filter(item =>
+        waiting = waiting.filter(item =>
           `${item.patient_first_name} ${item.patient_last_name}`.toLowerCase().includes(term) ||
           item.queue_number?.toString().includes(term)
         )
       }
 
       if (filters.value.priority === 'priority') {
-        filtered = filtered.filter(item => item.priority > 0)
+        waiting = waiting.filter(item => item.priority > 0)
       } else if (filters.value.priority === 'regular') {
-        filtered = filtered.filter(item => !item.priority || item.priority === 0)
-      }
-
-      if (filters.value.is_walkin !== null) {
-        filtered = filtered.filter(item => item.is_walkin === filters.value.is_walkin)
+        waiting = waiting.filter(item => !item.priority || item.priority === 0)
       }
 
       const [sortField, sortDir] = sortBy.value.split('_')
       const multiplier = sortDir === 'asc' ? 1 : -1
       
-      if (sortField === 'queue_number') {
-        filtered.sort((a, b) => (a.queue_number - b.queue_number) * multiplier)
-      } else if (sortField === 'scheduled_at') {
-        filtered.sort((a, b) => {
-          const aTime = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0
-          const bTime = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0
-          return (aTime - bTime) * multiplier
-        })
+      if (sortField === 'stream_queue_number') {
+        waiting.sort((a, b) => ((a.stream_queue_number || a.queue_number) - (b.stream_queue_number || b.queue_number)) * multiplier)
       }
       
-      if (cachedFilteredData.size > 50) {
-        const firstKey = cachedFilteredData.keys().next().value
-        cachedFilteredData.delete(firstKey)
+      return waiting
+    })
+
+    const filteredConsultationWaiting = computed(() => {
+      let waiting = [...(queueData.value.consultation?.waiting || [])]
+      
+      if (search.value) {
+        const term = search.value.toLowerCase()
+        waiting = waiting.filter(item =>
+          `${item.patient_first_name} ${item.patient_last_name}`.toLowerCase().includes(term) ||
+          item.queue_number?.toString().includes(term)
+        )
+      }
+
+      if (filters.value.priority === 'priority') {
+        waiting = waiting.filter(item => item.priority > 0)
+      } else if (filters.value.priority === 'regular') {
+        waiting = waiting.filter(item => !item.priority || item.priority === 0)
+      }
+
+      const [sortField, sortDir] = sortBy.value.split('_')
+      const multiplier = sortDir === 'asc' ? 1 : -1
+      
+      if (sortField === 'stream_queue_number') {
+        waiting.sort((a, b) => ((a.stream_queue_number || a.queue_number) - (b.stream_queue_number || b.queue_number)) * multiplier)
       }
       
-      cachedFilteredData.set(cacheKey, filtered)
-      return filtered
+      return waiting
     })
 
     const filteredCalled = computed(() => {
-      const called = queue.value.called || []
-      if (!called.length || !search.value) return called
+      const testingCalled = (queueData.value.testing?.called || []).map(p => ({ ...p, queue_stream: 'TESTING' }))
+      const consultationCalled = (queueData.value.consultation?.called || []).map(p => ({ ...p, queue_stream: 'CONSULTATION' }))
+      let allCalled = [...testingCalled, ...consultationCalled]
       
-      const term = search.value.toLowerCase()
-      return called.filter(item =>
-        `${item.patient_first_name} ${item.patient_last_name}`.toLowerCase().includes(term) ||
-        item.queue_number?.toString().includes(term)
-      )
+      if (search.value) {
+        const term = search.value.toLowerCase()
+        allCalled = allCalled.filter(item =>
+          `${item.patient_first_name} ${item.patient_last_name}`.toLowerCase().includes(term)
+        )
+      }
+      
+      if (filters.value.stream) {
+        allCalled = allCalled.filter(item => item.queue_stream === filters.value.stream)
+      }
+      
+      return allCalled
     })
 
-    const filteredServing = computed(() => {
-      const serving = queue.value.serving || []
-      if (!serving.length || !search.value) return serving
-      
-      const term = search.value.toLowerCase()
-      return serving.filter(item =>
-        `${item.patient_first_name} ${item.patient_last_name}`.toLowerCase().includes(term) ||
-        item.queue_number?.toString().includes(term)
-      )
-    })
+    const hasQueueEntries = computed(() => 
+      (queueData.value.testing?.waiting?.length || 0) + 
+      (queueData.value.consultation?.waiting?.length || 0) +
+      (queueData.value.testing?.called?.length || 0) +
+      (queueData.value.consultation?.called?.length || 0) > 0
+    )
+    
+    const hasActiveFilters = computed(() => !!(search.value || filters.value.stream || filters.value.priority))
 
-    const estimatedWaitTime = computed(() => (filteredWaiting.value?.length || 0) * 15)
-    const hasQueueEntries = computed(() => filteredWaiting.value.length + filteredCalled.value.length + filteredServing.value.length > 0)
-    const hasActiveFilters = computed(() => !!(search.value || filters.value.priority || filters.value.is_walkin !== null))
+    const sortFields = [
+      { title: 'Stream Queue # (Asc)', value: 'stream_queue_number_asc' },
+      { title: 'Stream Queue # (Desc)', value: 'stream_queue_number_desc' }
+    ]
 
     // Data Fetching Methods
     const fetchQueueData = async (forceRefresh = false) => {
-      const now = Date.now()
-      
-      if (!forceRefresh && lastQueueFetch && (now - lastQueueFetch) < QUEUE_CACHE_DURATION) {
-        return
-      }
-      
       loading.value = true
       try {
-        const response = await queueApi.getCurrent()
+        // Use the stream endpoint
+        const response = await queueApi.getQueueByStream()
         
-        let queueData = {}
-        
-        if (response.data?.success) {
-          queueData = response.data.data || {}
-        } else if (response.data) {
-          queueData = response.data
+        let data = {}
+        if (response?.data?.success) {
+          data = response.data.data
+        } else if (response?.data) {
+          data = response.data
         } else {
-          queueData = response
+          data = response
         }
         
-        queue.value = {
-          waiting: queueData.waiting || [],
-          called: queueData.called || [],
-          serving: queueData.serving || []
+        queueData.value = {
+          testing: {
+            waiting: data.testing?.waiting || [],
+            called: data.testing?.called || [],
+            serving: data.testing?.serving || [],
+            now_serving: data.testing?.now_serving || null
+          },
+          consultation: {
+            waiting: data.consultation?.waiting || [],
+            called: data.consultation?.called || [],
+            serving: data.consultation?.serving || [],
+            now_serving: data.consultation?.now_serving || null
+          },
+          stats: data.stats || {}
         }
-        nowServing.value = queueData.now_serving || null
-        stats.value = queueData.stats || { waiting_count: 0, called_count: 0, serving_count: 0 }
         
-        lastQueueFetch = now
-        
-        const shouldFetchHistory = !lastHistoryFetch || (now - lastHistoryFetch) > HISTORY_CACHE_DURATION
-        if (shouldFetchHistory) {
-          await fetchQueueHistory()
-        }
+        await fetchQueueHistory()
       } catch (error) {
         console.error('Error fetching queue data:', error)
         showToast('Failed to load queue data', 'error')
@@ -773,18 +844,18 @@ export default {
           page: 1
         })
 
-        if (response.data?.success) {
-          const historyData = response.data.data?.data || response.data?.data || []
-          history.value = historyData
-        } else if (response.data?.data) {
-          history.value = response.data.data
-        } else if (Array.isArray(response.data)) {
-          history.value = response.data
-        } else {
-          history.value = []
+        let historyData = []
+        if (response?.data?.success) {
+          historyData = response.data.data?.data || response.data.data || []
+        } else if (response?.data?.data) {
+          historyData = response.data.data
+        } else if (Array.isArray(response?.data)) {
+          historyData = response.data
+        } else if (Array.isArray(response)) {
+          historyData = response
         }
         
-        lastHistoryFetch = Date.now()
+        history.value = historyData
       } catch (error) {
         console.error('Error fetching queue history:', error)
         history.value = []
@@ -794,48 +865,51 @@ export default {
     const fetchAppointmentTypes = async () => {
       try {
         const response = await appointmentsApi.getTypes()
-        appointmentTypes.value = response.data?.success ? response.data.data : (response.data || [])
+        appointmentTypes.value = response?.data?.success ? response.data.data : (response.data || [])
       } catch (error) {
         console.error('Error fetching appointment types:', error)
       }
     }
 
     // Queue Actions
-    const callPatient = async (patient) => {
-      actionLoading.value = patient.id
-      
-      const waitingIndex = queue.value.waiting.findIndex(w => w.id === patient.id)
-      if (waitingIndex !== -1) {
-        const [movedPatient] = queue.value.waiting.splice(waitingIndex, 1)
-        movedPatient.status = 'CALLED'
-        movedPatient.called_at = new Date().toISOString()
-        queue.value.called.unshift(movedPatient)
-        cachedFilteredData.clear()
-      }
-      
+    const callTestingPatient = async () => {
+      actionLoading.value = 'testing'
       try {
-        await queueApi.callPatient(patient.id)
-        showToast(`Patient #${patient.queue_number} called`, 'success')
+        await queueApi.callPatientByStream('TESTING')
+        showToast('Testing patient called successfully', 'success')
         await fetchQueueData(true)
-        patientMenu.show = false
       } catch (error) {
-        console.error('Error calling patient:', error)
+        console.error('Error calling testing patient:', error)
         showToast(error.response?.data?.error || 'Failed to call patient', 'error')
-        await fetchQueueData(true)
       } finally {
         actionLoading.value = null
       }
     }
 
-    const callNextPatient = async () => {
-      actionLoading.value = 'next'
+    const callConsultationPatient = async () => {
+      actionLoading.value = 'consultation'
       try {
-        await queueApi.callPatient('next')
-        showToast('Next patient called successfully', 'success')
+        await queueApi.callPatientByStream('CONSULTATION')
+        showToast('Consultation patient called successfully', 'success')
         await fetchQueueData(true)
       } catch (error) {
-        console.error('Error calling next patient:', error)
-        showToast(error.response?.data?.error || 'Failed to call next patient', 'error')
+        console.error('Error calling consultation patient:', error)
+        showToast(error.response?.data?.error || 'Failed to call patient', 'error')
+      } finally {
+        actionLoading.value = null
+      }
+    }
+
+    const callPatient = async (patient) => {
+      actionLoading.value = patient.id
+      try {
+        await queueApi.callPatient(patient.id)
+        showToast(`Patient #${patient.stream_queue_number || patient.queue_number} called`, 'success')
+        await fetchQueueData(true)
+        patientMenu.show = false
+      } catch (error) {
+        console.error('Error calling patient:', error)
+        showToast(error.response?.data?.error || 'Failed to call patient', 'error')
       } finally {
         actionLoading.value = null
       }
@@ -843,25 +917,14 @@ export default {
 
     const startServing = async (patient) => {
       actionLoading.value = patient.id
-      
-      const calledIndex = queue.value.called.findIndex(c => c.id === patient.id)
-      if (calledIndex !== -1) {
-        const [movedPatient] = queue.value.called.splice(calledIndex, 1)
-        movedPatient.status = 'SERVING'
-        movedPatient.served_at = new Date().toISOString()
-        queue.value.serving.unshift(movedPatient)
-        cachedFilteredData.clear()
-      }
-      
       try {
         await queueApi.startServing(patient.id)
-        showToast(`Started serving patient #${patient.queue_number}`, 'success')
+        showToast(`Started serving patient #${patient.stream_queue_number || patient.queue_number}`, 'success')
         await fetchQueueData(true)
         patientMenu.show = false
       } catch (error) {
         console.error('Error starting service:', error)
         showToast(error.response?.data?.error || 'Failed to start service', 'error')
-        await fetchQueueData(true)
       } finally {
         actionLoading.value = null
       }
@@ -869,23 +932,14 @@ export default {
 
     const completeServing = async (patient) => {
       actionLoading.value = patient.id
-      
-      const servingIndex = queue.value.serving.findIndex(s => s.id === patient.id)
-      if (servingIndex !== -1) {
-        queue.value.serving.splice(servingIndex, 1)
-        cachedFilteredData.clear()
-      }
-      
       try {
         await queueApi.completeServing(patient.id)
-        showToast(`Completed service for patient #${patient.queue_number}`, 'success')
+        showToast(`Completed service for patient #${patient.stream_queue_number || patient.queue_number}`, 'success')
         await fetchQueueData(true)
-        await fetchQueueHistory()
         patientMenu.show = false
       } catch (error) {
         console.error('Error completing service:', error)
         showToast(error.response?.data?.error || 'Failed to complete service', 'error')
-        await fetchQueueData(true)
       } finally {
         actionLoading.value = null
       }
@@ -906,32 +960,19 @@ export default {
           notes: walkinData.notes
         })
 
-        let success = false
         let queueNumber = null
-        
-        if (response?.data?.success) {
-          success = true
-          queueNumber = response.data.data?.queue_number
-        } else if (response?.success) {
-          success = true
-          queueNumber = response.data?.queue_number
-        } else if (response?.data?.queue_number) {
-          success = true
+        if (response?.data?.queue_number) {
           queueNumber = response.data.queue_number
+        } else if (response?.queue_number) {
+          queueNumber = response.queue_number
         }
 
-        if (success) {
-          showToast(`Walk-in patient added to queue as #${queueNumber}`, 'success')
-          closeWalkinDialog()
-          await fetchQueueData(true)
-          cachedFilteredData.clear()
-        } else {
-          showToast(response?.data?.message || 'Failed to add walk-in patient', 'error')
-        }
+        showToast(`Walk-in patient added to queue as #${queueNumber || 'success'}`, 'success')
+        closeWalkinDialog()
+        await fetchQueueData(true)
       } catch (error) {
         console.error('Error adding walk-in:', error)
-        const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to add walk-in patient'
-        showToast(errorMessage, 'error')
+        showToast(error.response?.data?.message || error.response?.data?.error || 'Failed to add walk-in patient', 'error')
       } finally {
         walkinLoading.value = false
       }
@@ -943,9 +984,8 @@ export default {
       actionLoading.value = skipPatient.value.id
       try {
         await queueApi.skipPatient(skipPatient.value.id, { reason: skipReason.value || undefined })
-        showToast(`Patient #${skipPatient.value.queue_number} skipped`, 'warning')
+        showToast(`Patient #${skipPatient.value.stream_queue_number || skipPatient.value.queue_number} skipped`, 'warning')
         await fetchQueueData(true)
-        cachedFilteredData.clear()
         skipDialog.value = false
         skipPatient.value = null
         skipReason.value = ''
@@ -963,7 +1003,6 @@ export default {
         await queueApi.resetQueue()
         showToast('Queue reset successfully', 'success')
         await fetchQueueData(true)
-        cachedFilteredData.clear()
         resetDialog.value = false
       } catch (error) {
         console.error('Error resetting queue:', error)
@@ -992,37 +1031,28 @@ export default {
       }
     }, 500)
 
-    const handleSearch = debounce(() => {
-      cachedFilteredData.clear()
-    }, 300)
-
-    const handleFilterChange = () => {
-      cachedFilteredData.clear()
-    }
-
+    const handleSearch = debounce(() => {}, 300)
+    const handleFilterChange = () => {}
     const handleSortChange = () => {
       const parts = sortBy.value.split('_')
       if (parts.length > 1 && ['asc', 'desc'].includes(parts[parts.length - 1])) {
         sortOrder.value = parts[parts.length - 1]
       }
-      cachedFilteredData.clear()
     }
 
     const toggleSortOrder = () => {
       const newOrder = sortOrder.value === 'asc' ? 'desc' : 'asc'
       sortOrder.value = newOrder
-      const baseField = sortBy.value.split('_').slice(0, -1).join('_') || 'queue_number'
+      const baseField = sortBy.value.split('_').slice(0, -1).join('_') || 'stream_queue_number'
       sortBy.value = `${baseField}_${newOrder}`
-      cachedFilteredData.clear()
     }
 
     const clearFilters = () => {
       search.value = ''
+      filters.value.stream = null
       filters.value.priority = null
-      filters.value.is_walkin = null
-      sortBy.value = 'queue_number_asc'
+      sortBy.value = 'stream_queue_number_asc'
       sortOrder.value = 'asc'
-      cachedFilteredData.clear()
     }
 
     const refreshData = () => {
@@ -1062,7 +1092,6 @@ export default {
     // Utility Functions
     const formatTime = (datetime) => datetime ? format(parseISO(datetime), 'h:mm a') : '-'
     const formatShortTime = (datetime) => datetime ? format(parseISO(datetime), 'h:mm a') : '-'
-    const getElapsedTime = (startTime) => startTime ? formatDistanceToNow(parseISO(startTime), { addSuffix: false }) : '0 min'
     const getPriorityColor = (priority) => priority > 0 ? 'error' : 'warning'
     const getHistoryStatusColor = (status) => {
       const colors = { 'WAITING': 'warning', 'CALLED': 'info', 'SERVING': 'purple', 'COMPLETED': 'success', 'SKIPPED': 'error' }
@@ -1078,40 +1107,39 @@ export default {
       if (isPageVisible) fetchQueueData(true)
     }
 
-    watch([() => filters.value.priority, () => filters.value.is_walkin, search], () => {
-      cachedFilteredData.clear()
-    })
-
     onMounted(() => {
       fetchQueueData()
       fetchAppointmentTypes()
       refreshInterval = setInterval(() => {
         if (isPageVisible && document.hasFocus()) fetchQueueData(false)
-      }, 20000)
+      }, 10000)
       document.addEventListener('visibilitychange', handleVisibilityChange)
     })
 
     onUnmounted(() => {
       if (refreshInterval) clearInterval(refreshInterval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      cachedFilteredData.clear()
     })
 
     return {
-      loading, actionLoading, queue, nowServing, stats, history,
+      loading, actionLoading, queueData, history,
       search, sortBy, sortOrder, sortFields, filters,
       skipDialog, resetDialog, skipPatient, skipReason,
       walkinDialog, walkinFormValid, walkinForm, walkinLoading,
       appointmentTypes, patients, searchingPatients, walkinData,
       patientMenu, toasts,
-      filteredWaiting, filteredCalled, filteredServing,
-      estimatedWaitTime, hasQueueEntries, hasActiveFilters,
+      testingNowServing, consultationNowServing,
+      testingWaitingCount, consultationWaitingCount,
+      testingStats, consultationStats, totalServing, avgWaitTime,
+      filteredTestingWaiting, filteredConsultationWaiting, filteredCalled,
+      hasQueueEntries, hasActiveFilters,
       removeToast, refreshData, goToCalendar,
-      callPatient, callNextPatient, startServing, completeServing,
+      callTestingPatient, callConsultationPatient,
+      callPatient, startServing, completeServing,
       addWalkinPatient, skipPatientConfirm, resetQueue,
       openWalkinDialog, closeWalkinDialog, showSkipDialog, showResetDialog, openPatientActions,
       handleSearch, handleFilterChange, handleSortChange, toggleSortOrder, clearFilters,
-      searchPatients, formatTime, formatShortTime, getElapsedTime, getPriorityColor, getHistoryStatusColor
+      searchPatients, formatTime, formatShortTime, getPriorityColor, getHistoryStatusColor
     }
   }
 }
@@ -1204,6 +1232,17 @@ export default {
 /* ===== NOW SERVING CARD ===== */
 .now-serving-card {
   background: linear-gradient(135deg, #2d8a08 0%, #1565C0 100%);
+}
+.now-serving-card.testing-card {
+  background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+}
+
+.now-serving-card.consultation-card {
+  background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+}
+
+.now-serving-card.idle {
+  background: linear-gradient(135deg, #757575 0%, #616161 100%);
 }
 
 /* ===== QUEUE HISTORY TABLE ===== */

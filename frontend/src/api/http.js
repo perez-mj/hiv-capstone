@@ -1,7 +1,7 @@
 // frontend/src/api/http.js
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:5000/api'
+const API_BASE_URL = 'http://10.240.50.99:5000/api'
 const REQUEST_TIMEOUT = 10000
 
 // Single token storage key for consistency

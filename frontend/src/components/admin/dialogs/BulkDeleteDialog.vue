@@ -54,53 +54,44 @@
   </v-dialog>
 </template>
 
-<script>
+<script setup>
 import { computed } from 'vue'
 
-export default {
-  name: 'BulkDeleteDialog',
-  props: {
-    show: {
-      type: Boolean,
-      default: false
-    },
-    count: {
-      type: Number,
-      default: 0
-    },
-    hasUsers: {
-      type: Boolean,
-      default: false
-    },
-    loading: {
-      type: Boolean,
-      default: false
-    },
-    progress: {
-      type: Object,
-      default: () => ({ show: false, current: 0, total: 0 })
-    }
+const props = defineProps({
+  show: {
+    type: Boolean,
+    default: false
   },
-  emits: ['update:show', 'confirm'],
-  setup(props, { emit }) {
-    const dialogVisible = computed({
-      get: () => props.show,
-      set: (val) => emit('update:show', val)
-    })
-
-    const close = () => {
-      emit('update:show', false)
-    }
-
-    const confirmDelete = () => {
-      emit('confirm')
-    }
-
-    return {
-      dialogVisible,
-      close,
-      confirmDelete
-    }
+  count: {
+    type: Number,
+    default: 0
+  },
+  hasUsers: {
+    type: Boolean,
+    default: false
+  },
+  loading: {
+    type: Boolean,
+    default: false
+  },
+  progress: {
+    type: Object,
+    default: () => ({ show: false, current: 0, total: 0 })
   }
+})
+
+const emit = defineEmits(['update:show', 'confirm'])
+
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (val) => emit('update:show', val)
+})
+
+const close = () => {
+  emit('update:show', false)
+}
+
+const confirmDelete = () => {
+  emit('confirm')
 }
 </script>

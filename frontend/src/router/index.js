@@ -13,6 +13,19 @@ const routes = [
     component: () => import('@/pages/Login.vue'),
     meta: { requiresGuest: true }
   },
+  // Kiosk routes - MUST come before protected routes to avoid auth checks
+  {
+    path: '/kiosk',
+    meta: { public: true }, // Mark as public
+    children: [
+      {
+        path: 'display',
+        name: 'QueueDisplay',
+        component: () => import('@/pages/kiosk/QueueDisplay.vue'),
+        meta: { public: true, requiresGuest: false, requiresAuth: false }
+      }
+    ]
+  },
   {
     path: '/admin',
     component: () => import('@/layouts/AdminLayout.vue'),
@@ -74,13 +87,7 @@ const routes = [
       }
     ]
   },
-  // Kiosk routes (public)
-  {
-    path: '/kiosk/display',
-    name: 'QueueDisplay',
-    component: () => import('@/pages/kiosk/QueueDisplay.vue'),
-    meta: { layout: 'empty', requiresGuest: true }
-  },
+  // Catch all redirect
   { path: '/:pathMatch(.*)*', redirect: '/login' }
 ]
 
@@ -93,17 +100,14 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
-  console.log('🛣️ Navigation:', {
-    to: to.path,
-    from: from.path,
-    requiresAuth: to.meta.requiresAuth,
-    requiresGuest: to.meta.requiresGuest,
-    allowedRoles: to.meta.allowedRoles
-  })
-
   // Set page title
   if (to.meta.title) {
     document.title = `${to.meta.title} - HIV Patient Management System`
+  }
+
+  if (to.meta.public === true) {
+    next()
+    return
   }
 
   // Handle guest routes (login page)
@@ -149,7 +153,7 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-  // Default - allow access
+  // Default - allow access (this shouldn't normally be reached)
   next()
 })
 

@@ -118,28 +118,63 @@ export const appointmentsApi = {
 }
 
 // ==========================================================================================================
-// QUEUE API
+// QUEUE API - Updated with stream support
 // ==========================================================================================================
 export const queueApi = {
+  // Public endpoints
   getPublicQueue: () => http.get('/queue/public'),
+  getQueueByStream: () => http.get('/queue/current/stream'),
+  getWaitingTimeEstimation: () => http.get('/queue/waiting-time'),
+  
+  // Current queue
   getCurrent: () => http.get('/queue/current'),
   getSummary: () => http.get('/queue/current/summary'),
+  
+  // Patient specific
   getPatientQueue: (patientId) => http.get(`/queue/patient/${patientId}`),
   getMyQueueStatus: () => http.get('/queue/patient/me'),
+  
+  // Admin endpoints
   getAll: () => http.get('/queue'),
   getHistory: (params) => http.get('/queue/history', { params }),
+  
+  // Queue management
   addWalkin: (data) => http.post('/queue/walkin', data),
   confirmAppointment: (appointmentId) => http.post(`/queue/confirm/${appointmentId}`),
+  
+  // Stream-based calling (NEW - for dual stream system)
+  callPatientByStream: (stream) => http.post(`/queue/call-stream/${stream}`),
+  
+  // Legacy calling methods
   callPatient: (id) => http.post(`/queue/call/${id}`),
   startServing: (id) => http.post(`/queue/start-serving/${id}`),
   completeServing: (id) => http.post(`/queue/complete/${id}`),
   skipPatient: (id, data = {}) => http.post(`/queue/skip/${id}`, data),
   reorderQueue: (data) => http.post('/queue/reorder', data),
+  
+  // Statistics
   getStatsOverview: () => http.get('/queue/stats/overview'),
   getDailyStats: (params) => http.get('/queue/stats/daily', { params }),
   getPeakHoursStats: () => http.get('/queue/stats/peak-hours'),
+  
+  // Batch operations
+  batchUpdateStatus: (updates) => http.post('/queue/batch-update', updates),
   resetQueue: (params) => http.delete('/queue/reset', { params }),
   checkAppointmentInQueue: (appointmentId) => http.get(`/queue/check-appointment/${appointmentId}`)
+}
+
+// ==========================================================================================================
+// DASHBOARD API - Updated
+// ==========================================================================================================
+export const dashboardApi = {
+  getAdminDashboard: () => http.get('/dashboard/admin'),
+  getNurseDashboard: () => http.get('/dashboard/nurse'),
+  getNurseSchedule: (params) => http.get('/dashboard/nurse/schedule', { params }),
+  getPatientDashboard: () => http.get('/dashboard/patient'),
+  getPublicQueueDisplay: () => http.get('/dashboard/queue/public'),
+  
+  // Stream-specific dashboard data
+  getQueueStreamStats: () => http.get('/queue/current/stream')
 }
 
 // ==========================================================================================================
@@ -194,17 +229,6 @@ export const staffApi = {
   createWithUser: (data) => http.post('/staff/with-user', data),
   update: (id, data) => http.put(`/staff/${id}`, data),
   delete: (id) => http.delete(`/staff/${id}`)
-}
-
-// ==========================================================================================================
-// DASHBOARD API
-// ==========================================================================================================
-export const dashboardApi = {
-  getAdminDashboard: () => http.get('/dashboard/admin'),
-  getNurseDashboard: () => http.get('/dashboard/nurse'),
-  getNurseSchedule: (params) => http.get('/dashboard/nurse/schedule', { params }),
-  getPatientDashboard: () => http.get('/dashboard/patient'),
-  getPublicQueueDisplay: () => http.get('/dashboard/queue/public')
 }
 
 // ==========================================================================================================

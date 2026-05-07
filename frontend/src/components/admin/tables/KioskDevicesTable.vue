@@ -46,6 +46,18 @@
       </div>
     </template>
 
+    <template v-slot:item.status="{ item }">
+      <v-chip 
+        :color="getStatusColor(item)" 
+        size="x-small" 
+        variant="flat"
+        class="font-weight-medium"
+      >
+        <v-icon start size="10" :icon="getStatusIcon(item)" />
+        {{ getStatusText(item) }}
+      </v-chip>
+    </template>
+
     <template v-slot:item.actions="{ item }">
       <div class="d-flex gap-1">
         <v-btn size="x-small" variant="text" color="primary" icon="mdi-pencil" @click="$emit('edit', item)" title="Edit" />
@@ -107,10 +119,44 @@ const headers = computed(() => [
   { title: 'ID', key: 'id', width: '80' },
   { title: 'Device ID', key: 'device_id', sortable: true },
   { title: 'Device Name', key: 'device_name', sortable: true },
+  { title: 'Status', key: 'status', sortable: false, width: '120' },
   { title: 'Authorized', key: 'is_authorized', sortable: true, width: '100' },
-  { title: 'Last Seen', key: 'last_seen', sortable: true, width: '140' },
+  { title: 'Last Seen', key: 'last_seen', sortable: true, width: '160' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'center', width: '140' }
 ])
+
+const getStatusColor = (item) => {
+  if (!item.last_seen) return 'grey'
+  const lastSeen = new Date(item.last_seen)
+  const now = new Date()
+  const minutesAgo = Math.floor((now - lastSeen) / 60000)
+  
+  if (minutesAgo < 2) return 'success'
+  if (minutesAgo < 5) return 'warning'
+  return 'error'
+}
+
+const getStatusIcon = (item) => {
+  if (!item.last_seen) return 'mdi-alert-circle'
+  const lastSeen = new Date(item.last_seen)
+  const now = new Date()
+  const minutesAgo = Math.floor((now - lastSeen) / 60000)
+  
+  if (minutesAgo < 2) return 'mdi-wifi'
+  if (minutesAgo < 5) return 'mdi-clock-outline'
+  return 'mdi-wifi-off'
+}
+
+const getStatusText = (item) => {
+  if (!item.last_seen) return 'Never'
+  const lastSeen = new Date(item.last_seen)
+  const now = new Date()
+  const minutesAgo = Math.floor((now - lastSeen) / 60000)
+  
+  if (minutesAgo < 2) return 'Online'
+  if (minutesAgo < 5) return 'Away'
+  return 'Offline'
+}
 
 const formatDateTime = (dateString) => {
   if (!dateString) return 'Never'

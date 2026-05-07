@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Apr 14, 2026 at 09:55 AM
+-- Generation Time: May 07, 2026 at 11:06 AM
 -- Server version: 8.0.45-0ubuntu0.24.04.1
 -- PHP Version: 8.3.6
 
@@ -189,7 +189,9 @@ CREATE TABLE `queue` (
   `served_at` timestamp NULL DEFAULT NULL,
   `completed_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `queue_stream` enum('TESTING','CONSULTATION') COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'CONSULTATION',
+  `stream_queue_number` int DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -215,7 +217,8 @@ CREATE TABLE `staff` (
 --
 
 INSERT INTO `staff` (`id`, `user_id`, `first_name`, `last_name`, `middle_name`, `position`, `contact_number`, `created_at`, `updated_at`) VALUES
-(1, 1, 'System', 'Administrator', NULL, 'Head Administrator', '099999999999', '2026-02-24 09:47:42', '2026-02-28 15:58:00'),
+(1, 1, 'System', 'Administrator', NULL, 'System Administrator', '099999999999', '2026-02-24 09:47:42', '2026-02-28 15:58:00'),
+(2, 10, 'Mark', 'Perez', 'Ledesma', 'Developer', '09123456783', '2026-03-01 11:37:02', '2026-03-01 11:37:02');
 
 -- --------------------------------------------------------
 
@@ -240,7 +243,11 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password_hash`, `email`, `role`, `is_active`, `last_login`, `created_at`, `updated_at`) VALUES
-(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-04-13 23:25:08', '2025-11-26 02:59:49', '2026-04-13 23:25:08')
+(1, 'admin', '$2b$10$MwWd30/7Xt.LhhFLbzJFaOXTrmBzbKgRkX/4qs6CXXpjhheeOcCd2', NULL, 'ADMIN', 1, '2026-05-07 09:28:28', '2025-11-26 02:59:49', '2026-05-07 09:28:28'),
+(9, 'seikohana', '$2b$10$.ygctKgVsBsENn6P4M/us.vm937.WjQPDZwf1k1ZsoIC1qvJT8eey', 'seikohana@gmail.com', 'PATIENT', 1, '2026-05-05 02:08:48', '2026-02-27 10:32:38', '2026-05-05 02:08:48'),
+(10, 'mark.p181', '$2b$10$BHxeyPiy84wnmgvuBz5NU.SPkkJ481EcipP9aLc.uCh4KGeNMAKOm', NULL, 'NURSE', 1, '2026-03-02 10:57:12', '2026-03-01 11:37:02', '2026-03-02 10:57:12'),
+(11, 'mario', '$2b$10$bICcdZnfPNNzsRzCxDqSWeAwHUbhpeSQc3Lgq03YFq3ZA/yIFQ41u', 'mario@gmail.com', 'PATIENT', 1, '2026-03-02 08:05:58', '2026-03-01 13:06:21', '2026-03-02 08:05:58'),
+(23, 'michael.flores685', '$2b$10$EdxOUR.4CV9piroH9CQjWeaLr0HL7srFrs08zi8mIZGHNlv09EhUi', 'michael.flores685@gmail.com', 'PATIENT', 1, NULL, '2026-05-07 07:34:02', '2026-05-07 07:34:02');
 
 --
 -- Indexes for dumped tables
@@ -332,7 +339,8 @@ ALTER TABLE `queue`
   ADD KEY `idx_queue_status_created` (`status`,`created_at`),
   ADD KEY `idx_created_by` (`created_by`),
   ADD KEY `idx_updated_by` (`updated_by`),
-  ADD KEY `idx_queue_code` (`queue_code`);
+  ADD KEY `idx_queue_code` (`queue_code`),
+  ADD KEY `idx_queue_stream_status` (`queue_stream`,`status`,`created_at`);
 
 --
 -- Indexes for table `staff`
@@ -413,7 +421,7 @@ ALTER TABLE `staff`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- Constraints for dumped tables

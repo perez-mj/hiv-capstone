@@ -36,6 +36,18 @@
       </v-btn>
 
       <v-btn 
+  v-if="activeTable === 'kiosk_devices'" 
+  variant="outlined" 
+  size="small" 
+  prepend-icon="mdi-auto-refresh" 
+  @click="$emit('toggle-auto-refresh')"
+  :color="isAutoRefreshEnabled ? 'primary' : 'default'"
+  :style="{ borderColor: 'var(--color-border)' }"
+>
+  Auto {{ isAutoRefreshEnabled ? 'ON' : 'OFF' }}
+</v-btn>
+
+      <v-btn 
         color="primary" 
         size="small" 
         prepend-icon="mdi-plus" 

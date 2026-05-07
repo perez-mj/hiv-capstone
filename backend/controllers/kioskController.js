@@ -50,133 +50,26 @@ const kioskController = {
       // Update last seen
       await KioskDevice.updateLastSeen(deviceId);
 
-      // Get current serving patients
-      const [currentServing] = await pool.execute(
-        `SELECT 
-          q.queue_number,
-          at.type_name as appointment_type,
-          at.duration_minutes,
-          CONCAT(p.first_name, ' ', p.last_name) as patient_name,
-          q.served_at
-        FROM queue q
-        JOIN appointments a ON q.appointment_id = a.id
-        JOIN patients p ON a.patient_id = p.id
-        LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-        WHERE q.status = 'SERVING'
-          AND DATE(q.created_at) = CURDATE()
-        ORDER BY q.updated_at DESC
-        LIMIT 5`
-      );
-
-      // Get waiting list grouped by appointment type
-      const [waitingByType] = await pool.execute(
-        `SELECT 
-          at.type_name as appointment_type,
-          COUNT(*) as count,
-          MIN(q.queue_number) as next_number,
-          GROUP_CONCAT(
-            CONCAT(
-              '{"queue_number":', q.queue_number,
-              ',"time":"', DATE_FORMAT(q.created_at, '%H:%i'),
-              '","patient":"', LEFT(p.first_name, 1), '. ', p.last_name, '"}'
-            ) SEPARATOR '|'
-          ) as patients
-        FROM queue q
-        JOIN appointments a ON q.appointment_id = a.id
-        JOIN patients p ON a.patient_id = p.id
-        LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-        WHERE q.status = 'WAITING'
-          AND DATE(q.created_at) = CURDATE()
-        GROUP BY at.type_name
-        ORDER BY 
-          CASE at.type_name
-            WHEN 'Consultation' THEN 1
-            WHEN 'Testing' THEN 2
-            WHEN 'Refill' THEN 3
-            ELSE 4
-          END,
-          MIN(q.queue_number) ASC`
-      );
-
-      // Process grouped data
-      const waitingList = [];
-      waitingByType.forEach(group => {
-        if (group.patients) {
-          const patients = group.patients.split('|').map(p => JSON.parse(p));
-          waitingList.push({
-            type: group.appointment_type || 'Other',
-            count: group.count,
-            next_number: group.next_number,
-            patients: patients.slice(0, 5)
-          });
-        }
-      });
-
-      // Get all waiting patients (flat list)
-      const [allWaiting] = await pool.execute(
-        `SELECT 
-          q.queue_number,
-          DATE_FORMAT(q.created_at, '%H:%i') as time,
-          CONCAT(LEFT(p.first_name, 1), '. ', p.last_name) as patient_name,
-          at.type_name as appointment_type
-        FROM queue q
-        JOIN appointments a ON q.appointment_id = a.id
-        JOIN patients p ON a.patient_id = p.id
-        LEFT JOIN appointment_types at ON a.appointment_type_id = at.id
-        WHERE q.status = 'WAITING'
-          AND DATE(q.created_at) = CURDATE()
-        ORDER BY 
-          CASE at.type_name
-            WHEN 'Consultation' THEN 1
-            WHEN 'Testing' THEN 2
-            WHEN 'Refill' THEN 3
-            ELSE 4
-          END,
-          q.queue_number ASC
-        LIMIT 20`
-      );
-
-      // Get queue statistics
-      const [stats] = await pool.execute(
-        `SELECT 
-          COUNT(*) as total_in_queue,
-          SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END) as waiting,
-          SUM(CASE WHEN status = 'SERVING' THEN 1 ELSE 0 END) as serving,
-          SUM(CASE WHEN status = 'CALLED' THEN 1 ELSE 0 END) as called
-        FROM queue
-        WHERE DATE(created_at) = CURDATE()
-          AND status IN ('WAITING', 'SERVING', 'CALLED')`
-      );
-
-      // Calculate estimated wait times
-      const [avgWaitTimes] = await pool.execute(
-        `SELECT 
-          at.type_name,
-          AVG(TIMESTAMPDIFF(MINUTE, q.created_at, q.called_at)) as avg_wait
-        FROM queue q
-        JOIN appointments a ON q.appointment_id = a.id
-        JOIN appointment_types at ON a.appointment_type_id = at.id
-        WHERE DATE(q.created_at) = CURDATE()
-          AND q.status = 'COMPLETED'
-        GROUP BY at.type_name`
-      );
-
-      const avgWaitMap = {};
-      avgWaitTimes.forEach(item => {
-        avgWaitMap[item.type_name] = Math.round(item.avg_wait || 0);
-      });
+      // Get all queue data from models
+      const [currentServing, waitingByType, waitingList, stats, avgWaitTimes] = await Promise.all([
+        KioskDevice.getCurrentServing(),
+        KioskDevice.getWaitingByType(),
+        KioskDevice.getAllWaiting(),
+        KioskDevice.getQueueStats(),
+        KioskDevice.getAverageWaitTimes()
+      ]);
 
       sendResponse(res, 200, 'Queue data retrieved', {
         currentServing: currentServing || [],
-        waitingByType: waitingList,
-        waitingList: allWaiting,
+        waitingByType: waitingByType || [],
+        waitingList: waitingList || [],
         stats: {
-          total_in_queue: stats[0]?.total_in_queue || 0,
-          waiting_count: stats[0]?.waiting || 0,
-          serving_count: stats[0]?.serving || 0,
-          called_count: stats[0]?.called || 0
+          total_in_queue: stats.total_in_queue || 0,
+          waiting_count: stats.waiting || 0,
+          serving_count: stats.serving || 0,
+          called_count: stats.called || 0
         },
-        avgWaitTimes: avgWaitMap,
+        waitTimes: avgWaitTimes,
         timestamp: Date.now()
       });
     } catch (error) {
@@ -198,26 +91,9 @@ const kioskController = {
         return sendResponse(res, 403, 'Device not authorized');
       }
 
-      const [stats] = await pool.execute(
-        `SELECT 
-          COUNT(*) as total_in_queue,
-          SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END) as waiting,
-          SUM(CASE WHEN status = 'CALLED' THEN 1 ELSE 0 END) as called,
-          SUM(CASE WHEN status = 'SERVING' THEN 1 ELSE 0 END) as serving,
-          AVG(CASE WHEN status = 'COMPLETED' 
-            THEN TIMESTAMPDIFF(MINUTE, created_at, completed_at) 
-            ELSE NULL END) as avg_service_time
-        FROM queue
-        WHERE DATE(created_at) = CURDATE()`
-      );
+      const stats = await KioskDevice.getQueueStats();
 
-      sendResponse(res, 200, 'Queue statistics retrieved', stats[0] || {
-        total_in_queue: 0,
-        waiting: 0,
-        called: 0,
-        serving: 0,
-        avg_service_time: 0
-      });
+      sendResponse(res, 200, 'Queue statistics retrieved', stats);
     } catch (error) {
       next(error);
     }

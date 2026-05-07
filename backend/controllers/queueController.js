@@ -1,12 +1,15 @@
 // backend/controllers/queueController.js
 const Queue = require('../models/Queue');
 const Appointment = require('../models/Appointment');
+const AppointmentType = require('../models/AppointmentType');
 const Patient = require('../models/Patient');
 const { sendResponse } = require('../utils/responseHandler');
 const blockchainAuditService = require('../services/blockchainAuditService');
 
 const queueController = {
-  // OPTIMIZED: Get queue display board (public)
+  // ==================== PUBLIC ROUTES ====================
+  
+  // OPTIMIZED: Get queue display board (public) - Legacy
   async getQueueDisplay(req, res, next) {
     try {
       const queue = await Queue.getQueueDisplay();
@@ -16,10 +19,124 @@ const queueController = {
     }
   },
 
+  // ==================== STREAM-BASED PUBLIC METHODS ====================
+  
+  // NEW: Get queue display by stream (for kiosk/TV screens)
+  async getQueueDisplayByStream(req, res, next) {
+    try {
+      const queueData = await Queue.getCurrentQueueByStream();
+      
+      // Format for public display (hide sensitive patient names if needed)
+      const displayData = {
+        testing: {
+          now_serving: queueData.testing.now_serving ? {
+            queue_code: queueData.testing.now_serving.queue_code,
+            // Optionally hide full names for public display
+            display_name: queueData.testing.now_serving.patient_first_name ? 
+              `${queueData.testing.now_serving.patient_first_name.charAt(0)}. ${queueData.testing.now_serving.patient_last_name}` : 
+              queueData.testing.now_serving.queue_code,
+            type_name: queueData.testing.now_serving.type_name || 'Testing'
+          } : null,
+          waiting: queueData.testing.waiting.map(w => ({
+            queue_code: w.queue_code,
+            display_name: w.patient_first_name ? 
+              `${w.patient_first_name.charAt(0)}. ${w.patient_last_name}` : 
+              w.queue_code,
+            type_name: w.type_name || 'Testing',
+            wait_time: w.wait_time
+          })),
+          count: queueData.testing.waiting.length,
+          estimated_wait: queueData.testing.estimated_wait,
+          status: queueData.testing.serving.length > 0 ? 'BUSY' : 'AVAILABLE'
+        },
+        consultation: {
+          now_serving: queueData.consultation.now_serving ? {
+            queue_code: queueData.consultation.now_serving.queue_code,
+            display_name: queueData.consultation.now_serving.patient_first_name ? 
+              `${queueData.consultation.now_serving.patient_first_name.charAt(0)}. ${queueData.consultation.now_serving.patient_last_name}` : 
+              queueData.consultation.now_serving.queue_code,
+            type_name: queueData.consultation.now_serving.type_name || 'Consultation'
+          } : null,
+          waiting: queueData.consultation.waiting.map(w => ({
+            queue_code: w.queue_code,
+            display_name: w.patient_first_name ? 
+              `${w.patient_first_name.charAt(0)}. ${w.patient_last_name}` : 
+              w.queue_code,
+            type_name: w.type_name || 'Consultation',
+            wait_time: w.wait_time
+          })),
+          count: queueData.consultation.waiting.length,
+          estimated_wait: queueData.consultation.estimated_wait,
+          status: queueData.consultation.serving.length > 0 ? 'BUSY' : 'AVAILABLE'
+        },
+        stats: {
+          total_waiting: queueData.stats.total_waiting,
+          total_serving: queueData.stats.total_serving,
+          testing_serving: queueData.stats.testing_serving,
+          consultation_serving: queueData.stats.consultation_serving
+        },
+        last_updated: new Date().toISOString()
+      };
+      
+      sendResponse(res, 200, 'Queue display retrieved successfully', displayData);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // NEW: Get stream statistics (quick overview)
+  async getStreamStats(req, res, next) {
+    try {
+      const queueData = await Queue.getCurrentQueueByStream();
+      
+      sendResponse(res, 200, 'Stream statistics retrieved successfully', {
+        testing: {
+          active: queueData.testing.serving.length > 0,
+          now_serving: queueData.testing.now_serving ? {
+            queue_code: queueData.testing.now_serving.queue_code,
+            started_at: queueData.testing.now_serving.served_at
+          } : null,
+          waiting_count: queueData.testing.waiting.length,
+          estimated_wait_minutes: queueData.testing.estimated_wait,
+          status: queueData.testing.serving.length > 0 ? 'BUSY' : 'AVAILABLE'
+        },
+        consultation: {
+          active: queueData.consultation.serving.length > 0,
+          now_serving: queueData.consultation.now_serving ? {
+            queue_code: queueData.consultation.now_serving.queue_code,
+            started_at: queueData.consultation.now_serving.served_at
+          } : null,
+          waiting_count: queueData.consultation.waiting.length,
+          estimated_wait_minutes: queueData.consultation.estimated_wait,
+          status: queueData.consultation.serving.length > 0 ? 'BUSY' : 'AVAILABLE'
+        },
+        summary: {
+          total_waiting: queueData.stats.total_waiting,
+          total_serving: queueData.stats.total_serving,
+          can_call_testing: queueData.testing.serving.length === 0 && queueData.testing.waiting.length > 0,
+          can_call_consultation: queueData.consultation.serving.length === 0 && queueData.consultation.waiting.length > 0
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // NEW: Get current queue by stream (for admin/nurse dashboard)
+  async getCurrentQueueByStream(req, res, next) {
+    try {
+      const queueData = await Queue.getCurrentQueueByStream();
+      sendResponse(res, 200, 'Queue by stream retrieved successfully', queueData);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // ==================== LEGACY QUEUE METHODS ====================
+
   // OPTIMIZED: Get current queue status using optimized method
   async getCurrentQueue(req, res, next) {
     try {
-      // Use the optimized single-query method
       const queueData = await Queue.getCurrentQueueOptimized();
       sendResponse(res, 200, 'Current queue retrieved successfully', queueData);
     } catch (error) {
@@ -41,7 +158,6 @@ const queueController = {
       
       const currentServing = queue.find(q => q.status === 'SERVING');
       
-      // Calculate estimated wait times (15 min average per patient)
       let estimatedWaitTime = 0;
       for (let i = 0; i < grouped.waiting.length; i++) {
         grouped.waiting[i].estimated_wait_minutes = estimatedWaitTime;
@@ -79,10 +195,10 @@ const queueController = {
   // OPTIMIZED: Get queue history with filters
   async getQueueHistory(req, res, next) {
     try {
-      const { page = 1, limit = 20, start_date, end_date, status } = req.query;
+      const { page = 1, limit = 20, start_date, end_date, status, stream } = req.query;
       const offset = (page - 1) * limit;
       
-      const filters = { start_date, end_date, status };
+      const filters = { start_date, end_date, status, stream };
       const history = await Queue.getQueueHistory(filters, { limit, offset });
       const total = await Queue.countHistory(filters);
       const summary = await Queue.getTodaySummary();
@@ -117,7 +233,7 @@ const queueController = {
         return sendResponse(res, 200, 'Patient not in queue', null);
       }
       
-      const position = await Queue.getPatientPositionInQueue(queueEntry.queue_number);
+      const position = await Queue.getPatientPositionInStream(queueEntry.stream_queue_number, queueEntry.queue_stream);
       queueEntry.position = position;
       queueEntry.estimated_wait_minutes = (position - 1) * 15;
       
@@ -126,6 +242,56 @@ const queueController = {
       next(error);
     }
   },
+
+  // ==================== SERVICE TYPE METHODS (Legacy) ====================
+
+  // NEW: Get current queue organized by service type (for multi-room support)
+  async getCurrentQueueByServiceType(req, res, next) {
+    try {
+      const queueData = await Queue.getCurrentQueueByServiceType();
+      sendResponse(res, 200, 'Queue by service type retrieved successfully', queueData);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // NEW: Call patient to specific service type room
+  async callPatientByType(req, res, next) {
+    try {
+      const { serviceTypeId } = req.params;
+      
+      const queueEntry = await Queue.getNextWaitingPatientForType(serviceTypeId);
+      
+      if (!queueEntry) {
+        return sendResponse(res, 404, `No patients waiting for service type ${serviceTypeId}`);
+      }
+      
+      await Queue.updateStatus(queueEntry.id, 'CALLED', {
+        called_at: new Date(),
+        updated_by: req.user.id
+      });
+      
+      await Appointment.updateStatus(queueEntry.appointment_id, 'IN_PROGRESS', req.user.id);
+      
+      const updated = await Queue.findById(queueEntry.id);
+      
+      sendResponse(res, 200, `Patient called for ${updated.type_name} service`, updated);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // NEW: Get waiting time by service type
+  async getWaitingTimeByType(req, res, next) {
+    try {
+      const waitingTimes = await Queue.getWaitingTimeByType();
+      sendResponse(res, 200, 'Waiting time by service type retrieved', waitingTimes);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // ==================== PATIENT SELF-SERVICE ====================
 
   // OPTIMIZED: Get current patient's own queue status
   async getMyQueueStatus(req, res, next) {
@@ -157,7 +323,9 @@ const queueController = {
     }
   },
 
-  // OPTIMIZED: Confirm appointment and add to queue (with transaction)
+  // ==================== QUEUE MANAGEMENT ====================
+
+  // OPTIMIZED: Confirm appointment and add to queue
   async confirmAndAddToQueue(req, res, next) {
     try {
       const { appointmentId } = req.params;
@@ -176,18 +344,16 @@ const queueController = {
         return sendResponse(res, 400, 'Appointment is already in today\'s queue');
       }
       
-      // Use the optimized confirm method that handles everything in a transaction
       const queueEntry = await Queue.confirmAppointment(appointmentId, req.user.id);
       
-      // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         'CONFIRM_AND_ADD_TO_QUEUE',
         'queue',
         queueEntry.id,
         appointment.patient_id,
         { status: appointment.status },
-        { status: 'CONFIRMED', queue_number: queueEntry.queue_number, queue_code: queueEntry.queue_code },
-        `Confirmed appointment and added to queue (${queueEntry.queue_code})`,
+        { status: 'CONFIRMED', queue_number: queueEntry.queue_number, queue_code: queueEntry.queue_code, queue_stream: queueEntry.queue_stream },
+        `Confirmed appointment and added to ${queueEntry.queue_stream} queue (${queueEntry.queue_code})`,
         req
       ).catch(err => console.error('Blockchain audit log failed:', err));
       
@@ -203,7 +369,8 @@ const queueController = {
     }
   },
 
-async addWalkIn(req, res, next) {
+  // Add walk-in patient
+  async addWalkIn(req, res, next) {
   try {
     const { patient_id, appointment_type_id, notes } = req.body;
     
@@ -220,6 +387,11 @@ async addWalkIn(req, res, next) {
     if (existingQueue) {
       return sendResponse(res, 400, 'Patient is already in today\'s queue');
     }
+    
+    // Get appointment type to determine stream
+    const appointmentType = await AppointmentType.findById(appointment_type_id);
+    const typeName = appointmentType?.type_name?.toLowerCase() || '';
+    const queueStream = typeName === 'testing' ? 'TESTING' : 'CONSULTATION';
     
     // Create temporary appointment for walk-in
     const scheduledAt = new Date();
@@ -238,20 +410,22 @@ async addWalkIn(req, res, next) {
       notes: notes || 'Walk-in patient',
       status: 'CONFIRMED',
       created_by: req.user.id
-      // Removed is_walkin field
     });
     
-    // Generate queue number
-    const queueNumber = await Queue.getNextQueueNumber();
-    const queueCode = await Queue.generateQueueCode(queueNumber);
+    // Generate queue numbers
+    const streamQueueNumber = await Queue.getNextStreamQueueNumber(queueStream);
+    const globalQueueNumber = await Queue.getNextQueueNumber();
+    const queueCode = await Queue.generateQueueCode(streamQueueNumber, queueStream);
     
     // Add to queue
     const queueId = await Queue.create({
       appointment_id: appointmentId,
-      queue_number: queueNumber,
+      queue_number: globalQueueNumber,
       queue_code: queueCode,
       priority: 0,
-      created_by: req.user.id
+      created_by: req.user.id,
+      queue_stream: queueStream,
+      stream_queue_number: streamQueueNumber
     });
     
     const newQueue = await Queue.findById(queueId);
@@ -262,7 +436,60 @@ async addWalkIn(req, res, next) {
   }
 },
 
-  // OPTIMIZED: Call patient (next or specific)
+  // NEW: Call patient by stream (Testing or Consultation)
+  async callPatientByStream(req, res, next) {
+    try {
+      const { stream } = req.params;
+      
+      // Validate stream
+      if (!['TESTING', 'CONSULTATION'].includes(stream)) {
+        return sendResponse(res, 400, 'Invalid stream. Must be TESTING or CONSULTATION');
+      }
+      
+      // Check if stream is already serving a patient
+      const queueData = await Queue.getCurrentQueueByStream();
+      const streamData = stream === 'TESTING' ? queueData.testing : queueData.consultation;
+      
+      if (streamData.serving.length > 0) {
+        return sendResponse(res, 400, `Cannot call new patient. ${stream} stream is already serving ${streamData.serving[0].queue_code}`);
+      }
+      
+      // Get next waiting patient for this stream
+      const queueEntry = await Queue.getNextWaitingPatientForStream(stream);
+      
+      if (!queueEntry) {
+        return sendResponse(res, 404, `No patients waiting in ${stream} stream`);
+      }
+      
+      // Update queue status
+      await Queue.updateStatus(queueEntry.id, 'CALLED', {
+        called_at: new Date(),
+        updated_by: req.user.id
+      });
+      
+      // Update appointment status
+      await Appointment.updateStatus(queueEntry.appointment_id, 'IN_PROGRESS', req.user.id);
+      
+      const updated = await Queue.findById(queueEntry.id);
+      
+      blockchainAuditService.logAction(
+        'CALL_BY_STREAM',
+        'queue',
+        queueEntry.id,
+        queueEntry.patient_id,
+        { status: 'WAITING', stream: stream },
+        { status: 'CALLED', stream: stream },
+        `Called patient ${updated.queue_code} for ${stream} service`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      sendResponse(res, 200, `Patient called for ${stream} service`, updated);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // OPTIMIZED: Call patient (next or specific) - Legacy
   async callPatient(req, res, next) {
     try {
       const { id } = req.params;
@@ -283,18 +510,15 @@ async addWalkIn(req, res, next) {
         }
       }
       
-      // Update queue status
       await Queue.updateStatus(queueEntry.id, 'CALLED', {
         called_at: new Date(),
         updated_by: req.user.id
       });
       
-      // Update appointment status
       await Appointment.updateStatus(queueEntry.appointment_id, 'IN_PROGRESS', req.user.id);
       
       const updated = await Queue.findById(queueEntry.id);
       
-      // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         id === 'next' ? 'CALL_NEXT' : 'CALL',
         'queue',
@@ -333,7 +557,6 @@ async addWalkIn(req, res, next) {
       
       const updated = await Queue.findById(id);
       
-      // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         'START_SERVING',
         'queue',
@@ -341,7 +564,7 @@ async addWalkIn(req, res, next) {
         queueEntry.patient_id,
         { status: 'CALLED' },
         { status: 'SERVING' },
-        `Started serving patient ${updated.queue_code}`,
+        `Started serving patient ${updated.queue_code} in ${updated.queue_stream} stream`,
         req
       ).catch(err => console.error('Blockchain audit log failed:', err));
       
@@ -374,7 +597,6 @@ async addWalkIn(req, res, next) {
       
       const updated = await Queue.findById(id);
       
-      // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         'COMPLETE_SERVICE',
         'queue',
@@ -410,7 +632,6 @@ async addWalkIn(req, res, next) {
       await Queue.updateStatus(id, 'SKIPPED', { updated_by: req.user.id });
       await Appointment.updateStatus(queueEntry.appointment_id, 'SCHEDULED', req.user.id);
       
-      // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         'SKIP',
         'queue',
@@ -447,7 +668,6 @@ async addWalkIn(req, res, next) {
       const oldPriority = queueEntry.priority;
       await Queue.updatePriority(queue_id, priority, req.user.id);
       
-      // Blockchain audit logging (non-blocking)
       blockchainAuditService.logAction(
         'UPDATE_PRIORITY',
         'queue',
@@ -465,7 +685,7 @@ async addWalkIn(req, res, next) {
     }
   },
 
-  // OPTIMIZED: Reset queue (with filters) using batch operations
+  // OPTIMIZED: Reset queue (with filters)
   async resetQueue(req, res, next) {
     try {
       const { appointment_id, date } = req.query;
@@ -477,7 +697,6 @@ async addWalkIn(req, res, next) {
         return sendResponse(res, 404, 'No queue entries found to reset');
       }
       
-      // Log blockchain audit for each entry (non-blocking)
       for (const entry of queueEntries) {
         blockchainAuditService.logAction(
           'DELETE',
@@ -491,13 +710,11 @@ async addWalkIn(req, res, next) {
         ).catch(err => console.error('Blockchain audit log failed:', err));
       }
       
-      // Update appointments status back to SCHEDULED
       const appointmentIds = [...new Set(queueEntries.map(entry => entry.appointment_id))];
       for (const apptId of appointmentIds) {
         await Appointment.updateStatus(apptId, 'SCHEDULED', req.user.id);
       }
       
-      // Delete queue entries
       const count = await Queue.deleteByFilters(filters);
       
       sendResponse(res, 200, `Successfully reset ${count} queue entries`, { count });
@@ -506,7 +723,7 @@ async addWalkIn(req, res, next) {
     }
   },
 
-  // OPTIMIZED: Get queue summary (cached-friendly)
+  // OPTIMIZED: Get queue summary
   async getQueueSummary(req, res, next) {
     try {
       const summary = await Queue.getCurrentSummary();
@@ -556,7 +773,7 @@ async addWalkIn(req, res, next) {
     }
   },
 
-  // OPTIMIZED: Batch update multiple queue statuses (new endpoint)
+  // OPTIMIZED: Batch update multiple queue statuses
   async batchUpdateStatus(req, res, next) {
     try {
       const { updates } = req.body;
@@ -565,7 +782,6 @@ async addWalkIn(req, res, next) {
         return sendResponse(res, 400, 'Updates array is required');
       }
       
-      // Validate updates
       for (const update of updates) {
         if (!update.id || !update.status) {
           return sendResponse(res, 400, 'Each update must have id and status');
@@ -575,7 +791,6 @@ async addWalkIn(req, res, next) {
         }
       }
       
-      // Add updated_by to each update
       const updatesWithUser = updates.map(update => ({
         ...update,
         updated_by: req.user.id
@@ -593,26 +808,48 @@ async addWalkIn(req, res, next) {
     }
   },
 
-  // OPTIMIZED: Get waiting time estimation (new endpoint)
+  // ==================== ENHANCED WAITING TIME ESTIMATION ====================
+  
+  // ENHANCED: Get waiting time estimation with stream support
   async getWaitingTimeEstimation(req, res, next) {
     try {
-      const waitingCount = await Queue.getCurrentSummary();
-      const avgServiceTime = 15; // minutes
-      const estimatedWaitTime = waitingCount.waiting * avgServiceTime;
-      
-      // Get current time distribution
-      const timeDistribution = {
-        less_than_15: Math.max(0, 1 * avgServiceTime),
-        less_than_30: Math.max(0, 2 * avgServiceTime),
-        less_than_60: Math.max(0, 4 * avgServiceTime),
-        more_than_60: Math.max(0, (waitingCount.waiting - 4) * avgServiceTime)
-      };
+      const queueData = await Queue.getCurrentQueueByStream();
       
       sendResponse(res, 200, 'Waiting time estimation retrieved', {
-        current_waiting: waitingCount.waiting,
-        estimated_wait_minutes: estimatedWaitTime,
-        estimated_wait_formatted: `${Math.floor(estimatedWaitTime / 60)}h ${estimatedWaitTime % 60}m`,
-        time_distribution: timeDistribution
+        testing: {
+          current_waiting: queueData.testing.waiting.length,
+          estimated_wait_minutes: queueData.testing.estimated_wait,
+          estimated_wait_formatted: queueData.testing.estimated_wait < 60 ? 
+            `${queueData.testing.estimated_wait} minutes` : 
+            `${Math.floor(queueData.testing.estimated_wait / 60)}h ${queueData.testing.estimated_wait % 60}m`,
+          now_serving: queueData.testing.now_serving ? {
+            queue_code: queueData.testing.now_serving.queue_code,
+            patient_name: `${queueData.testing.now_serving.patient_first_name} ${queueData.testing.now_serving.patient_last_name}`
+          } : null,
+          next: queueData.testing.waiting[0] ? {
+            queue_code: queueData.testing.waiting[0].queue_code,
+            patient_name: `${queueData.testing.waiting[0].patient_first_name} ${queueData.testing.waiting[0].patient_last_name}`
+          } : null
+        },
+        consultation: {
+          current_waiting: queueData.consultation.waiting.length,
+          estimated_wait_minutes: queueData.consultation.estimated_wait,
+          estimated_wait_formatted: queueData.consultation.estimated_wait < 60 ? 
+            `${queueData.consultation.estimated_wait} minutes` : 
+            `${Math.floor(queueData.consultation.estimated_wait / 60)}h ${queueData.consultation.estimated_wait % 60}m`,
+          now_serving: queueData.consultation.now_serving ? {
+            queue_code: queueData.consultation.now_serving.queue_code,
+            patient_name: `${queueData.consultation.now_serving.patient_first_name} ${queueData.consultation.now_serving.patient_last_name}`
+          } : null,
+          next: queueData.consultation.waiting[0] ? {
+            queue_code: queueData.consultation.waiting[0].queue_code,
+            patient_name: `${queueData.consultation.waiting[0].patient_first_name} ${queueData.consultation.waiting[0].patient_last_name}`
+          } : null
+        },
+        overall: {
+          total_waiting: queueData.stats.total_waiting,
+          peak_stream: queueData.testing.waiting.length > queueData.consultation.waiting.length ? 'TESTING' : 'CONSULTATION'
+        }
       });
     } catch (error) {
       next(error);

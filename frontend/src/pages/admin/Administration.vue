@@ -255,7 +255,7 @@ const removeToast = (id) => {
 const loading = ref(false)
 const bulkDeleting = ref(false)
 const authLoading = ref(null)
-const activeTable = ref('appointment_types')
+const activeTable = ref('users')
 const search = ref('')
 const page = ref(1)
 const perPage = ref(10)
