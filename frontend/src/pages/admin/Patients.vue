@@ -1,10 +1,10 @@
-<!-- frontend/src/pages/admin/Patients.vue - WITH TOAST NOTIFICATIONS AND IMPORT -->
+<!-- frontend/src/pages/admin/Patients.vue - WITH CSV IMPORT/EXPORT -->
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- Header Section -->
     <div class="d-flex flex-wrap justify-space-between align-center mb-4">
       <div>
-        <h1 class="text-h5 text-md-h4 font-weight-bold" :style="{ color: 'var(--color-primary)' }">
+        <h1 class="text-h5 text-md-h4 font-weight-bold text-primary">
           Patient Management
         </h1>
         <p class="text-body-2 text-medium-emphasis mt-1">
@@ -13,48 +13,32 @@
       </div>
 
       <div class="d-flex gap-2 mt-2 mt-sm-0">
-        <!-- Mask Sensitive Data Toggle -->
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          :prepend-icon="maskSensitiveData ? 'mdi-eye-off' : 'mdi-eye'"
-          @click="toggleMaskSensitiveData"
-          :color="maskSensitiveData ? 'warning' : 'primary'"
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
-          {{ maskSensitiveData ? 'Unmask Data' : 'Mask Data' }}
-        </v-btn>
-        
-        <!-- Import Button -->
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          prepend-icon="mdi-upload" 
-          @click="openImportDialog"
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
-          Import
-        </v-btn>
-        
-        <v-btn 
-          color="primary" 
-          size="small" 
-          prepend-icon="mdi-account-plus" 
-          @click="openEnrollmentDialog"
-          :loading="loading"
-          :style="{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text-on-primary)' }"
-        >
-          New Enrollment
-        </v-btn>
-        <v-btn 
-          variant="outlined" 
-          size="small" 
-          prepend-icon="mdi-download" 
-          @click="exportPatientData"
-          :disabled="patients.length === 0" 
-          :style="{ borderColor: 'var(--color-border)' }"
-        >
-          Export
+        <v-tooltip text="Import CSV" location="bottom">
+          <template v-slot:activator="{ props }">
+            <v-btn v-bind="props" variant="outlined" size="small" @click="openImportDialog">
+              <v-icon>mdi-upload</v-icon>
+            </v-btn>
+          </template>
+        </v-tooltip>
+
+        <v-tooltip text="Export CSV" location="bottom">
+          <template v-slot:activator="{ props }">
+            <v-btn v-bind="props" variant="outlined" size="small" @click="exportPatientData" :disabled="patients.length === 0">
+              <v-icon>mdi-download</v-icon>
+            </v-btn>
+          </template>
+        </v-tooltip>
+
+        <v-tooltip :text="maskSensitiveData ? 'Unmask Data' : 'Mask Data'" location="bottom">
+          <template v-slot:activator="{ props }">
+            <v-btn v-bind="props" variant="outlined" size="small" :color="maskSensitiveData ? 'warning' : 'primary'" @click="toggleMaskSensitiveData">
+              <v-icon>{{ maskSensitiveData ? 'mdi-eye-off' : 'mdi-eye' }}</v-icon>
+            </v-btn>
+          </template>
+        </v-tooltip>
+
+        <v-btn color="primary" size="small" prepend-icon="mdi-account-plus" @click="openEnrollmentDialog" :loading="loading">
+          New
         </v-btn>
       </div>
     </div>
@@ -62,16 +46,9 @@
     <!-- Compact Stats Cards -->
     <v-row class="mb-4">
       <v-col v-for="stat in compactStats" :key="stat.label" cols="6" sm="3" md="3" lg="3">
-        <v-card 
-          elevation="0" 
-          border 
-          class="stat-card"
-          :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
-        >
+        <v-card elevation="0" variant="outlined" class="stat-card">
           <v-card-text class="pa-3 d-flex align-center">
-            <v-avatar size="40" :color="stat.color" class="mr-3"
-              :style="{ backgroundColor: `var(--color-${stat.color})` }"
-            >
+            <v-avatar size="40" :color="stat.color" class="mr-3">
               <v-icon :icon="stat.icon" size="24" color="white"></v-icon>
             </v-avatar>
             <div>
@@ -84,29 +61,15 @@
     </v-row>
 
     <!-- Error Alert -->
-    <v-alert 
-      v-if="error" 
-      type="error" 
-      variant="tonal" 
-      class="mb-4" 
-      closable 
-      @click:close="error = ''"
-      :style="{ backgroundColor: 'var(--color-error-light)', color: 'var(--color-error-dark)' }"
-    >
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4" closable @click:close="error = ''">
       <template v-slot:title>Error Loading Patients</template>
       {{ error }}
     </v-alert>
 
-    <!-- Search and Filters - Horizontal Layout -->
-    <v-card 
-      elevation="0" 
-      border 
-      class="mb-4"
-      :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
-    >
+    <!-- Search and Filters -->
+    <v-card elevation="0" variant="outlined" class="mb-4">
       <v-card-text class="pa-2">
         <div class="d-flex flex-wrap align-center ga-2">
-          <!-- Search -->
           <v-text-field 
             v-model="search" 
             density="compact" 
@@ -120,8 +83,7 @@
             style="flex: 2; min-width: 200px;"
           />
 
-          <!-- HIV Status Filter - Horizontal Chips -->
-          <div class="d-flex align-center ga-1" style="flex-wrap: wrap;">
+          <div class="d-flex align-center ga-1 flex-wrap">
             <span class="text-caption text-medium-emphasis mr-1">HIV:</span>
             <v-chip
               v-for="option in hivStatusOptions"
@@ -129,16 +91,13 @@
               size="small"
               :color="filters.hiv_status === option.value ? 'primary' : 'default'"
               variant="flat"
-              :class="{ 'v-chip--selected': filters.hiv_status === option.value }"
               @click="toggleFilter('hiv_status', option.value)"
-              class="filter-chip"
             >
               {{ option.title }}
             </v-chip>
           </div>
 
-          <!-- Sex Filter - Horizontal Chips -->
-          <div class="d-flex align-center ga-1" style="flex-wrap: wrap;">
+          <div class="d-flex align-center ga-1 flex-wrap">
             <span class="text-caption text-medium-emphasis mr-1">Sex:</span>
             <v-chip
               v-for="option in sexOptions"
@@ -146,46 +105,31 @@
               size="small"
               :color="filters.sex === option.value ? 'primary' : 'default'"
               variant="flat"
-              :class="{ 'v-chip--selected': filters.sex === option.value }"
               @click="toggleFilter('sex', option.value)"
-              class="filter-chip"
             >
               {{ option.title }}
             </v-chip>
           </div>
 
-          <!-- Sort By -->
           <v-select 
-            v-model="sortBy" 
+            v-model="sortSelect" 
             density="compact" 
             variant="outlined" 
             :items="sortFields" 
             placeholder="Sort"
             hide-details 
-            @update:model-value="loadPatients" 
+            @update:model-value="handleSortChange" 
             class="compact-field"
             style="min-width: 130px;"
           />
 
-          <!-- Sort Order Toggle -->
-          <v-btn 
-            variant="outlined" 
-            density="comfortable" 
-            size="small"
-            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" 
-            @click="toggleSortOrder"
-            :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" 
-          />
-
-          <!-- Clear Filters -->
           <v-btn 
             variant="text" 
             color="primary" 
             size="small" 
             prepend-icon="mdi-filter-remove" 
             @click="clearFilters"
-            :disabled="!hasActiveFilters" 
-            :style="{ color: 'var(--color-primary)' }" 
+            :disabled="!hasActiveFilters"
             class="px-2"
           >
             Clear
@@ -195,11 +139,7 @@
     </v-card>
 
     <!-- Main Table -->
-    <v-card 
-      elevation="0" 
-      border 
-      :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }"
-    >
+    <v-card elevation="0" variant="outlined">
       <v-card-title class="d-flex justify-space-between align-center py-3 px-4">
         <span class="text-subtitle-1 font-weight-medium">Patient Records</span>
         <span class="text-caption text-medium-emphasis">
@@ -207,7 +147,7 @@
         </span>
       </v-card-title>
 
-      <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+      <v-divider />
 
       <v-card-text class="pa-0">
         <v-data-table-server 
@@ -217,28 +157,25 @@
           :items="patients"
           :items-length="totalPatients" 
           :loading="loading" 
-          @update:options="handleTableSort"
-          class="elevation-0 patients-table" 
+          @update:options="updateOptions"
           density="compact" 
           hover
+          :server-items-length="totalPatients"
         >
-          <!-- Loading State -->
           <template v-slot:loading>
             <v-skeleton-loader type="table-row@10" />
           </template>
 
-          <!-- Patient Facility Code Column -->
           <template v-slot:item.patient_facility_code="{ item }">
             <span 
-              class="patient-id-link font-weight-medium cursor-pointer" 
-              :style="{ color: 'var(--color-info)' }"
+              class="text-info font-weight-medium cursor-pointer text-decoration-none"
               @click="goToPatientDetails(item)"
+              style="cursor: pointer;"
             >
               {{ maskSensitiveData ? maskString(item.patient_facility_code, 4) : item.patient_facility_code }}
             </span>
           </template>
 
-          <!-- Name Column -->
           <template v-slot:item.full_name="{ item }">
             <div>
               <div class="text-body-2 font-weight-medium">
@@ -258,65 +195,37 @@
             </div>
           </template>
 
-          <!-- Age Column -->
           <template v-slot:item.age="{ item }">
             <span class="text-caption">{{ calculateAge(item.date_of_birth) }}y</span>
           </template>
 
-          <!-- Sex Column -->
           <template v-slot:item.sex="{ item }">
             <span class="text-caption">{{ formatSex(item.sex) }}</span>
           </template>
 
-          <!-- Contact Column -->
           <template v-slot:item.contact_number="{ item }">
             <span class="text-caption">
               {{ maskSensitiveData ? maskContact(item.contact_number) : (item.contact_number || '—') }}
             </span>
           </template>
 
-          <!-- HIV Status Column -->
           <template v-slot:item.hiv_status="{ item }">
-            <v-chip 
-              size="x-small" 
-              :color="getHivStatusColor(item.hiv_status)" 
-              variant="flat"
-              :prepend-icon="getHivStatusIcon(item.hiv_status)"
-            >
+            <v-chip size="x-small" :color="getHivStatusColor(item.hiv_status)" variant="flat">
               {{ formatHivStatus(item.hiv_status) }}
             </v-chip>
           </template>
 
-          <!-- Enrollment Date Column -->
           <template v-slot:item.created_at="{ item }">
             <div class="text-caption">{{ formatDateTime(item.created_at) }}</div>
           </template>
 
-          <!-- Actions Column -->
           <template v-slot:item.actions="{ item }">
             <div class="d-flex gap-1">
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="warning" 
-                icon="mdi-pencil" 
-                @click="editPatient(item)"
-                :style="{ color: 'var(--color-warning)' }" 
-                title="Edit patient"
-              />
-              <v-btn 
-                size="x-small" 
-                variant="text" 
-                color="error" 
-                icon="mdi-delete" 
-                @click="deletePatient(item)"
-                :style="{ color: 'var(--color-error)' }" 
-                title="Delete patient"
-              />
+              <v-btn size="x-small" variant="text" color="warning" icon="mdi-pencil" @click="editPatient(item)" title="Edit patient" />
+              <v-btn size="x-small" variant="text" color="error" icon="mdi-delete" @click="deletePatient(item)" title="Delete patient" />
             </div>
           </template>
 
-          <!-- Empty State -->
           <template v-slot:no-data>
             <div class="text-center py-6">
               <v-icon size="48" color="grey-lighten-2" class="mb-2">mdi-account-off</v-icon>
@@ -324,13 +233,7 @@
               <div class="text-caption text-grey mt-1">
                 {{ hasActiveFilters ? 'Try adjusting your filters' : 'Enroll your first patient' }}
               </div>
-              <v-btn 
-                color="primary" 
-                size="small" 
-                @click="openEnrollmentDialog" 
-                class="mt-3"
-                :style="{ backgroundColor: 'var(--color-primary)' }"
-              >
+              <v-btn color="primary" size="small" @click="openEnrollmentDialog" class="mt-3">
                 <v-icon start>mdi-account-plus</v-icon>
                 Enroll First
               </v-btn>
@@ -341,130 +244,117 @@
     </v-card>
 
     <!-- Patient Dialog -->
-    <PatientDialog 
-      v-model="showPatientDialog" 
-      :patient="selectedPatient" 
-      :mode="dialogMode"
-      @saved="handlePatientSaved" 
-    />
+    <PatientDialog v-model="showPatientDialog" :patient="selectedPatient" :mode="dialogMode" @saved="handlePatientSaved" />
 
-    <!-- Import Dialog -->
-    <v-dialog v-model="showImportDialog" max-width="600">
+    <!-- Import CSV Dialog -->
+    <v-dialog v-model="showImportDialog" max-width="800">
       <v-card>
         <v-card-title class="d-flex justify-space-between align-center">
-          <span class="text-h5">Import Patients</span>
+          <span class="text-h5">Import Patients from CSV</span>
           <v-btn icon @click="showImportDialog = false">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-card-title>
         
         <v-card-text>
-          <v-alert
-            type="info"
-            variant="tonal"
-            class="mb-4"
-          >
-            <strong>Import Instructions:</strong>
+          <v-alert type="info" variant="tonal" class="mb-4">
+            <strong>CSV Format Instructions:</strong>
             <ul class="mt-2">
-              <li>Upload a JSON file with an array of patient objects</li>
-              <li>Required fields: first_name, last_name, date_of_birth, sex, hiv_status</li>
-              <li>Optional fields: middle_name, address, contact_number, diagnosis_date, art_start_date, latest_cd4_count, latest_viral_load</li>
-              <li>Download a sample template using the button below</li>
+              <li>First row must contain column headers</li>
+              <li><strong>Required columns:</strong> first_name, last_name, date_of_birth, sex, hiv_status</li>
+              <li><strong>Optional columns:</strong> middle_name, address, contact_number, diagnosis_date, art_start_date, latest_cd4_count, latest_viral_load</li>
+              <li>Date format: YYYY-MM-DD (e.g., 1990-01-15)</li>
+              <li>Sex values: MALE, FEMALE, OTHER</li>
+              <li>HIV Status values: REACTIVE, NON_REACTIVE, INDETERMINATE</li>
             </ul>
           </v-alert>
 
-          <div class="d-flex justify-end mb-4">
-            <v-btn
-              variant="text"
-              color="primary"
-              prepend-icon="mdi-download"
-              @click="downloadTemplate"
-            >
-              Download Template
+          <div class="d-flex justify-space-between align-center mb-4">
+            <v-btn variant="text" color="primary" prepend-icon="mdi-download" @click="downloadTemplate">
+              Download CSV Template
+            </v-btn>
+            <v-btn variant="text" color="info" prepend-icon="mdi-help-circle" @click="showSampleData = !showSampleData">
+              Show Sample Data
             </v-btn>
           </div>
 
+          <!-- Sample Data Preview -->
+          <v-expand-transition>
+            <v-card v-if="showSampleData" variant="tonal" class="mb-4" color="info">
+              <v-card-text>
+                <div class="text-caption font-weight-medium mb-2">Sample CSV Content:</div>
+                <pre class="sample-csv">first_name,last_name,middle_name,date_of_birth,sex,address,contact_number,hiv_status,diagnosis_date,art_start_date,latest_cd4_count,latest_viral_load
+John,Doe,Smith,1990-01-15,MALE,123 Main St,+1234567890,REACTIVE,2023-01-01,2023-02-01,500,40
+Jane,Smith,,1985-06-20,FEMALE,456 Oak Ave,+1987654321,NON_REACTIVE,,,,
+Michael,Brown,James,1978-03-10,MALE,789 Pine Rd,+1122334455,INDETERMINATE,2024-01-15,2024-02-01,450,100</pre>
+              </v-card-text>
+            </v-card>
+          </v-expand-transition>
+
           <v-file-input
             v-model="importFile"
-            label="Choose JSON file"
-            accept="application/json"
+            label="Choose CSV file"
+            accept=".csv,.text/csv,.application/vnd.ms-excel"
             variant="outlined"
             density="comfortable"
-            :rules="[v => !!v || 'Please select a file']"
             prepend-icon="mdi-upload"
             show-size
             @update:model-value="validateImportFile"
           />
 
-          <div v-if="importValidation" class="mt-3">
-            <v-alert
-              :type="importValidation.valid ? 'success' : 'error'"
-              variant="tonal"
-            >
-              <div v-if="importValidation.valid">
-                ✅ File is valid. Found {{ importValidation.count }} patient records ready to import.
-              </div>
-              <div v-else>
-                ❌ {{ importValidation.error }}
-              </div>
-            </v-alert>
-          </div>
-
-          <!-- Import Preview -->
+          <!-- Preview imported data -->
           <div v-if="importPreview.length > 0" class="mt-4">
-            <div class="text-subtitle-2 mb-2">Preview (first 3 records):</div>
-            <v-table density="compact">
+            <v-divider class="mb-3" />
+            <div class="d-flex justify-space-between align-center mb-2">
+              <span class="text-subtitle-2 font-weight-medium">Preview (First 5 rows):</span>
+              <span class="text-caption text-medium-emphasis">Total records found: {{ importValidation?.count || 0 }}</span>
+            </div>
+            <v-table density="compact" class="preview-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>DOB</th>
-                  <th>Sex</th>
-                  <th>HIV Status</th>
+                  <th v-for="col in previewColumns" :key="col">{{ col }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(item, index) in importPreview" :key="index">
-                  <td>{{ item.last_name }}, {{ item.first_name }}</td>
-                  <td>{{ formatDate(item.date_of_birth) }}</td>
-                  <td>{{ formatSex(item.sex) }}</td>
-                  <td>{{ formatHivStatus(item.hiv_status) }}</td>
+                <tr v-for="(row, idx) in importPreview" :key="idx">
+                  <td v-for="col in previewColumns" :key="col">
+                    {{ truncateText(row[col], 20) }}
+                  </td>
                 </tr>
               </tbody>
             </v-table>
+          </div>
+
+          <div v-if="importValidation && !importValidation.valid" class="mt-3">
+            <v-alert type="error" variant="tonal">
+              <div class="font-weight-medium">Validation Errors:</div>
+              <ul class="mt-1 mb-0">
+                <li v-for="(error, idx) in importValidation.errors" :key="idx">{{ error }}</li>
+              </ul>
+            </v-alert>
+          </div>
+
+          <div v-if="importValidation && importValidation.valid" class="mt-3">
+            <v-alert type="success" variant="tonal">
+              ✅ File is valid. Found {{ importValidation.count }} patient records ready to import.
+            </v-alert>
           </div>
         </v-card-text>
 
         <v-card-actions>
           <v-spacer />
-          <v-btn
-            color="secondary"
-            variant="text"
-            @click="showImportDialog = false"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            :loading="importLoading"
-            :disabled="!importValidation?.valid"
-            @click="importPatients"
-          >
+          <v-btn color="secondary" variant="text" @click="showImportDialog = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="importLoading" :disabled="!importValidation?.valid" @click="importPatients">
             Import {{ importValidation?.count || 0 }} Patients
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
-    <!-- Toast Notifications - REPLACED SNACKBAR -->
+    <!-- Toast Notifications -->
     <div class="toast-container">
       <transition-group name="toast">
-        <div
-          v-for="toast in toasts"
-          :key="toast.id"
-          class="toast"
-          :class="`toast-${toast.type}`"
-          @click="removeToast(toast.id)"
-        >
+        <div v-for="toast in toasts" :key="toast.id" class="toast" :class="`toast-${toast.type}`" @click="removeToast(toast.id)">
           <div class="toast-content">
             <v-icon :icon="toast.icon" size="20" class="mr-2" />
             <span>{{ toast.message }}</span>
@@ -482,6 +372,7 @@ import { useRouter } from 'vue-router'
 import { patientsApi } from '@/api'
 import PatientDialog from '@/components/PatientDialog.vue'
 import debounce from 'lodash/debounce'
+import Papa from 'papaparse' // Add this package: npm install papaparse
 
 const router = useRouter()
 
@@ -491,8 +382,7 @@ const filters = ref({
   hiv_status: null,
   sex: null
 })
-const sortBy = ref('created_at_desc')
-const sortOrder = ref('desc')
+const sortSelect = ref('created_at_desc')
 const page = ref(1)
 const perPage = ref(10)
 const loading = ref(false)
@@ -505,9 +395,7 @@ const stats = ref({
   by_hiv_status: [],
   by_sex: [],
   on_art: 0,
-  recent_registrations: 0,
-  age_distribution: [],
-  monthly_registrations: []
+  recent_registrations: 0
 })
 
 // Toast notifications
@@ -520,13 +408,14 @@ const importFile = ref(null)
 const importLoading = ref(false)
 const importValidation = ref(null)
 const importPreview = ref([])
+const previewColumns = ref([])
+const showSampleData = ref(false)
 
 // Patient dialog
 const showPatientDialog = ref(false)
 const selectedPatient = ref(null)
 const dialogMode = ref('create')
 
-// Toast functions
 function showToast(message, type = 'success', duration = 3000) {
   const id = toastId++
   const icon = {
@@ -536,64 +425,34 @@ function showToast(message, type = 'success', duration = 3000) {
     info: 'mdi-information'
   }[type] || 'mdi-information'
   
-  toasts.value.push({
-    id,
-    message,
-    type,
-    icon,
-    duration
-  })
-  
-  // Auto remove after duration
-  setTimeout(() => {
-    removeToast(id)
-  }, duration)
+  toasts.value.push({ id, message, type, icon, duration })
+  setTimeout(() => removeToast(id), duration)
 }
 
 function removeToast(id) {
   const index = toasts.value.findIndex(t => t.id === id)
-  if (index !== -1) {
-    toasts.value.splice(index, 1)
-  }
+  if (index !== -1) toasts.value.splice(index, 1)
 }
 
-// Compact stats cards
+function truncateText(text, length) {
+  if (!text) return '—'
+  const str = String(text)
+  return str.length > length ? str.substring(0, length) + '...' : str
+}
+
 const compactStats = computed(() => {
   const reactiveStat = Array.isArray(stats.value.by_hiv_status) 
     ? stats.value.by_hiv_status.find(s => s.hiv_status === 'REACTIVE') 
     : { count: 0 }
   
-  const onArtStat = stats.value.on_art || 0
-  
   return [
-    {
-      label: 'Total Patients',
-      value: stats.value.total_patients || 0,
-      icon: 'mdi-account-multiple',
-      color: 'primary'
-    },
-    {
-      label: 'On ART',
-      value: onArtStat,
-      icon: 'mdi-pill',
-      color: 'success'
-    },
-    {
-      label: 'Reactive',
-      value: reactiveStat?.count || 0,
-      icon: 'mdi-alert-circle',
-      color: 'warning'
-    },
-    {
-      label: 'Recent (30d)',
-      value: stats.value.recent_registrations || 0,
-      icon: 'mdi-calendar-plus',
-      color: 'info'
-    }
+    { label: 'Total Patients', value: stats.value.total_patients || 0, icon: 'mdi-account-multiple', color: 'primary' },
+    { label: 'On ART', value: stats.value.on_art || 0, icon: 'mdi-pill', color: 'success' },
+    { label: 'Reactive', value: reactiveStat?.count || 0, icon: 'mdi-alert-circle', color: 'warning' },
+    { label: 'Recent (30d)', value: stats.value.recent_registrations || 0, icon: 'mdi-calendar-plus', color: 'info' }
   ]
 })
 
-// Table headers
 const headers = ref([
   { title: 'Facility ID', key: 'patient_facility_code', sortable: true, width: '120' },
   { title: 'Name', key: 'full_name', sortable: false },
@@ -605,7 +464,6 @@ const headers = ref([
   { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '80' }
 ])
 
-// Filter options
 const hivStatusOptions = [
   { title: 'Reactive', value: 'REACTIVE' },
   { title: 'Non-Reactive', value: 'NON_REACTIVE' },
@@ -618,7 +476,6 @@ const sexOptions = [
   { title: 'Other', value: 'OTHER' }
 ]
 
-// Sort fields
 const sortFields = [
   { title: 'Newest First', value: 'created_at_desc' },
   { title: 'Oldest First', value: 'created_at_asc' },
@@ -630,120 +487,105 @@ const sortFields = [
   { title: 'DOB (Oldest)', value: 'date_of_birth_asc' }
 ]
 
-// Computed properties
 const paginationStart = computed(() => (page.value - 1) * perPage.value + 1)
 const paginationEnd = computed(() => Math.min(page.value * perPage.value, totalPatients.value))
+const hasActiveFilters = computed(() => search.value || filters.value.hiv_status || filters.value.sex)
 
-const hasActiveFilters = computed(() => {
-  return search.value || filters.value.hiv_status || filters.value.sex
-})
-
-// Toggle filter function
-function toggleFilter(filterType, value) {
-  if (filters.value[filterType] === value) {
-    filters.value[filterType] = null
-  } else {
-    filters.value[filterType] = value
+const getSortParams = () => {
+  if (!sortSelect.value) return { sort_by: 'created_at', sort_order: 'DESC' }
+  
+  const parts = sortSelect.value.split('_')
+  const order = parts.pop()
+  const field = parts.join('_')
+  
+  return {
+    sort_by: field,
+    sort_order: order.toUpperCase()
   }
+}
+
+function toggleFilter(filterType, value) {
+  filters.value[filterType] = filters.value[filterType] === value ? null : value
   page.value = 1
   loadPatients()
 }
 
-// Toggle mask sensitive data
 function toggleMaskSensitiveData() {
   maskSensitiveData.value = !maskSensitiveData.value
 }
 
-// Masking functions
 function maskString(str, visibleChars = 2) {
   if (!str) return '—'
   if (str.length <= visibleChars) return '*'.repeat(str.length)
-  const masked = '*'.repeat(str.length - visibleChars)
-  return str.substring(0, visibleChars) + masked
+  return str.substring(0, visibleChars) + '*'.repeat(str.length - visibleChars)
 }
 
 function maskContact(contact) {
   if (!contact) return '—'
   if (contact.length <= 4) return '*'.repeat(contact.length)
-  const masked = '*'.repeat(contact.length - 4)
-  return masked + contact.substring(contact.length - 4)
+  return '*'.repeat(contact.length - 4) + contact.substring(contact.length - 4)
 }
 
-// Debounced fetch
 const debouncedFetchPatients = debounce(() => {
   page.value = 1
   loadPatients()
 }, 500)
 
-// Watch for filter changes
-watch([() => filters.value.hiv_status, () => filters.value.sex], () => {
-  debouncedFetchPatients()
-})
+watch([() => filters.value.hiv_status, () => filters.value.sex], () => debouncedFetchPatients())
 
-// Lifecycle
-onMounted(async () => {
-  await loadPatients()
-  await fetchStats()
-})
+function handleSortChange() {
+  page.value = 1
+  loadPatients()
+}
 
-// Methods
+function updateOptions(options) {
+  const { page: newPage, itemsPerPage, sortBy: sortItems, sortDesc } = options
+  
+  if (newPage !== page.value) page.value = newPage
+  if (itemsPerPage !== perPage.value) perPage.value = itemsPerPage
+  
+  if (sortItems && sortItems.length) {
+    const sortField = sortItems[0]
+    const sortDirection = sortDesc[0] ? 'desc' : 'asc'
+    sortSelect.value = `${sortField}_${sortDirection}`
+  }
+  
+  loadPatients()
+}
+
 async function loadPatients() {
   loading.value = true
   error.value = ''
 
   try {
-    let sortField = 'created_at'
-    let sortDir = 'desc'
-
-    if (sortBy.value && typeof sortBy.value === 'string') {
-      const parts = sortBy.value.split('_')
-      if (parts.length > 1 && ['asc', 'desc'].includes(parts[parts.length - 1])) {
-        sortField = parts.slice(0, -1).join('_')
-        sortDir = parts[parts.length - 1]
-      }
-    }
-
+    const { sort_by, sort_order } = getSortParams()
+    
     const params = {
       page: page.value,
       limit: perPage.value,
-      sort_by: sortField,
-      sort_order: sortDir.toUpperCase()
+      sort_by: sort_by,
+      sort_order: sort_order
     }
 
-    if (search.value?.trim()) {
-      params.search = search.value.trim()
-    }
-    if (filters.value.hiv_status) {
-      params.hiv_status = filters.value.hiv_status
-    }
-    if (filters.value.sex) {
-      params.sex = filters.value.sex
-    }
+    if (search.value?.trim()) params.search = search.value.trim()
+    if (filters.value.hiv_status) params.hiv_status = filters.value.hiv_status
+    if (filters.value.sex) params.sex = filters.value.sex
 
     const response = await patientsApi.getAll(params)
     
-    if (response.data) {
-      if (response.data.success === true) {
-        patients.value = response.data.data || []
-        totalPatients.value = response.data.pagination?.total || 0
-      } else if (response.data.data) {
-        patients.value = response.data.data
-        totalPatients.value = response.data.pagination?.total || response.data.data.length
-      } else if (Array.isArray(response.data)) {
-        patients.value = response.data
-        totalPatients.value = patients.value.length
-      } else {
-        patients.value = []
-        totalPatients.value = 0
-      }
+    if (response && response.success === true) {
+      patients.value = response.data || []
+      totalPatients.value = response.pagination?.total || 0
     } else {
       patients.value = []
       totalPatients.value = 0
+      if (response && response.message) {
+        error.value = response.message
+      }
     }
-
   } catch (err) {
     console.error('Error fetching patients:', err)
-    error.value = err.response?.data?.error || 'Failed to load patients'
+    error.value = err.error || err.message || 'Failed to load patients'
     patients.value = []
     totalPatients.value = 0
     showToast('Error loading patients', 'error')
@@ -755,45 +597,18 @@ async function loadPatients() {
 async function fetchStats() {
   try {
     const response = await patientsApi.getStats()
-    
-    if (response.data) {
-      if (response.data.success === true) {
-        stats.value = response.data.stats || stats.value
-      } else if (response.data.stats) {
-        stats.value = response.data.stats
-      } else {
-        stats.value = response.data
-      }
+    if (response && response.success === true) {
+      stats.value = response.data || stats.value
     }
   } catch (err) {
     console.error('Error fetching stats:', err)
   }
 }
 
-function handleTableSort(options) {
-  const { sortBy: sortItems, sortDesc } = options
-  if (sortItems?.length) {
-    const key = sortItems[0]
-    const order = sortDesc[0] ? 'desc' : 'asc'
-    sortBy.value = `${key}_${order}`
-    sortOrder.value = order
-  }
-  loadPatients()
-}
-
-function toggleSortOrder() {
-  const newOrder = sortOrder.value === 'asc' ? 'desc' : 'asc'
-  sortOrder.value = newOrder
-  const baseField = sortBy.value.split('_').slice(0, -1).join('_') || 'created_at'
-  sortBy.value = `${baseField}_${newOrder}`
-  loadPatients()
-}
-
 function goToPatientDetails(patient) {
   router.push(`/admin/patients/${patient.id}`)
 }
 
-// Utility functions
 function formatSex(sex) {
   if (!sex) return '—'
   return sex.charAt(0).toUpperCase() + sex.slice(1).toLowerCase()
@@ -801,11 +616,7 @@ function formatSex(sex) {
 
 function formatHivStatus(status) {
   if (!status) return '—'
-  const statusMap = {
-    'REACTIVE': 'Reactive',
-    'NON_REACTIVE': 'Non-Reactive',
-    'INDETERMINATE': 'Indeterminate'
-  }
+  const statusMap = { 'REACTIVE': 'Reactive', 'NON_REACTIVE': 'Non-Reactive', 'INDETERMINATE': 'Indeterminate' }
   return statusMap[status] || status
 }
 
@@ -815,56 +626,30 @@ function calculateAge(dateString) {
   const birthDate = new Date(dateString)
   let age = today.getFullYear() - birthDate.getFullYear()
   const monthDiff = today.getMonth() - birthDate.getMonth()
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--
-  }
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--
   return age
 }
 
 function formatDate(dateString, mask = false) {
   if (!dateString) return '—'
-  if (mask) {
-    return '**/**/****'
-  }
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  if (mask) return '**/**/****'
+  return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function formatDateTime(dateString) {
   if (!dateString) return '—'
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric'
-  })
+  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function getHivStatusColor(status) {
-  const colors = {
-    'REACTIVE': 'warning',
-    'NON_REACTIVE': 'success',
-    'INDETERMINATE': 'info'
-  }
+  const colors = { 'REACTIVE': 'warning', 'NON_REACTIVE': 'success', 'INDETERMINATE': 'info' }
   return colors[status] || 'grey'
 }
 
-function getHivStatusIcon(status) {
-  const icons = {
-    'REACTIVE': 'mdi-alert',
-    'NON_REACTIVE': 'mdi-check',
-    'INDETERMINATE': 'mdi-help'
-  }
-  return icons[status] || 'mdi-help'
-}
-
-// Event handlers
 function clearFilters() {
   search.value = ''
   filters.value = { hiv_status: null, sex: null }
-  sortBy.value = 'created_at_desc'
-  sortOrder.value = 'desc'
+  sortSelect.value = 'created_at_desc'
   page.value = 1
   loadPatients()
 }
@@ -877,17 +662,9 @@ function openEnrollmentDialog() {
 
 function editPatient(patient) {
   const formattedPatient = { ...patient }
-  
-  if (patient.date_of_birth) {
-    formattedPatient.date_of_birth = formatDateForInput(patient.date_of_birth)
-  }
-  if (patient.diagnosis_date) {
-    formattedPatient.diagnosis_date = formatDateForInput(patient.diagnosis_date)
-  }
-  if (patient.art_start_date) {
-    formattedPatient.art_start_date = formatDateForInput(patient.art_start_date)
-  }
-  
+  if (patient.date_of_birth) formattedPatient.date_of_birth = formatDateForInput(patient.date_of_birth)
+  if (patient.diagnosis_date) formattedPatient.diagnosis_date = formatDateForInput(patient.diagnosis_date)
+  if (patient.art_start_date) formattedPatient.art_start_date = formatDateForInput(patient.art_start_date)
   selectedPatient.value = formattedPatient
   dialogMode.value = 'edit'
   showPatientDialog.value = true
@@ -895,13 +672,9 @@ function editPatient(patient) {
 
 function formatDateForInput(dateString) {
   if (!dateString) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return dateString
-  }
-  
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString
   const date = new Date(dateString)
   if (isNaN(date.getTime())) return ''
-  
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -917,89 +690,106 @@ async function deletePatient(patient) {
       await fetchStats()
       showToast('Patient deleted successfully', 'success')
     } catch (err) {
-      console.error('Delete error:', err)
-      showToast(err.response?.data?.error || 'Failed to delete patient', 'error')
+      showToast(err.error || err.message || 'Failed to delete patient', 'error')
     } finally {
       loading.value = false
     }
   }
 }
 
+// CSV Export Function
 function exportPatientData() {
   try {
-    const exportData = patients.value.map(patient => ({
+    // Define CSV headers and data
+    const headers = [
+      'facility_code', 'first_name', 'last_name', 'middle_name', 'date_of_birth', 
+      'age', 'sex', 'contact_number', 'address', 'hiv_status', 
+      'diagnosis_date', 'art_start_date', 'latest_cd4_count', 'latest_viral_load', 'enrollment_date'
+    ]
+    
+    const csvData = patients.value.map(patient => ({
       facility_code: patient.patient_facility_code,
       first_name: patient.first_name,
       last_name: patient.last_name,
       middle_name: patient.middle_name || '',
-      date_of_birth: patient.date_of_birth,
+      date_of_birth: patient.date_of_birth ? patient.date_of_birth.split('T')[0] : '',
       age: calculateAge(patient.date_of_birth),
       sex: patient.sex,
       contact_number: patient.contact_number || '',
+      address: patient.address || '',
       hiv_status: patient.hiv_status,
-      diagnosis_date: patient.diagnosis_date || '',
-      art_start_date: patient.art_start_date || '',
+      diagnosis_date: patient.diagnosis_date ? patient.diagnosis_date.split('T')[0] : '',
+      art_start_date: patient.art_start_date ? patient.art_start_date.split('T')[0] : '',
       latest_cd4_count: patient.latest_cd4_count || '',
       latest_viral_load: patient.latest_viral_load || '',
-      enrollment_date: patient.created_at
+      enrollment_date: patient.created_at ? patient.created_at.split('T')[0] : ''
     }))
-
-    const dataStr = JSON.stringify(exportData, null, 2)
-    const dataBlob = new Blob([dataStr], { type: 'application/json' })
-    const url = URL.createObjectURL(dataBlob)
+    
+    // Convert to CSV using PapaParse
+    const csv = Papa.unparse({
+      fields: headers,
+      data: csvData.map(row => headers.map(h => row[h]))
+    })
+    
+    // Download file
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
     link.href = url
-    link.download = `patients-${new Date().toISOString().split('T')[0]}.json`
+    link.setAttribute('download', `patients_${new Date().toISOString().split('T')[0]}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    showToast('Patient data exported successfully', 'success')
+    
+    showToast(`Exported ${patients.value.length} patients successfully`, 'success')
   } catch (err) {
     console.error('Export error:', err)
     showToast('Failed to export patient data', 'error')
   }
 }
 
-async function handlePatientSaved() {
-  showPatientDialog.value = false
-  await loadPatients()
-  await fetchStats()
-  showToast('Patient saved successfully', 'success')
-}
-
-// Import Functions
+// CSV Import Functions
 function openImportDialog() {
   showImportDialog.value = true
   importFile.value = null
   importValidation.value = null
   importPreview.value = []
+  previewColumns.value = []
 }
 
 function downloadTemplate() {
-  const template = [
-    {
-      first_name: "John",
-      last_name: "Doe",
-      middle_name: "Smith",
-      date_of_birth: "1990-01-15",
-      sex: "MALE",
-      address: "123 Main St",
-      contact_number: "+1234567890",
-      hiv_status: "REACTIVE",
-      diagnosis_date: "2023-01-01",
-      art_start_date: "2023-02-01",
-      latest_cd4_count: 500,
-      latest_viral_load: 40
-    }
+  const headers = [
+    'first_name', 'last_name', 'middle_name', 'date_of_birth', 'sex', 
+    'address', 'contact_number', 'hiv_status', 'diagnosis_date', 
+    'art_start_date', 'latest_cd4_count', 'latest_viral_load'
   ]
   
-  const dataStr = JSON.stringify(template, null, 2)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(dataBlob)
+  const sampleRow = {
+    first_name: 'John',
+    last_name: 'Doe',
+    middle_name: 'Smith',
+    date_of_birth: '1990-01-15',
+    sex: 'MALE',
+    address: '123 Main St',
+    contact_number: '+1234567890',
+    hiv_status: 'REACTIVE',
+    diagnosis_date: '2023-01-01',
+    art_start_date: '2023-02-01',
+    latest_cd4_count: '500',
+    latest_viral_load: '40'
+  }
+  
+  const csv = Papa.unparse({
+    fields: headers,
+    data: [headers.map(h => sampleRow[h])]
+  })
+  
+  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' })
   const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
   link.href = url
-  link.download = 'patient-import-template.json'
+  link.setAttribute('download', 'patient_import_template.csv')
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -1012,62 +802,78 @@ function validateImportFile() {
     importPreview.value = []
     return
   }
-
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const data = JSON.parse(e.target.result)
+  
+  const file = importFile.value
+  const errors = []
+  
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      const data = results.data
+      const requiredFields = ['first_name', 'last_name', 'date_of_birth', 'sex', 'hiv_status']
       
-      // Validate it's an array
-      if (!Array.isArray(data)) {
-        throw new Error('File must contain an array of patients')
+      // Check if we have data
+      if (data.length === 0) {
+        errors.push('CSV file is empty')
+        importValidation.value = { valid: false, errors, count: 0 }
+        return
       }
       
-      // Validate each patient has required fields
-      const requiredFields = ['first_name', 'last_name', 'date_of_birth', 'sex', 'hiv_status']
-      const errors = []
+      // Check for required columns
+      const headers = results.meta.fields || []
+      const missingColumns = requiredFields.filter(col => !headers.includes(col))
+      if (missingColumns.length > 0) {
+        errors.push(`Missing required columns: ${missingColumns.join(', ')}`)
+      }
       
-      data.forEach((patient, index) => {
-        requiredFields.forEach(field => {
-          if (!patient[field]) {
-            errors.push(`Row ${index + 1}: Missing required field '${field}'`)
-          }
-        })
+      // Validate each row
+      data.forEach((row, index) => {
+        if (!row.first_name) errors.push(`Row ${index + 2}: Missing first_name`)
+        if (!row.last_name) errors.push(`Row ${index + 2}: Missing last_name`)
+        if (!row.date_of_birth) errors.push(`Row ${index + 2}: Missing date_of_birth`)
+        
+        // Validate date format
+        if (row.date_of_birth && !/^\d{4}-\d{2}-\d{2}$/.test(row.date_of_birth)) {
+          errors.push(`Row ${index + 2}: Invalid date format for date_of_birth. Use YYYY-MM-DD`)
+        }
         
         // Validate sex
-        if (patient.sex && !['MALE', 'FEMALE', 'OTHER'].includes(patient.sex)) {
-          errors.push(`Row ${index + 1}: Invalid sex '${patient.sex}'. Must be MALE, FEMALE, or OTHER`)
+        if (row.sex && !['MALE', 'FEMALE', 'OTHER'].includes(row.sex.toUpperCase())) {
+          errors.push(`Row ${index + 2}: Invalid sex value '${row.sex}'. Must be MALE, FEMALE, or OTHER`)
         }
         
         // Validate HIV status
-        if (patient.hiv_status && !['REACTIVE', 'NON_REACTIVE', 'INDETERMINATE'].includes(patient.hiv_status)) {
-          errors.push(`Row ${index + 1}: Invalid HIV status '${patient.hiv_status}'. Must be REACTIVE, NON_REACTIVE, or INDETERMINATE`)
+        if (row.hiv_status && !['REACTIVE', 'NON_REACTIVE', 'INDETERMINATE'].includes(row.hiv_status.toUpperCase())) {
+          errors.push(`Row ${index + 2}: Invalid hiv_status '${row.hiv_status}'. Must be REACTIVE, NON_REACTIVE, or INDETERMINATE`)
+        }
+        
+        // Validate dates if present
+        if (row.diagnosis_date && !/^\d{4}-\d{2}-\d{2}$/.test(row.diagnosis_date)) {
+          errors.push(`Row ${index + 2}: Invalid date format for diagnosis_date. Use YYYY-MM-DD`)
+        }
+        
+        if (row.art_start_date && !/^\d{4}-\d{2}-\d{2}$/.test(row.art_start_date)) {
+          errors.push(`Row ${index + 2}: Invalid date format for art_start_date. Use YYYY-MM-DD`)
         }
       })
       
+      // Set preview data (first 5 rows)
+      const previewData = data.slice(0, 5)
+      previewColumns.value = headers
+      importPreview.value = previewData
+      
       if (errors.length > 0) {
-        importValidation.value = {
-          valid: false,
-          error: errors.join('. ')
-        }
-        importPreview.value = []
+        importValidation.value = { valid: false, errors, count: data.length }
       } else {
-        importValidation.value = {
-          valid: true,
-          count: data.length
-        }
-        importPreview.value = data.slice(0, 3) // Show first 3 for preview
+        importValidation.value = { valid: true, count: data.length, errors: [] }
       }
-    } catch (err) {
-      importValidation.value = {
-        valid: false,
-        error: 'Invalid JSON file: ' + err.message
-      }
-      importPreview.value = []
+    },
+    error: (error) => {
+      errors.push(`Failed to parse CSV: ${error.message}`)
+      importValidation.value = { valid: false, errors, count: 0 }
     }
-  }
-  
-  reader.readAsText(importFile.value)
+  })
 }
 
 async function importPatients() {
@@ -1075,165 +881,131 @@ async function importPatients() {
   
   importLoading.value = true
   
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    try {
-      const patients = JSON.parse(e.target.result)
-      
-      // Import patients one by one
-      let successCount = 0
-      let failCount = 0
-      const errors = []
-      
-      for (const patient of patients) {
-        try {
-          await patientsApi.create(patient)
-          successCount++
-        } catch (err) {
-          failCount++
-          errors.push(`${patient.first_name} ${patient.last_name}: ${err.response?.data?.error || err.message}`)
+  Papa.parse(importFile.value, {
+    header: true,
+    skipEmptyLines: true,
+    complete: async (results) => {
+      try {
+        const patientsData = results.data
+        let successCount = 0
+        const importErrors = []
+        
+        for (let i = 0; i < patientsData.length; i++) {
+          const patient = patientsData[i]
+          try {
+            // Format the patient data
+            const formattedPatient = {
+              first_name: patient.first_name?.trim(),
+              last_name: patient.last_name?.trim(),
+              middle_name: patient.middle_name?.trim() || null,
+              date_of_birth: patient.date_of_birth,
+              sex: patient.sex?.toUpperCase(),
+              address: patient.address?.trim() || null,
+              contact_number: patient.contact_number?.trim() || null,
+              hiv_status: patient.hiv_status?.toUpperCase(),
+              diagnosis_date: patient.diagnosis_date || null,
+              art_start_date: patient.art_start_date || null,
+              latest_cd4_count: patient.latest_cd4_count ? parseInt(patient.latest_cd4_count) : null,
+              latest_viral_load: patient.latest_viral_load ? parseInt(patient.latest_viral_load) : null
+            }
+            
+            await patientsApi.create(formattedPatient)
+            successCount++
+          } catch (err) {
+            importErrors.push(`Row ${i + 2}: ${err.error || err.message || 'Import failed'}`)
+            console.error(`Failed to import ${patient.first_name} ${patient.last_name}:`, err)
+          }
         }
+        
+        showImportDialog.value = false
+        await loadPatients()
+        await fetchStats()
+        
+        if (successCount === patientsData.length) {
+          showToast(`Successfully imported all ${successCount} patients`, 'success')
+        } else {
+          showToast(`Imported ${successCount} of ${patientsData.length} patients. ${importErrors.length} failed.`, 'warning')
+          console.error('Import errors:', importErrors)
+        }
+      } catch (err) {
+        showToast('Failed to import patients: ' + err.message, 'error')
+      } finally {
+        importLoading.value = false
+        importFile.value = null
+        importValidation.value = null
+        importPreview.value = []
       }
-      
-      showImportDialog.value = false
-      await loadPatients()
-      await fetchStats()
-      
-      if (failCount === 0) {
-        showToast(`Successfully imported ${successCount} patients`, 'success')
-      } else {
-        showToast(`Imported ${successCount} patients, ${failCount} failed. Check console for details.`, 'warning')
-        console.error('Import errors:', errors)
-      }
-    } catch (err) {
-      showToast('Failed to import patients: ' + err.message, 'error')
-    } finally {
+    },
+    error: (error) => {
+      showToast('Failed to parse CSV: ' + error.message, 'error')
       importLoading.value = false
     }
-  }
-  
-  reader.readAsText(importFile.value)
+  })
 }
+
+async function handlePatientSaved() {
+  showPatientDialog.value = false
+  await loadPatients()
+  await fetchStats()
+  showToast('Patient saved successfully', 'success')
+}
+
+onMounted(async () => {
+  await loadPatients()
+  await fetchStats()
+})
 </script>
 
 <style scoped>
-@import '@/styles/variables.css';
+.gap-2 { gap: 8px; }
+.gap-1 { gap: 4px; }
+.ga-1 { gap: 4px; }
+.ga-2 { gap: 8px; }
 
-.gap-2 {
-  gap: var(--spacing-sm);
-}
-
-.gap-1 {
-  gap: var(--spacing-xs);
-}
-
-.ga-1 {
-  gap: 4px;
-}
-
-.ga-2 {
-  gap: 8px;
-}
-
-/* Stat card styling */
 .stat-card {
-  transition: all var(--transition-fast);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
+  transition: all 0.3s ease;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-/* Patient ID link styling */
-.patient-id-link {
-  cursor: pointer;
-  text-decoration: none;
-  transition: opacity var(--transition-fast);
-  font-weight: 600;
+.compact-field { 
+  width: 100%; 
 }
 
-.patient-id-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
+.cursor-pointer { 
+  cursor: pointer; 
 }
 
-/* Compact field styling */
-.compact-field {
-  width: 100%;
+.text-decoration-none { 
+  text-decoration: none; 
 }
 
-.compact-field :deep(.v-field) {
-  font-size: var(--font-size-sm);
+.text-decoration-none:hover { 
+  text-decoration: underline; 
 }
 
-.compact-field :deep(.v-field__input) {
-  min-height: 36px;
-  padding-top: 0;
-  padding-bottom: 0;
+.sample-csv {
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
-.compact-field :deep(.v-label) {
-  font-size: var(--font-size-sm);
+.preview-table {
+  font-size: 12px;
 }
 
-/* Filter chip styling */
-.filter-chip {
-  cursor: pointer;
-  transition: all var(--transition-fast);
+.preview-table th,
+.preview-table td {
+  padding: 8px 4px !important;
 }
 
-.filter-chip.v-chip--selected {
-  background-color: var(--color-primary) !important;
-  color: white !important;
-}
-
-/* Table styling */
-:deep(.v-data-table-header th) {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  background-color: var(--color-surface-dark);
-  padding: var(--spacing-sm) var(--spacing-md) !important;
-  white-space: nowrap;
-}
-
-:deep(.v-data-table .v-table__wrapper > table > tbody > tr > td) {
-  padding: var(--spacing-sm) var(--spacing-md) !important;
-  font-size: var(--font-size-sm);
-  border-bottom: 1px solid var(--color-divider);
-}
-
-:deep(.v-data-table .v-table__wrapper > table > tbody > tr:hover) {
-  background-color: var(--color-surface-light);
-}
-
-/* Chip styling */
-:deep(.v-chip) {
-  font-size: var(--font-size-xs);
-  height: 22px;
-}
-
-:deep(.v-chip.v-chip--size-x-small) {
-  --v-chip-height: 20px;
-  font-size: var(--font-size-xs);
-}
-
-/* Button styling */
-:deep(.v-btn--size-small) {
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.3px;
-}
-
-:deep(.v-btn--icon.v-btn--size-x-small) {
-  width: 28px;
-  height: 28px;
-}
-
-/* Toast Container and Notifications */
 .toast-container {
   position: fixed;
   top: 20px;
@@ -1260,30 +1032,30 @@ async function importPatients() {
   border-left: 4px solid;
 }
 
-.toast-success {
-  border-left-color: var(--color-success);
-  background-color: #e8f5e9;
+.toast-success { 
+  border-left-color: #4CAF50; 
+  background-color: #e8f5e9; 
 }
 
-.toast-error {
-  border-left-color: var(--color-error);
-  background-color: #ffebee;
+.toast-error { 
+  border-left-color: #B00020; 
+  background-color: #ffebee; 
 }
 
-.toast-warning {
-  border-left-color: var(--color-warning);
-  background-color: #fff3e0;
+.toast-warning { 
+  border-left-color: #FB8C00; 
+  background-color: #fff3e0; 
 }
 
-.toast-info {
-  border-left-color: var(--color-info);
-  background-color: #e3f2fd;
+.toast-info { 
+  border-left-color: #2196F3; 
+  background-color: #e3f2fd; 
 }
 
 .toast-content {
   display: flex;
   align-items: center;
-  color: var(--color-text-primary);
+  color: rgba(0, 0, 0, 0.87);
 }
 
 .toast-progress {
@@ -1295,39 +1067,23 @@ async function importPatients() {
   animation: toast-progress linear forwards;
 }
 
-.toast-success .toast-progress {
-  background-color: var(--color-success);
-}
-
-.toast-error .toast-progress {
-  background-color: var(--color-error);
-}
-
-.toast-warning .toast-progress {
-  background-color: var(--color-warning);
-}
-
-.toast-info .toast-progress {
-  background-color: var(--color-info);
-}
-
 @keyframes toast-slide-in {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
+  from { 
+    transform: translateX(100%); 
+    opacity: 0; 
   }
-  to {
-    transform: translateX(0);
-    opacity: 1;
+  to { 
+    transform: translateX(0); 
+    opacity: 1; 
   }
 }
 
 @keyframes toast-progress {
-  from {
-    width: 100%;
+  from { 
+    width: 100%; 
   }
-  to {
-    width: 0%;
+  to { 
+    width: 0%; 
   }
 }
 
@@ -1340,45 +1096,5 @@ async function importPatients() {
 .toast-leave-to {
   transform: translateX(100%);
   opacity: 0;
-}
-
-/* Dark theme support for toasts */
-:root.dark-theme .toast-success {
-  background-color: #1b5e20;
-}
-
-:root.dark-theme .toast-error {
-  background-color: #b71c1c;
-}
-
-:root.dark-theme .toast-warning {
-  background-color: #bf360c;
-}
-
-:root.dark-theme .toast-info {
-  background-color: #0d47a1;
-}
-
-:root.dark-theme .toast-content {
-  color: white;
-}
-
-/* Dark theme support */
-:root.dark-theme .stat-card {
-  background-color: var(--color-surface);
-  border-color: var(--color-border);
-}
-
-:root.dark-theme :deep(.v-data-table-header th) {
-  background-color: var(--color-surface-dark);
-  color: var(--color-text-secondary);
-}
-
-:root.dark-theme :deep(.v-data-table .v-table__wrapper > table > tbody > tr:hover) {
-  background-color: var(--color-surface-dark);
-}
-
-.cursor-pointer {
-  cursor: pointer;
 }
 </style>

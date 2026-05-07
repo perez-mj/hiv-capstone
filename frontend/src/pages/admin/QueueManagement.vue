@@ -5,7 +5,7 @@
     <div class="d-flex flex-wrap justify-space-between align-center mb-4">
       <div class="d-flex align-center">
         <div>
-          <h1 class="text-h5 text-md-h4 font-weight-bold" :style="{ color: 'var(--color-primary)' }">
+          <h1 class="text-h5 text-md-h4 font-weight-bold text-primary">
             Queue Management
           </h1>
           <p class="text-body-2 text-medium-emphasis mt-1">
@@ -15,12 +15,10 @@
       </div>
 
       <div class="d-flex gap-2 mt-2 mt-sm-0">
-        <v-btn variant="outlined" size="small" prepend-icon="mdi-refresh" @click="refreshData" :loading="loading"
-          :style="{ borderColor: 'var(--color-border)' }">
+        <v-btn variant="outlined" size="small" prepend-icon="mdi-refresh" @click="refreshData" :loading="loading">
           Refresh
         </v-btn>
-        <v-btn color="primary" size="small" prepend-icon="mdi-calendar" @click="goToCalendar"
-          :style="{ backgroundColor: 'var(--color-primary)', color: 'white' }">
+        <v-btn color="primary" size="small" prepend-icon="mdi-calendar" @click="goToCalendar">
           Calendar
         </v-btn>
       </div>
@@ -29,15 +27,11 @@
     <!-- Queue Stats -->
     <v-row class="mb-4">
       <v-col cols="6" sm="6" md="3">
-        <v-card elevation="0" border class="stat-card" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          borderLeft: '4px solid var(--color-warning)'
-        }">
+        <v-card elevation="0" variant="outlined" class="stat-card" color="warning">
           <v-card-text class="text-center pa-3">
             <v-icon color="warning" size="28" class="mb-1">mdi-clock-outline</v-icon>
             <div class="text-subtitle-2 text-medium-emphasis">Waiting</div>
-            <div class="text-h3 font-weight-bold" :style="{ color: 'var(--color-warning)' }">
+            <div class="text-h3 font-weight-bold text-warning">
               {{ stats.waiting_count || 0 }}
             </div>
           </v-card-text>
@@ -45,15 +39,11 @@
       </v-col>
 
       <v-col cols="6" sm="6" md="3">
-        <v-card elevation="0" border class="stat-card" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          borderLeft: '4px solid var(--color-info)'
-        }">
+        <v-card elevation="0" variant="outlined" class="stat-card" color="info">
           <v-card-text class="text-center pa-3">
             <v-icon color="info" size="28" class="mb-1">mdi-phone</v-icon>
             <div class="text-subtitle-2 text-medium-emphasis">Called</div>
-            <div class="text-h3 font-weight-bold" :style="{ color: 'var(--color-info)' }">
+            <div class="text-h3 font-weight-bold text-info">
               {{ stats.called_count || 0 }}
             </div>
           </v-card-text>
@@ -61,15 +51,11 @@
       </v-col>
 
       <v-col cols="6" sm="6" md="3">
-        <v-card elevation="0" border class="stat-card" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          borderLeft: '4px solid var(--color-purple)'
-        }">
+        <v-card elevation="0" variant="outlined" class="stat-card">
           <v-card-text class="text-center pa-3">
             <v-icon color="purple" size="28" class="mb-1">mdi-account-check</v-icon>
             <div class="text-subtitle-2 text-medium-emphasis">In Service</div>
-            <div class="text-h3 font-weight-bold" style="color: #9C27B0">
+            <div class="text-h3 font-weight-bold text-purple">
               {{ stats.serving_count || 0 }}
             </div>
           </v-card-text>
@@ -77,15 +63,11 @@
       </v-col>
 
       <v-col cols="6" sm="6" md="3">
-        <v-card elevation="0" border class="stat-card" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)',
-          borderLeft: '4px solid var(--color-success)'
-        }">
+        <v-card elevation="0" variant="outlined" class="stat-card" color="success">
           <v-card-text class="text-center pa-3">
             <v-icon color="success" size="28" class="mb-1">mdi-timer</v-icon>
             <div class="text-subtitle-2 text-medium-emphasis">Est. Wait Time</div>
-            <div class="text-h5 font-weight-bold" :style="{ color: 'var(--color-success)' }">
+            <div class="text-h5 font-weight-bold text-success">
               {{ estimatedWaitTime }} min
             </div>
           </v-card-text>
@@ -96,10 +78,7 @@
     <!-- Add Walk-in Patient Card -->
     <v-row class="mb-4">
       <v-col cols="12">
-        <v-card elevation="0" border :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)'
-        }">
+        <v-card elevation="0" variant="outlined">
           <v-card-text class="d-flex align-center justify-space-between pa-4">
             <div class="d-flex align-center">
               <v-icon color="primary" class="mr-3">mdi-walk</v-icon>
@@ -110,8 +89,7 @@
                 </div>
               </div>
             </div>
-            <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="openWalkinDialog"
-              :style="{ backgroundColor: 'var(--color-primary)', color: 'white' }">
+            <v-btn color="primary" size="small" prepend-icon="mdi-plus" @click="openWalkinDialog">
               Add Walk-in
             </v-btn>
           </v-card-text>
@@ -122,10 +100,7 @@
     <!-- Now Serving Banner -->
     <v-row v-if="nowServing" class="mb-4">
       <v-col cols="12">
-        <v-card class="now-serving-card" elevation="0" :style="{
-          background: 'linear-gradient(135deg, var(--color-primary) 0%, #1565C0 100%)',
-          borderRadius: 'var(--radius-md)'
-        }">
+        <v-card class="now-serving-card" elevation="0" color="primary">
           <v-card-text class="d-flex flex-wrap align-center justify-space-between pa-4">
             <div class="d-flex align-center">
               <v-icon size="48" color="white" class="mr-4">mdi-account-check</v-icon>
@@ -136,8 +111,7 @@
               </div>
             </div>
             <v-btn color="success" size="small" class="mt-2 mt-sm-0" prepend-icon="mdi-check"
-              @click="completeServing(nowServing)" :loading="actionLoading === nowServing.id"
-              :style="{ backgroundColor: 'var(--color-success)', color: 'white' }">
+              @click="completeServing(nowServing)" :loading="actionLoading === nowServing.id">
               Complete Service
             </v-btn>
           </v-card-text>
@@ -146,10 +120,7 @@
     </v-row>
 
     <!-- Search and Filters Card -->
-    <v-card elevation="0" border class="mb-4" :style="{
-      borderColor: 'var(--color-border)',
-      borderRadius: 'var(--radius-md)'
-    }">
+    <v-card elevation="0" variant="outlined" class="mb-4">
       <v-card-text class="pa-3">
         <div class="d-flex flex-wrap align-center ga-3">
           <div style="min-width: 200px; flex: 1;">
@@ -190,11 +161,10 @@
           </div>
 
           <v-btn variant="outlined" density="compact" size="small"
-            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" @click="toggleSortOrder"
-            :style="{ borderColor: 'var(--color-border)', minWidth: '36px' }" />
+            :icon="sortOrder === 'asc' ? 'mdi-sort-ascending' : 'mdi-sort-descending'" @click="toggleSortOrder" />
 
           <v-btn variant="text" color="primary" size="small" prepend-icon="mdi-filter-remove" @click="clearFilters"
-            :disabled="!hasActiveFilters" :style="{ color: 'var(--color-primary)' }">
+            :disabled="!hasActiveFilters">
             Clear
           </v-btn>
         </div>
@@ -205,31 +175,27 @@
     <v-row>
       <!-- Waiting Queue -->
       <v-col cols="12" md="4">
-        <v-card elevation="0" border class="queue-column" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)'
-        }">
-          <v-card-title class="d-flex align-center py-3 px-4" style="background-color: rgba(255, 193, 7, 0.1);">
+        <v-card elevation="0" variant="outlined" class="queue-column">
+          <v-card-title class="d-flex align-center py-3 px-4 bg-warning-lighten-5">
             <v-icon color="warning" class="mr-2">mdi-clock-outline</v-icon>
             <span class="text-subtitle-1 font-weight-medium">Waiting</span>
             <v-chip size="x-small" color="warning" class="ml-2">{{ filteredWaiting.length }}</v-chip>
             <v-spacer />
             <v-btn v-if="filteredWaiting.length > 0 && !nowServing" color="success" size="x-small"
-              prepend-icon="mdi-phone" @click="callNextPatient" :loading="actionLoading === 'next'"
-              :style="{ backgroundColor: 'var(--color-success)', color: 'white' }">
+              prepend-icon="mdi-phone" @click="callNextPatient" :loading="actionLoading === 'next'">
               Call Next
             </v-btn>
           </v-card-title>
 
-          <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+          <v-divider />
 
           <v-card-text class="pa-0 queue-list-container">
-            <v-list class="queue-list" lines="two" :style="{ background: 'transparent' }">
+            <v-list class="queue-list" lines="two" bg-color="transparent">
               <v-list-item v-for="(patient, index) in filteredWaiting" :key="patient.id"
                 :class="{ 'priority-high': patient.priority > 0 }" @click="(e) => openPatientActions(e, patient)">
                 <template v-slot:prepend>
                   <v-avatar :color="getPriorityColor(patient.priority)" size="36" class="mr-2">
-                    <span class="text-subtitle-2 font-weight-bold">{{ patient.queue_number }}</span>
+                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.queue_number }}</span>
                   </v-avatar>
                 </template>
 
@@ -282,25 +248,22 @@
 
       <!-- Called Queue -->
       <v-col cols="12" md="4">
-        <v-card elevation="0" border class="queue-column" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)'
-        }">
-          <v-card-title class="d-flex align-center py-3 px-4" style="background-color: rgba(33, 150, 243, 0.1);">
+        <v-card elevation="0" variant="outlined" class="queue-column">
+          <v-card-title class="d-flex align-center py-3 px-4 bg-info-lighten-5">
             <v-icon color="info" class="mr-2">mdi-phone</v-icon>
             <span class="text-subtitle-1 font-weight-medium">Called</span>
             <v-chip size="x-small" color="info" class="ml-2">{{ filteredCalled.length }}</v-chip>
           </v-card-title>
 
-          <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+          <v-divider />
 
           <v-card-text class="pa-0 queue-list-container">
-            <v-list class="queue-list" lines="two" :style="{ background: 'transparent' }">
+            <v-list class="queue-list" lines="two" bg-color="transparent">
               <v-list-item v-for="patient in filteredCalled" :key="patient.id" 
                 @click="(e) => openPatientActions(e, patient)">
                 <template v-slot:prepend>
                   <v-avatar color="info" size="36" class="mr-2">
-                    <span class="text-subtitle-2 font-weight-bold">{{ patient.queue_number }}</span>
+                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.queue_number }}</span>
                   </v-avatar>
                 </template>
 
@@ -334,25 +297,22 @@
 
       <!-- Serving Queue -->
       <v-col cols="12" md="4">
-        <v-card elevation="0" border class="queue-column" :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)'
-        }">
-          <v-card-title class="d-flex align-center py-3 px-4" style="background-color: rgba(156, 39, 176, 0.1);">
+        <v-card elevation="0" variant="outlined" class="queue-column">
+          <v-card-title class="d-flex align-center py-3 px-4 bg-purple-lighten-5">
             <v-icon color="purple" class="mr-2">mdi-account-check</v-icon>
             <span class="text-subtitle-1 font-weight-medium">In Service</span>
             <v-chip size="x-small" color="purple" class="ml-2">{{ filteredServing.length }}</v-chip>
           </v-card-title>
 
-          <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+          <v-divider />
 
           <v-card-text class="pa-0 queue-list-container">
-            <v-list class="queue-list" lines="two" :style="{ background: 'transparent' }">
+            <v-list class="queue-list" lines="two" bg-color="transparent">
               <v-list-item v-for="patient in filteredServing" :key="patient.id"
                 @click="(e) => openPatientActions(e, patient)">
                 <template v-slot:prepend>
                   <v-avatar color="purple" size="36" class="mr-2">
-                    <span class="text-subtitle-2 font-weight-bold">{{ patient.queue_number }}</span>
+                    <span class="text-subtitle-2 font-weight-bold text-white">{{ patient.queue_number }}</span>
                   </v-avatar>
                 </template>
 
@@ -389,21 +349,18 @@
     <!-- History Section -->
     <v-row class="mt-6">
       <v-col cols="12">
-        <v-card elevation="0" border :style="{
-          borderColor: 'var(--color-border)',
-          borderRadius: 'var(--radius-md)'
-        }">
+        <v-card elevation="0" variant="outlined">
           <v-card-title class="d-flex align-center py-3 px-4">
             <v-icon color="primary" class="mr-2">mdi-history</v-icon>
             <span class="text-subtitle-1 font-weight-medium">Today's Queue History</span>
             <v-spacer />
             <v-btn color="error" variant="text" size="small" prepend-icon="mdi-delete-sweep"
-              @click="showResetDialog" :disabled="!hasQueueEntries" :style="{ color: 'var(--color-error)' }">
+              @click="showResetDialog" :disabled="!hasQueueEntries">
               Reset Queue
             </v-btn>
           </v-card-title>
 
-          <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+          <v-divider />
 
           <v-card-text class="pa-0">
             <v-table density="compact" class="queue-history-table">
@@ -696,7 +653,6 @@ export default {
       
       let filtered = [...currentQueue]
 
-      // Apply search filter
       if (search.value) {
         const term = search.value.toLowerCase()
         filtered = filtered.filter(item =>
@@ -705,19 +661,16 @@ export default {
         )
       }
 
-      // Apply priority filter
       if (filters.value.priority === 'priority') {
         filtered = filtered.filter(item => item.priority > 0)
       } else if (filters.value.priority === 'regular') {
         filtered = filtered.filter(item => !item.priority || item.priority === 0)
       }
 
-      // Apply walk-in filter
       if (filters.value.is_walkin !== null) {
         filtered = filtered.filter(item => item.is_walkin === filters.value.is_walkin)
       }
 
-      // Apply sorting
       const [sortField, sortDir] = sortBy.value.split('_')
       const multiplier = sortDir === 'asc' ? 1 : -1
       
@@ -731,7 +684,6 @@ export default {
         })
       }
       
-      // Limit cache size
       if (cachedFilteredData.size > 50) {
         const firstKey = cachedFilteredData.keys().next().value
         cachedFilteredData.delete(firstKey)
@@ -769,79 +721,75 @@ export default {
 
     // Data Fetching Methods
     const fetchQueueData = async (forceRefresh = false) => {
-  const now = Date.now()
-  
-  if (!forceRefresh && lastQueueFetch && (now - lastQueueFetch) < QUEUE_CACHE_DURATION) {
-    return
-  }
-  
-  loading.value = true
-  try {
-    const response = await queueApi.getCurrent()
-    
-    // FIXED: Handle different response structures
-    let queueData = {}
-    
-    if (response.data?.success) {
-      queueData = response.data.data || {}
-    } else if (response.data) {
-      queueData = response.data
-    } else {
-      queueData = response
+      const now = Date.now()
+      
+      if (!forceRefresh && lastQueueFetch && (now - lastQueueFetch) < QUEUE_CACHE_DURATION) {
+        return
+      }
+      
+      loading.value = true
+      try {
+        const response = await queueApi.getCurrent()
+        
+        let queueData = {}
+        
+        if (response.data?.success) {
+          queueData = response.data.data || {}
+        } else if (response.data) {
+          queueData = response.data
+        } else {
+          queueData = response
+        }
+        
+        queue.value = {
+          waiting: queueData.waiting || [],
+          called: queueData.called || [],
+          serving: queueData.serving || []
+        }
+        nowServing.value = queueData.now_serving || null
+        stats.value = queueData.stats || { waiting_count: 0, called_count: 0, serving_count: 0 }
+        
+        lastQueueFetch = now
+        
+        const shouldFetchHistory = !lastHistoryFetch || (now - lastHistoryFetch) > HISTORY_CACHE_DURATION
+        if (shouldFetchHistory) {
+          await fetchQueueHistory()
+        }
+      } catch (error) {
+        console.error('Error fetching queue data:', error)
+        showToast('Failed to load queue data', 'error')
+      } finally {
+        loading.value = false
+      }
     }
-    
-    queue.value = {
-      waiting: queueData.waiting || [],
-      called: queueData.called || [],
-      serving: queueData.serving || []
-    }
-    nowServing.value = queueData.now_serving || null
-    stats.value = queueData.stats || { waiting_count: 0, called_count: 0, serving_count: 0 }
-    
-    lastQueueFetch = now
-    
-    // Fetch history if needed
-    const shouldFetchHistory = !lastHistoryFetch || (now - lastHistoryFetch) > HISTORY_CACHE_DURATION
-    if (shouldFetchHistory) {
-      await fetchQueueHistory()
-    }
-  } catch (error) {
-    console.error('Error fetching queue data:', error)
-    showToast('Failed to load queue data', 'error')
-  } finally {
-    loading.value = false
-  }
-}
 
-const fetchQueueHistory = async () => {
-  try {
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const response = await queueApi.getHistory({
-      start_date: today,
-      end_date: today,
-      limit: 20,
-      page: 1
-    })
+    const fetchQueueHistory = async () => {
+      try {
+        const today = format(new Date(), 'yyyy-MM-dd')
+        const response = await queueApi.getHistory({
+          start_date: today,
+          end_date: today,
+          limit: 20,
+          page: 1
+        })
 
-    // FIXED: Handle nested data structure
-    if (response.data?.success) {
-      // The data is nested in response.data.data.data
-      const historyData = response.data.data?.data || response.data?.data || []
-      history.value = historyData
-    } else if (response.data?.data) {
-      history.value = response.data.data
-    } else if (Array.isArray(response.data)) {
-      history.value = response.data
-    } else {
-      history.value = []
+        if (response.data?.success) {
+          const historyData = response.data.data?.data || response.data?.data || []
+          history.value = historyData
+        } else if (response.data?.data) {
+          history.value = response.data.data
+        } else if (Array.isArray(response.data)) {
+          history.value = response.data
+        } else {
+          history.value = []
+        }
+        
+        lastHistoryFetch = Date.now()
+      } catch (error) {
+        console.error('Error fetching queue history:', error)
+        history.value = []
+      }
     }
-    
-    lastHistoryFetch = Date.now()
-  } catch (error) {
-    console.error('Error fetching queue history:', error)
-    history.value = []
-  }
-}
 
     const fetchAppointmentTypes = async () => {
       try {
@@ -856,7 +804,6 @@ const fetchQueueHistory = async () => {
     const callPatient = async (patient) => {
       actionLoading.value = patient.id
       
-      // Optimistic update
       const waitingIndex = queue.value.waiting.findIndex(w => w.id === patient.id)
       if (waitingIndex !== -1) {
         const [movedPatient] = queue.value.waiting.splice(waitingIndex, 1)
@@ -897,7 +844,6 @@ const fetchQueueHistory = async () => {
     const startServing = async (patient) => {
       actionLoading.value = patient.id
       
-      // Optimistic update
       const calledIndex = queue.value.called.findIndex(c => c.id === patient.id)
       if (calledIndex !== -1) {
         const [movedPatient] = queue.value.called.splice(calledIndex, 1)
@@ -924,7 +870,6 @@ const fetchQueueHistory = async () => {
     const completeServing = async (patient) => {
       actionLoading.value = patient.id
       
-      // Optimistic update
       const servingIndex = queue.value.serving.findIndex(s => s.id === patient.id)
       if (servingIndex !== -1) {
         queue.value.serving.splice(servingIndex, 1)
@@ -935,7 +880,7 @@ const fetchQueueHistory = async () => {
         await queueApi.completeServing(patient.id)
         showToast(`Completed service for patient #${patient.queue_number}`, 'success')
         await fetchQueueData(true)
-        await fetchQueueHistory() // Refresh history
+        await fetchQueueHistory()
         patientMenu.show = false
       } catch (error) {
         console.error('Error completing service:', error)
@@ -946,57 +891,51 @@ const fetchQueueHistory = async () => {
       }
     }
 
-const addWalkinPatient = async () => {
-  // Validate form
-  if (!walkinForm.value?.validate()) return
-  if (!walkinData.patient) {
-    showToast('Please select a patient', 'error')
-    return
-  }
+    const addWalkinPatient = async () => {
+      if (!walkinForm.value?.validate()) return
+      if (!walkinData.patient) {
+        showToast('Please select a patient', 'error')
+        return
+      }
 
-  walkinLoading.value = true
-  try {
-    const response = await queueApi.addWalkin({
-      patient_id: walkinData.patient.id,
-      appointment_type_id: parseInt(walkinData.appointment_type_id),
-      notes: walkinData.notes
-    })
+      walkinLoading.value = true
+      try {
+        const response = await queueApi.addWalkin({
+          patient_id: walkinData.patient.id,
+          appointment_type_id: parseInt(walkinData.appointment_type_id),
+          notes: walkinData.notes
+        })
 
-    // Handle different response structures
-    let success = false
-    let queueNumber = null
-    
-    if (response?.data?.success) {
-      success = true
-      queueNumber = response.data.data?.queue_number
-    } else if (response?.success) {
-      success = true
-      queueNumber = response.data?.queue_number
-    } else if (response?.data?.queue_number) {
-      success = true
-      queueNumber = response.data.queue_number
+        let success = false
+        let queueNumber = null
+        
+        if (response?.data?.success) {
+          success = true
+          queueNumber = response.data.data?.queue_number
+        } else if (response?.success) {
+          success = true
+          queueNumber = response.data?.queue_number
+        } else if (response?.data?.queue_number) {
+          success = true
+          queueNumber = response.data.queue_number
+        }
+
+        if (success) {
+          showToast(`Walk-in patient added to queue as #${queueNumber}`, 'success')
+          closeWalkinDialog()
+          await fetchQueueData(true)
+          cachedFilteredData.clear()
+        } else {
+          showToast(response?.data?.message || 'Failed to add walk-in patient', 'error')
+        }
+      } catch (error) {
+        console.error('Error adding walk-in:', error)
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to add walk-in patient'
+        showToast(errorMessage, 'error')
+      } finally {
+        walkinLoading.value = false
+      }
     }
-
-    if (success) {
-      showToast(`Walk-in patient added to queue as #${queueNumber}`, 'success')
-      
-      // Close dialog FIRST
-      closeWalkinDialog()
-      
-      // Then refresh data
-      await fetchQueueData(true)
-      cachedFilteredData.clear()
-    } else {
-      showToast(response?.data?.message || 'Failed to add walk-in patient', 'error')
-    }
-  } catch (error) {
-    console.error('Error adding walk-in:', error)
-    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to add walk-in patient'
-    showToast(errorMessage, 'error')
-  } finally {
-    walkinLoading.value = false
-  }
-}
 
     const skipPatientConfirm = async () => {
       if (!skipPatient.value) return
@@ -1159,19 +1098,14 @@ const addWalkinPatient = async () => {
     })
 
     return {
-      // State
       loading, actionLoading, queue, nowServing, stats, history,
       search, sortBy, sortOrder, sortFields, filters,
       skipDialog, resetDialog, skipPatient, skipReason,
       walkinDialog, walkinFormValid, walkinForm, walkinLoading,
       appointmentTypes, patients, searchingPatients, walkinData,
       patientMenu, toasts,
-      
-      // Computed
       filteredWaiting, filteredCalled, filteredServing,
       estimatedWaitTime, hasQueueEntries, hasActiveFilters,
-      
-      // Methods
       removeToast, refreshData, goToCalendar,
       callPatient, callNextPatient, startServing, completeServing,
       addWalkinPatient, skipPatientConfirm, resetQueue,
@@ -1184,109 +1118,222 @@ const addWalkinPatient = async () => {
 </script>
 
 <style scoped>
-@import '@/styles/variables.css';
+/* ===== LAYOUT UTILITIES ===== */
+.gap-2 {
+  gap: 8px;
+}
 
-/* All your existing styles remain exactly the same */
-.gap-2 { gap: var(--spacing-sm); }
-.gap-1 { gap: var(--spacing-xs); }
-.ga-3 { gap: 16px; }
+.gap-1 {
+  gap: 4px;
+}
 
-.compact-field :deep(.v-field) { font-size: var(--font-size-sm); }
-.compact-field :deep(.v-field__input) { min-height: 36px; padding-top: 0; padding-bottom: 0; }
+.ga-3 {
+  gap: 16px;
+}
 
+/* ===== COMPACT FIELD ===== */
+.compact-field :deep(.v-field) {
+  font-size: 0.875rem;
+}
+
+.compact-field :deep(.v-field__input) {
+  min-height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ===== STAT CARD ===== */
 .stat-card {
   transition: transform 0.2s, box-shadow 0.2s;
-  background-color: var(--color-surface);
 }
-.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md) !important; }
 
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ===== QUEUE COLUMN ===== */
 .queue-column {
   height: calc(100vh - 400px);
   display: flex;
   flex-direction: column;
-  background-color: var(--color-surface);
   overflow: hidden;
 }
 
-.queue-list-container { flex: 1; overflow-y: auto; padding: 0; }
-.queue-list { background: transparent; }
+.queue-list-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.queue-list {
+  background: transparent;
+}
 
 .queue-list :deep(.v-list-item) {
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
   cursor: pointer;
   transition: background-color 0.2s;
   min-height: 72px;
 }
-.queue-list :deep(.v-list-item:hover) { background-color: var(--color-surface-light); }
-.queue-list :deep(.v-list-item.priority-high) { background-color: rgba(var(--color-error-rgb), 0.05); }
-.queue-list :deep(.v-list-item-title) { font-size: var(--font-size-sm); line-height: 1.4; margin-bottom: 2px; }
-.queue-list :deep(.v-list-item-subtitle) { font-size: var(--font-size-xs); line-height: 1.4; opacity: 0.8; }
-:deep(.v-avatar) { font-weight: 600; color: white; }
 
-.now-serving-card { background: linear-gradient(135deg, var(--color-primary) 0%, #1565C0 100%); }
+.queue-list :deep(.v-list-item:hover) {
+  background-color: rgba(0, 0, 0, 0.04);
+}
 
-.queue-history-table :deep(table) { width: 100%; border-collapse: collapse; }
-.queue-history-table :deep(th) {
-  font-size: var(--font-size-xs);
+.queue-list :deep(.v-list-item.priority-high) {
+  background-color: rgba(176, 0, 32, 0.05);
+}
+
+.queue-list :deep(.v-list-item-title) {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.queue-list :deep(.v-list-item-subtitle) {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  opacity: 0.8;
+}
+
+:deep(.v-avatar) {
   font-weight: 600;
-  color: var(--color-text-secondary);
-  background-color: var(--color-surface-dark);
-  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+/* ===== NOW SERVING CARD ===== */
+.now-serving-card {
+  background: linear-gradient(135deg, #2d8a08 0%, #1565C0 100%);
+}
+
+/* ===== QUEUE HISTORY TABLE ===== */
+.queue-history-table :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.queue-history-table :deep(th) {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.04);
+  padding: 8px 16px;
   text-align: left;
   white-space: nowrap;
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
-.queue-history-table :deep(td) { padding: var(--spacing-sm) var(--spacing-md); border-bottom: 1px solid var(--color-divider); font-size: var(--font-size-sm); }
-.queue-history-table :deep(tr:hover td) { background-color: var(--color-surface-light); }
-:deep(.v-chip) { font-size: var(--font-size-xs); height: 22px; }
-:deep(.v-chip.v-chip--size-x-small) { --v-chip-height: 20px; font-size: var(--font-size-xs); }
 
-.edit-dialog, .delete-dialog { border-radius: var(--radius-md); overflow: hidden; }
-.bg-primary-lighten-5 { background-color: rgba(var(--color-primary-rgb), 0.05); }
-.bg-info-lighten-5 { background-color: rgba(var(--color-info-rgb), 0.05); }
-.bg-success-lighten-5 { background-color: rgba(var(--color-success-rgb), 0.05); }
-.bg-error-lighten-5 { background-color: rgba(var(--color-error-rgb), 0.05); }
-.bg-warning-lighten-5 { background-color: rgba(var(--color-warning-rgb), 0.05); }
+.queue-history-table :deep(td) {
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: 0.875rem;
+}
 
+.queue-history-table :deep(tr:hover td) {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* ===== DIALOGS ===== */
+.edit-dialog,
+.delete-dialog {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ===== BACKGROUND LIGHTEN CLASSES ===== */
+.bg-primary-lighten-5 {
+  background-color: rgba(45, 138, 8, 0.05);
+}
+
+.bg-info-lighten-5 {
+  background-color: rgba(33, 150, 243, 0.1);
+}
+
+.bg-success-lighten-5 {
+  background-color: rgba(76, 175, 80, 0.05);
+}
+
+.bg-error-lighten-5 {
+  background-color: rgba(176, 0, 32, 0.05);
+}
+
+.bg-warning-lighten-5 {
+  background-color: rgba(255, 193, 7, 0.1);
+}
+
+.bg-purple-lighten-5 {
+  background-color: rgba(156, 39, 176, 0.1);
+}
+
+/* ===== PATIENT ACTIONS MENU ===== */
 .patient-actions-menu {
   min-width: 200px;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
-.patient-actions-menu :deep(.v-list-item) { min-height: 40px; padding: 0 var(--spacing-md); }
-.patient-actions-menu :deep(.v-list-item-title) { font-size: var(--font-size-sm); }
 
+.patient-actions-menu :deep(.v-list-item) {
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.patient-actions-menu :deep(.v-list-item-title) {
+  font-size: 0.875rem;
+}
+
+/* ===== TOAST NOTIFICATIONS ===== */
 .toast-container {
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: var(--z-toast);
+  z-index: 9999;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 8px;
   pointer-events: none;
 }
+
 .toast {
   position: relative;
   min-width: 300px;
   max-width: 400px;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background-color: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  padding: 12px 16px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   pointer-events: auto;
   overflow: hidden;
-  animation: toast-slide-in var(--transition-normal);
+  animation: toast-slide-in 0.3s ease;
   border-left: 4px solid;
 }
-.toast-success { border-left-color: var(--color-success); background-color: #e8f5e9; }
-.toast-error { border-left-color: var(--color-error); background-color: #ffebee; }
-.toast-warning { border-left-color: var(--color-warning); background-color: #fff3e0; }
-.toast-info { border-left-color: var(--color-info); background-color: #e3f2fd; }
-.toast-content { display: flex; align-items: center; color: var(--color-text-primary); }
+
+.toast-success {
+  border-left-color: #4CAF50;
+  background-color: #e8f5e9;
+}
+
+.toast-error {
+  border-left-color: #B00020;
+  background-color: #ffebee;
+}
+
+.toast-warning {
+  border-left-color: #FB8C00;
+  background-color: #fff3e0;
+}
+
+.toast-info {
+  border-left-color: #2196F3;
+  background-color: #e3f2fd;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  color: rgba(0, 0, 0, 0.87);
+}
+
 .toast-progress {
   position: absolute;
   bottom: 0;
@@ -1296,22 +1343,79 @@ const addWalkinPatient = async () => {
   animation: toast-progress linear forwards;
 }
 
-@keyframes toast-slide-in {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+.toast-success .toast-progress {
+  background-color: #4CAF50;
 }
-@keyframes toast-progress {
-  from { width: 100%; }
-  to { width: 0%; }
-}
-.toast-enter-active, .toast-leave-active { transition: all var(--transition-normal); }
-.toast-enter-from, .toast-leave-to { transform: translateX(100%); opacity: 0; }
 
-@media (max-width: 960px) { .queue-column { height: 500px; margin-bottom: 16px; } }
+.toast-error .toast-progress {
+  background-color: #B00020;
+}
+
+.toast-warning .toast-progress {
+  background-color: #FB8C00;
+}
+
+.toast-info .toast-progress {
+  background-color: #2196F3;
+}
+
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 960px) {
+  .queue-column {
+    height: 500px;
+    margin-bottom: 16px;
+  }
+}
+
 @media (max-width: 600px) {
-  .now-serving-card .v-card-text { flex-direction: column; text-align: center; }
-  .now-serving-card .v-icon { margin-bottom: 16px; }
-  .toast-container { left: 20px; right: 20px; }
-  .toast { min-width: auto; max-width: none; }
+  .now-serving-card .v-card-text {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .now-serving-card .v-icon {
+    margin-bottom: 16px;
+  }
+  
+  .toast-container {
+    left: 20px;
+    right: 20px;
+  }
+  
+  .toast {
+    min-width: auto;
+    max-width: none;
+  }
 }
 </style>

@@ -579,6 +579,54 @@ if (!finalPatientCode) {
       next(error);
     }
   },
+
+    async linkUserAccount(req, res, next) {
+    try {
+      const patientId = req.params.id;
+      const { user_id } = req.body;
+      
+      if (!user_id) {
+        return sendBadRequest(res, 'user_id is required');
+      }
+      
+      // Check if user exists
+      const user = await User.findById(user_id);
+      if (!user) {
+        return sendNotFound(res, 'User account not found');
+      }
+      
+      // Check if user is already linked to another patient
+      const existingPatientWithUser = await Patient.findByUserId(user_id);
+      if (existingPatientWithUser) {
+        return sendBadRequest(res, 'User account is already linked to another patient');
+      }
+      
+      // Get patient before linking for audit
+      const existingPatient = await Patient.findById(patientId);
+      if (!existingPatient) {
+        return sendNotFound(res, 'Patient not found');
+      }
+      
+      // Link the user account to the patient using the model method
+      const updatedPatient = await Patient.linkUserAccount(patientId, user_id, req.user.id);
+      
+      // Blockchain audit logging
+      blockchainAuditService.logAction(
+        'LINK',
+        'patients',
+        patientId,
+        patientId,
+        { previous_user_id: existingPatient.user_id },
+        { new_user_id: user_id },
+        `Linked user account ${user.username} to patient ${existingPatient.first_name} ${existingPatient.last_name}`,
+        req
+      ).catch(err => console.error('Blockchain audit log failed:', err));
+      
+      sendSuccess(res, 'User account linked successfully', updatedPatient);
+    } catch (error) {
+      next(error);
+    }
+  },
   
   // Import patients from CSV
   async importPatients(req, res, next) {

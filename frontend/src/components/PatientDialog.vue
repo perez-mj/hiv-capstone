@@ -3,17 +3,17 @@
   <v-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" max-width="800" persistent>
     <v-card class="patient-dialog">
       <v-card-title class="text-subtitle-1 font-weight-bold pa-4" :class="titleClass">
-        <v-icon :color="titleIconColor" size="small" class="mr-2">{{ titleIcon }}</v-icon>
+        <v-icon :icon="titleIcon" size="small" class="mr-2" :color="titleIconColor" />
         {{ dialogTitle }}
       </v-card-title>
       
-      <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+      <v-divider />
       
       <v-card-text class="pa-4">
         <v-form ref="form" @submit.prevent="savePatient">
           <!-- Patient Facility Code Section - Now Editable -->
-          <div class="section-header mb-3">
-            <v-icon color="primary" size="small" class="mr-2">mdi-barcode</v-icon>
+          <div class="d-flex align-center mb-3">
+            <v-icon icon="mdi-barcode" size="small" class="mr-2 text-primary" />
             <span class="text-caption font-weight-medium">Patient Identification</span>
           </div>
 
@@ -48,7 +48,7 @@
           </v-row>
 
           <!-- Personal Information Section -->
-          <div class="section-header mb-3 mt-2">
+          <div class="d-flex align-center mb-3 mt-2">
             <span class="text-caption font-weight-medium">Personal Information</span>
           </div>
           
@@ -161,7 +161,7 @@
           </v-row>
 
           <!-- HIV Status Section -->
-          <div class="section-header mb-3 mt-2">
+          <div class="d-flex align-center mb-3 mt-2">
             <span class="text-caption font-weight-medium">HIV Information</span>
           </div>
 
@@ -250,10 +250,10 @@
           
           <!-- Create User Account Section (for create mode only) -->
           <template v-if="mode === 'create'">
-            <v-divider class="my-3" :style="{ borderColor: 'var(--color-divider)' }" />
+            <v-divider class="my-3" />
             
-            <div class="section-header mb-3">
-              <v-icon color="success" size="small" class="mr-2">mdi-account-plus</v-icon>
+            <div class="d-flex align-center mb-3">
+              <v-icon icon="mdi-account-plus" size="small" class="mr-2 text-success" />
               <span class="text-caption font-weight-medium">User Account (Optional)</span>
             </div>
             
@@ -350,7 +350,7 @@
         </v-form>
       </v-card-text>
 
-      <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+      <v-divider />
       
       <v-card-actions class="pa-4">
         <v-spacer />
@@ -400,7 +400,7 @@ const loading = ref(false)
 
 // Form data structure
 const formData = ref({
-  patient_facility_code: '', // Added this field
+  patient_facility_code: '',
   first_name: '',
   last_name: '',
   middle_name: '',
@@ -454,12 +454,10 @@ const titleIconColor = computed(() => {
 function formatDateForInput(dateString) {
   if (!dateString) return ''
   
-  // If it's already in YYYY-MM-DD format, return as is
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
     return dateString
   }
   
-  // Try to parse the date
   const date = new Date(dateString)
   if (isNaN(date.getTime())) return ''
   
@@ -495,7 +493,6 @@ const dialogTitle = computed(() => {
 watch(() => props.modelValue, (newVal) => {
   if (newVal) {
     if (props.patient && (props.mode === 'edit' || props.mode === 'view')) {
-      // Format dates properly for the form
       formData.value = {
         patient_facility_code: props.patient.patient_facility_code || '',
         first_name: props.patient.first_name || '',
@@ -511,7 +508,6 @@ watch(() => props.modelValue, (newVal) => {
         latest_cd4_count: props.patient.latest_cd4_count || null,
         latest_viral_load: props.patient.latest_viral_load || null,
         
-        // Reset user account fields
         create_user_account: false,
         username: '',
         email: '',
@@ -519,9 +515,8 @@ watch(() => props.modelValue, (newVal) => {
         confirm_password: ''
       }
     } else {
-      // Reset to empty for create mode
       formData.value = {
-        patient_facility_code: '', // Empty for auto-generation
+        patient_facility_code: '',
         first_name: '',
         last_name: '',
         middle_name: '',
@@ -558,7 +553,6 @@ const savePatient = async () => {
   loading.value = true
   try {
     const patientData = {
-      // Include patient_facility_code if provided (will be auto-generated in backend if empty)
       patient_facility_code: formData.value.patient_facility_code || undefined,
       first_name: formData.value.first_name,
       last_name: formData.value.last_name,
@@ -574,15 +568,12 @@ const savePatient = async () => {
       latest_viral_load: formData.value.latest_viral_load ? parseInt(formData.value.latest_viral_load) : null
     }
     
-    // Add user account data if creating account
     if (props.mode === 'create' && formData.value.create_user_account) {
       patientData.create_user_account = true
       patientData.username = formData.value.username
       patientData.email = formData.value.email || null
       patientData.password_hash = formData.value.password
     }
-    
-    console.log('Sending patient data:', patientData)
     
     let response
     if (props.mode === 'create') {
@@ -591,13 +582,10 @@ const savePatient = async () => {
       response = await patientsApi.update(props.patient.id, patientData)
     }
     
-    console.log('Patient saved successfully:', response?.data)
     emit('saved', response?.data?.patient)
     closeDialog()
   } catch (error) {
     console.error('Error saving patient:', error)
-    console.error('Error details:', error.response?.data)
-    
     const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Failed to save patient'
     alert(errorMessage)
   } finally {
@@ -617,33 +605,27 @@ watch(() => formData.value.hiv_status, (newVal) => {
 </script>
 
 <style scoped>
-@import '@/styles/variables.css';
-
 .patient-dialog {
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   overflow: hidden;
 }
 
+/* Background classes - using Vuetify's built-in classes */
 .bg-primary-lighten-5 {
-  background-color: rgba(var(--color-primary-rgb), 0.05);
+  background-color: rgba(var(--v-theme-primary), 0.05);
 }
 
 .bg-info-lighten-5 {
-  background-color: rgba(var(--color-info-rgb), 0.05);
+  background-color: rgba(var(--v-theme-info), 0.05);
 }
 
 .bg-grey-lighten-4 {
-  background-color: var(--color-surface-light);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
+  background-color: rgb(var(--v-theme-surface-light));
 }
 
 /* Compact field styling */
 :deep(.v-field) {
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
 }
 
 :deep(.v-field__input) {
@@ -656,50 +638,40 @@ watch(() => formData.value.hiv_status, (newVal) => {
   --v-field-border-width: 1px;
 }
 
-/* Select styling */
 :deep(.v-select .v-field) {
   min-height: 36px;
 }
 
-/* Checkbox styling */
 :deep(.v-checkbox .v-selection-control) {
   min-height: 32px;
 }
 
 :deep(.v-checkbox .v-label) {
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
   opacity: 0.87;
 }
 
-/* Alert styling */
 :deep(.v-alert) {
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
 }
 
 :deep(.v-alert .v-alert__content) {
-  font-size: var(--font-size-xs);
+  font-size: 0.75rem;
 }
 
-/* Button styling */
 :deep(.v-btn) {
-  font-size: var(--font-size-xs);
+  font-size: 0.75rem;
   letter-spacing: 0.3px;
   text-transform: none;
 }
 
 :deep(.v-btn--variant-elevated) {
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Card title styling */
 :deep(.v-card-title) {
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
   line-height: 1.4;
-}
-
-/* Divider styling */
-:deep(.v-divider) {
-  border-color: var(--color-divider);
 }
 
 /* Responsive adjustments */
@@ -707,18 +679,5 @@ watch(() => formData.value.hiv_status, (newVal) => {
   :deep(.v-col) {
     padding: 0 4px;
   }
-}
-
-/* Dark theme support */
-:root.dark-theme .bg-grey-lighten-4 {
-  background-color: var(--color-surface-dark);
-}
-
-:root.dark-theme .bg-primary-lighten-5 {
-  background-color: rgba(var(--color-primary-rgb), 0.15);
-}
-
-:root.dark-theme .bg-info-lighten-5 {
-  background-color: rgba(var(--color-info-rgb), 0.15);
 }
 </style>

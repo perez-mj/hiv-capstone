@@ -1,15 +1,18 @@
 <!-- frontend/src/pages/admin/AppointmentsCalendar.vue -->
 <template>
-  <div class="appointments-calendar">
+  <div>
     <!-- Header Section -->
     <v-container fluid class="pa-3 pa-md-6">
       <v-row class="mb-4 align-center">
         <v-col cols="12" md="6" class="text-center text-md-left">
-          <h1 class="text-h5 text-md-h4 font-weight-medium text-primary">
-            <v-icon icon="mdi-calendar-month" class="mr-2" color="primary" size="28" />
-            Appointments Calendar
-          </h1>
-          <p class="text-caption text-medium-emphasis mt-1">Manage and track patient appointments</p>
+          <div>
+        <h1 class="text-h5 text-md-h4 font-weight-bold text-primary">
+          Appointments Calendar
+        </h1>
+        <p class="text-body-2 text-medium-emphasis mt-1">
+          View and manage all appointments
+        </p>
+      </div>
         </v-col>
 
         <v-col cols="12" md="6" class="text-center text-md-right mt-3 mt-md-0">
@@ -64,6 +67,7 @@
                     label="Appointment Type" 
                     clearable 
                     density="compact"
+                    variant="outlined"
                     hide-details
                     @update:model-value="fetchAppointments"
                   />
@@ -75,6 +79,7 @@
                     label="Status" 
                     clearable 
                     density="compact"
+                    variant="outlined"
                     hide-details
                     @update:model-value="fetchAppointments"
                   />
@@ -86,6 +91,7 @@
                     prepend-inner-icon="mdi-magnify" 
                     clearable 
                     density="compact"
+                    variant="outlined"
                     hide-details
                     @update:model-value="debouncedSearch"
                   />
@@ -256,15 +262,15 @@
       </v-card>
     </v-container>
 
-    <!-- Appointment Details Dialog (Keep from first version) -->
+    <!-- Appointment Details Dialog -->
     <v-dialog v-model="detailsDialog" max-width="500px" :fullscreen="$vuetify.display.smAndDown">
       <v-card v-if="selectedAppointment">
-        <v-toolbar color="primary" dark>
+        <v-toolbar color="primary">
           <v-toolbar-title class="text-subtitle-1">
             Appointment Details
           </v-toolbar-title>
           <v-spacer />
-          <v-btn icon dark @click="detailsDialog = false">
+          <v-btn icon @click="detailsDialog = false">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-toolbar>
@@ -373,16 +379,16 @@
       </v-card>
     </v-dialog>
 
-    <!-- Create/Edit Appointment Dialog (Keep from first version) -->
+    <!-- Create/Edit Appointment Dialog -->
     <v-dialog v-model="appointmentDialog" max-width="500px" :fullscreen="$vuetify.display.smAndDown">
       <v-card>
-        <v-toolbar :color="editingAppointment ? 'primary' : 'secondary'" dark>
+        <v-toolbar :color="editingAppointment ? 'primary' : 'secondary'">
           <v-toolbar-title class="text-subtitle-1">
             <v-icon left size="20">{{ editingAppointment ? 'mdi-pencil' : 'mdi-plus-circle' }}</v-icon>
             {{ editingAppointment ? 'Edit Appointment' : 'New Appointment' }}
           </v-toolbar-title>
           <v-spacer />
-          <v-btn icon dark @click="closeAppointmentDialog">
+          <v-btn icon @click="closeAppointmentDialog">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-toolbar>
@@ -900,28 +906,27 @@ export default {
     }
 
     const confirmAndAddToQueue = async (appointment) => {
-  confirmingId.value = appointment.id
-  try {
-    const response = await queueApi.confirmAppointment(appointment.id)
-    if (response?.data?.success !== false) {
-      showSnackbar(`Appointment #${appointment.appointment_number} confirmed and added to queue`, 'success')
-      // Refresh both queue and appointments data
-      await Promise.all([
-        fetchQueueData(),
-        fetchAppointments()
-      ])
-      detailsDialog.value = false
-    } else {
-      showSnackbar(response?.data?.message || 'Failed to confirm appointment', 'error')
+      confirmingId.value = appointment.id
+      try {
+        const response = await queueApi.confirmAppointment(appointment.id)
+        if (response?.data?.success !== false) {
+          showSnackbar(`Appointment #${appointment.appointment_number} confirmed and added to queue`, 'success')
+          await Promise.all([
+            fetchQueueData(),
+            fetchAppointments()
+          ])
+          detailsDialog.value = false
+        } else {
+          showSnackbar(response?.data?.message || 'Failed to confirm appointment', 'error')
+        }
+      } catch (error) {
+        console.error('Error confirming appointment:', error)
+        const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to confirm appointment'
+        showSnackbar(errorMessage, 'error')
+      } finally {
+        confirmingId.value = null
+      }
     }
-  } catch (error) {
-    console.error('Error confirming appointment:', error)
-    const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to confirm appointment'
-    showSnackbar(errorMessage, 'error')
-  } finally {
-    confirmingId.value = null
-  }
-}
 
     const openCreateDialog = () => {
       editingAppointment.value = false
@@ -1136,74 +1141,49 @@ export default {
 </script>
 
 <style scoped>
-.appointments-calendar {
-  background: linear-gradient(135deg, #F5F7F6 0%, #EDF2EF 100%);
-  min-height: 100vh;
-}
+/* ===== LAYOUT & VUETIFY OVERRIDES ===== */
 
+/* Text color override for primary text elements */
 .text-primary {
-  color: #1A4D3A !important;
+  color: #2d8a08 !important;
 }
 
-/* Stat Cards */
+/* ===== STAT CARDS ===== */
 .stat-card {
   transition: all 0.3s ease;
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #E0E8E4;
   cursor: pointer;
+  border-radius: 12px;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(26, 77, 58, 0.1);
+  box-shadow: 0 4px 12px rgba(45, 138, 8, 0.1) !important;
 }
 
-/* Filter Card */
-.filter-card {
-  border-radius: 12px;
-  background: white;
-  border: 1px solid #E0E8E4;
-}
-
-/* Calendar Toolbar */
-.calendar-toolbar-card {
-  border-radius: 12px;
-  background: white;
-  border: 1px solid #E0E8E4;
-}
-
-/* Calendar Card */
+/* ===== FILTER & TOOLBAR CARDS ===== */
+.filter-card,
+.calendar-toolbar-card,
 .calendar-card {
   border-radius: 12px;
-  overflow: hidden;
-  background: white;
-  border: 1px solid #E0E8E4;
 }
 
-.calendar-sheet {
-  background: white;
-}
-
-/* Day View */
+/* ===== DAY VIEW ===== */
 .day-view {
-  border-top: 1px solid #E0E8E4;
-  background-color: #FFFFFF;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .day-view .time-slot {
   display: flex;
   min-height: 100px;
-  border-bottom: 1px solid #E0E8E4;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .time-label {
   width: 100px;
   padding: 10px;
   background-color: #F8FAF9;
-  border-right: 1px solid #E0E8E4;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
   font-weight: 700;
-  color: #1A4D3A;
 }
 
 .slot-appointments {
@@ -1215,12 +1195,12 @@ export default {
 }
 
 .appointment-card {
-  border-left: 4px solid #1A4D3A !important;
+  border-left: 4px solid #2d8a08 !important;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.appointment-card:hover {
+.appointment-card.hover {
   transform: translateX(4px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
@@ -1239,30 +1219,29 @@ export default {
   font-size: 0.875rem;
 }
 
-/* Week View */
+/* ===== WEEK VIEW ===== */
 .week-view {
   display: flex;
   flex-direction: column;
-  background-color: #FFFFFF;
-  border-top: 1px solid #E0E8E4;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .week-header {
   display: grid;
   grid-template-columns: 100px repeat(7, 1fr);
-  background-color: #1A4D3A;
-  color: #FFFFFF;
-  border-left: 1px solid #1A4D3A;
+  background-color: #2d8a08;
+  border-left: 1px solid #2d8a08;
 }
 
 .week-header .day-column {
   padding: 12px;
   text-align: center;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
 }
 
 .week-header .day-column.is-today {
-  background-color: #2D5A27;
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 .day-name {
@@ -1283,17 +1262,17 @@ export default {
 .week-body {
   display: grid;
   grid-template-columns: 100px repeat(7, 1fr);
-  border-left: 1px solid #E0E8E4;
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .week-body .time-column {
   background-color: #F8FAF9;
-  border-right: 1px solid #E0E8E4;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .hour-marker, .hour-slot {
   height: 95px;
-  border-bottom: 1px solid rgba(26, 77, 58, 0.1);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1302,11 +1281,10 @@ export default {
 .hour-marker {
   font-size: 0.75rem;
   font-weight: 800;
-  color: #1A4D3A;
 }
 
 .week-body .day-column {
-  border-right: 1px solid #E0E8E4;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
   position: relative;
 }
 
@@ -1316,13 +1294,15 @@ export default {
   border-radius: 4px;
   color: white;
   margin-bottom: 2px;
-  background-color: #2D5A27;
+  background-color: #2d8a08;
   cursor: pointer;
   transition: all 0.2s ease;
+  width: 100%;
+  text-align: center;
 }
 
 .appointment-indicator:hover {
-  transform: scale(1.05);
+  transform: scale(1.02);
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
@@ -1331,21 +1311,23 @@ export default {
   font-weight: bold;
 }
 
+/* Status colors for indicators */
 .appointment-indicator.scheduled {
   background-color: #FFC107;
   color: #000;
 }
-
 .appointment-indicator.confirmed {
   background-color: #2196F3;
 }
-
 .appointment-indicator.in_progress {
-  background-color: #1A4D3A;
+  background-color: #2d8a08;
 }
-
 .appointment-indicator.completed {
   background-color: #4CAF50;
+}
+.appointment-indicator.cancelled,
+.appointment-indicator.no_show {
+  background-color: #B00020;
 }
 
 .indicator-queue {
@@ -1353,12 +1335,12 @@ export default {
   font-weight: bold;
 }
 
-/* Month View */
+/* ===== MONTH VIEW ===== */
 .month-header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background-color: #1A4D3A;
-  color: #FFFFFF;
+  background-color: #2d8a08;
+  color: white;
 }
 
 .header-day {
@@ -1373,31 +1355,30 @@ export default {
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  border-top: 1px solid #E0E8E4;
-  border-left: 1px solid #E0E8E4;
-  background-color: #FFFFFF;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .month-day {
   min-height: 120px;
   padding: 8px;
   cursor: pointer;
-  border-right: 1px solid #E0E8E4;
-  border-bottom: 1px solid #E0E8E4;
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
   transition: all 0.2s ease;
 }
 
 .month-day:hover {
-  background-color: rgba(26, 77, 58, 0.05);
+  background-color: rgba(45, 138, 8, 0.05);
 }
 
 .month-day.is-today {
-  background-color: rgba(26, 77, 58, 0.05);
-  box-shadow: inset 0 0 0 2px #1A4D3A;
+  background-color: rgba(45, 138, 8, 0.08);
+  box-shadow: inset 0 0 0 2px #2d8a08;
 }
 
 .month-day.is-today .day-number {
-  color: #1A4D3A;
+  color: #2d8a08;
   font-weight: 900;
 }
 
@@ -1418,12 +1399,12 @@ export default {
   font-size: 0.7rem;
   padding: 2px 6px;
   border-radius: 4px;
-  color: #FFFFFF;
+  color: white;
 }
 
 .bg-success { background-color: #4CAF50 !important; }
 .bg-warning { background-color: #FFC107 !important; color: #000 !important; }
-.bg-error { background-color: #F44336 !important; }
+.bg-error { background-color: #B00020 !important; }
 
 .day-appointments {
   display: flex;
@@ -1454,7 +1435,6 @@ export default {
 }
 
 .more-appointments {
-  color: #1A4D3A;
   font-size: 0.7rem;
   margin-top: 4px;
   cursor: pointer;
@@ -1464,44 +1444,12 @@ export default {
   text-decoration: underline;
 }
 
-/* Gap utility */
+/* ===== UTILITY CLASSES ===== */
 .gap-2 {
   gap: 8px;
 }
 
-/* Button Overrides */
-:deep(.v-btn--variant-text) {
-  color: #1A4D3A !important;
-}
-
-:deep(.v-btn--variant-outlined) {
-  border-color: #1A4D3A !important;
-  color: #1A4D3A !important;
-}
-
-:deep(.v-btn--variant-flat.bg-primary) {
-  background-color: #1A4D3A !important;
-}
-
-:deep(.v-btn-group .v-btn) {
-  border-color: #1A4D3A !important;
-}
-
-:deep(.v-btn-group .v-btn--active) {
-  background-color: #1A4D3A !important;
-  color: white !important;
-}
-
-/* Form Overrides */
-:deep(.v-field--focused) .v-field__field {
-  color: #1A4D3A !important;
-}
-
-:deep(.v-field--focused .v-field__outline) {
-  border-color: #1A4D3A !important;
-}
-
-/* Scrollbar */
+/* ===== SCROLLBAR ===== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -1513,15 +1461,15 @@ export default {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1A4D3A;
+  background: #2d8a08;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2D5A27;
+  background: #1e5c06;
 }
 
-/* Mobile Responsive */
+/* ===== MOBILE RESPONSIVE ===== */
 @media (max-width: 600px) {
   .appointments-calendar {
     padding-bottom: 70px;

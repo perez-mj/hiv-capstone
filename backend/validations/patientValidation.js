@@ -39,7 +39,8 @@ const validatePatientUpdate = (data) => {
     diagnosis_date: Joi.date().iso().max('now').optional().allow('', null),
     art_start_date: Joi.date().iso().optional().allow('', null),
     latest_cd4_count: Joi.number().integer().min(0).optional().allow('', null),
-    latest_viral_load: Joi.number().integer().min(0).optional().allow('', null)
+    latest_viral_load: Joi.number().integer().min(0).optional().allow('', null),
+    user_id: Joi.number().integer().optional().allow(null)  
   }).min(1);
   
   return schema.validate(data);

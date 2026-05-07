@@ -354,6 +354,32 @@ class Patient {
       monthly_registrations: monthlyRegistrations
     };
   }
+  
+    static async linkUserAccount(patientId, userId, updatedBy) {
+    // Check if patient exists
+    const patient = await this.findById(patientId);
+    if (!patient) {
+      throw new Error('Patient not found');
+    }
+    
+    // Check if patient already has a user account
+    if (patient.user_id) {
+      throw new Error('Patient already has a user account linked');
+    }
+    
+    // Update patient with user_id
+    const [result] = await pool.execute(
+      'UPDATE patients SET user_id = ?, updated_by = ?, updated_at = NOW() WHERE id = ?',
+      [userId, updatedBy, patientId]
+    );
+    
+    if (result.affectedRows === 0) {
+      throw new Error('Failed to link user account');
+    }
+    
+    // Return the updated patient
+    return await this.findById(patientId);
+  }
 
   static async getPatientSummary(patientId) {
     const patient = await this.findById(patientId);

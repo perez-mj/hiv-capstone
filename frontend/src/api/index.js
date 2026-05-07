@@ -81,7 +81,8 @@ export const patientsApi = {
   exportCSV: (params) => http.get('/patients/export/csv', {
     params,
     responseType: 'blob'
-  })
+  }),
+  linkUserAccount: (id, userId) => http.put(`/patients/${id}/link-user`, { user_id: userId })
 }
 
 // ==========================================================================================================

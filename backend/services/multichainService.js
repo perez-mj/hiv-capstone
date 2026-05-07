@@ -1,3 +1,6 @@
+const fs = require('fs').promises;
+const path = require('path');
+const os = require('os');
 const MultiChainHTTPClient = require('../config/multichain-http');
 
 class MultiChainService {
@@ -53,54 +56,83 @@ class MultiChainService {
   }
 
   async getInfo() {
-    const cacheKey = 'blockchain_info';
-    const cached = this.getCached(cacheKey);
-    if (cached) return cached;
-    
-    try {
-      const client = await this.getClient();
-      
-      if (!client || !this.initialized) {
-        throw new Error('MultiChain not initialized');
-      }
-      
-      const info = await client.call('getinfo');
-      const miningInfo = await client.call('getmininginfo');
-      const streams = await client.listStreams();
-      
-      // Calculate approximate chain size
-      let chainSize = 0;
-      try {
-        const blockchainInfo = await client.call('getblockchaininfo');
-        chainSize = blockchainInfo.size_on_disk || 0;
-      } catch (e) {
-        chainSize = (info.blocks || 0) * 1024 * 1024;
-      }
-      
-      const result = {
-        total_blocks: info.blocks || 0,
-        chain_name: info.chainname || 'omph_hiv_chain',
-        version: info.version,
-        protocol_version: info.protocolversion,
-        node_address: `${info.nodeaddress || 'localhost'}:${info.port || 7204}`,
-        connections: info.connections || 0,
-        difficulty: miningInfo.difficulty || 0,
-        mining: miningInfo.mining || false,
-        chain_size: chainSize,
-        streams: streams.length,
-        is_valid: await this.verifyIntegrity(),
-        latest_block: await this.getLatestBlock(),
-        wallet_version: info.walletversion,
-        wallet_balance: info.balance || 0
-      };
-      
-      this.setCached(cacheKey, result);
-      return result;
-    } catch (error) {
-      console.error('Error getting blockchain info:', error);
-      throw error;
-    }
+  const cacheKey = 'blockchain_info';
+  const cached = this.getCached(cacheKey);
+
+  if (cached) {
+    return cached;
   }
+
+  try {
+    const client = await this.getClient();
+
+    if (!client || !this.initialized) {
+      throw new Error('MultiChain not initialized');
+    }
+
+    const info = await client.call('getinfo');
+    const miningInfo = await client.call('getmininginfo');
+    const streams = await client.listStreams();
+
+    /*
+     * REAL chain size calculation
+     */
+    let chainSize = 0;
+
+    try {
+      const chainDir = this.getChainDirectory(
+        info.chainname || 'omph_hiv_chain'
+      );
+
+      const blocksDir = path.join(chainDir, 'blocks');
+      const chainstateDir = path.join(chainDir, 'chainstate');
+
+      const [blocksSize, chainstateSize] = await Promise.all([
+        this.getDirectorySize(blocksDir),
+        this.getDirectorySize(chainstateDir)
+      ]);
+
+      chainSize = blocksSize + chainstateSize;
+    } catch (err) {
+      console.error('Failed to calculate chain size:', err.message);
+    }
+
+    const result = {
+      total_blocks: info.blocks || 0,
+      chain_name: info.chainname || 'omph_hiv_chain',
+      version: info.version,
+      protocol_version: info.protocolversion,
+
+      node_address: `${info.nodeaddress || 'localhost'}:${info.port || 7204}`,
+
+      connections: info.connections || 0,
+
+      difficulty: miningInfo.difficulty || 0,
+
+      mining: miningInfo.mining || false,
+
+      chain_size: chainSize,
+
+      streams: streams.length,
+
+      is_valid: await this.verifyIntegrity(),
+
+      latest_block: await this.getLatestBlock(),
+
+      wallet_version: info.walletversion,
+
+      wallet_balance: info.balance || 0
+    };
+
+    this.setCached(cacheKey, result, 300000);
+
+    return result;
+
+  } catch (error) {
+    console.error('Error getting blockchain info:', error);
+    throw error;
+  }
+}
 
   async getBlocks(limit = 10, offset = 0) {
     const cacheKey = `blocks_${limit}_${offset}`;
@@ -181,7 +213,7 @@ class MultiChainService {
           
           // The items count is directly available from liststreams
           const itemsCount = stream.items || streamInfo?.items || 0;
-          const streamSize = streamInfo?.size || 0;
+          const streamSize = await this.calculateStreamSize(stream.name);
           const subscribed = streamInfo?.subscribed || stream.subscribed || false;
           
           streamDetails.push({
@@ -603,6 +635,92 @@ class MultiChainService {
     return this.getStreamItems(streamName, key, count, start);
   }
 
+  async getDirectorySize(dirPath) {
+  let totalSize = 0;
+
+  async function walk(currentPath) {
+    const entries = await fs.readdir(currentPath, {
+      withFileTypes: true
+    });
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentPath, entry.name);
+
+      try {
+        if (entry.isDirectory()) {
+          await walk(fullPath);
+        } else if (entry.isFile()) {
+          const stats = await fs.stat(fullPath);
+          totalSize += stats.size;
+        }
+      } catch (err) {
+        console.error(`Error reading ${fullPath}:`, err.message);
+      }
+    }
+  }
+
+  try {
+    await walk(dirPath);
+    return totalSize;
+  } catch (err) {
+    console.error('Error calculating directory size:', err.message);
+    return 0;
+  }
+}
+
+async calculateStreamSize(streamName) {
+  try {
+    const client = await this.getClient();
+
+    const items = await client.call(
+      'liststreamitems',
+      [streamName, false, 1000]
+    );
+
+    let totalBytes = 0;
+
+    for (const item of items) {
+      try {
+        // Count raw data size
+        if (item.data) {
+          totalBytes += Buffer.byteLength(
+            JSON.stringify(item.data),
+            'utf8'
+          );
+        }
+
+        // Count keys
+        if (item.keys) {
+          totalBytes += Buffer.byteLength(
+            JSON.stringify(item.keys),
+            'utf8'
+          );
+        }
+
+        // Count txid metadata
+        if (item.txid) {
+          totalBytes += Buffer.byteLength(item.txid, 'utf8');
+        }
+
+      } catch (err) {
+        console.error(
+          `Error sizing item in ${streamName}:`,
+          err.message
+        );
+      }
+    }
+
+    return totalBytes;
+
+  } catch (err) {
+    console.error(
+      `Error calculating stream size for ${streamName}:`,
+      err.message
+    );
+
+    return 0;
+  }
+}
   // NEW METHOD: Ensure stream exists
   async ensureStreamExists(streamName, options = {}) {
     try {
@@ -618,6 +736,21 @@ class MultiChainService {
       throw error;
     }
   }
+
+  getChainDirectory(chainName = 'omph_hiv_chain') {
+  const home = os.homedir();
+
+  switch (process.platform) {
+    case 'win32':
+      return path.join(home, 'AppData', 'Roaming', 'MultiChain', chainName);
+
+    case 'darwin':
+      return path.join(home, 'Library', 'Application Support', 'MultiChain', chainName);
+
+    default:
+      return path.join(home, '.multichain', chainName);
+  }
+}
 
   // Cache management methods
   getCached(key) {

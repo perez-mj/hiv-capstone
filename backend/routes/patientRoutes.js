@@ -19,11 +19,13 @@ router.get('/:id', protect, authorize('ADMIN', 'NURSE'), patientController.getPa
 router.get('/:id/summary', protect, authorize('ADMIN', 'NURSE'), patientController.getPatientSummary);
 router.put('/:id', protect, authorize('ADMIN', 'NURSE'), validate(validatePatientUpdate), patientController.updatePatient);
 router.delete('/:id', protect, authorize('ADMIN'), patientController.deletePatient);
+router.put('/:id/link-user', protect, authorize('ADMIN'), patientController.linkUserAccount);
 
 // ==================== PATIENT SUB-RESOURCES (ADMIN/NURSE VIEW) ====================
 router.get('/:id/appointments', protect, authorize('ADMIN', 'NURSE'), validatePagination, patientAppointmentController.getPatientAppointments);
 router.get('/:id/lab-results', protect, authorize('ADMIN', 'NURSE'), validatePagination, patientAppointmentController.getPatientLabResults);
 router.get('/:id/encounters', protect, authorize('ADMIN', 'NURSE'), validatePagination, patientAppointmentController.getPatientEncounters);
 router.get('/:id/queue-history', protect, authorize('ADMIN', 'NURSE'), validatePagination, patientAppointmentController.getPatientQueueHistory);
+
 
 module.exports = router;

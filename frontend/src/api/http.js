@@ -1,7 +1,7 @@
 // frontend/src/api/http.js
 import axios from 'axios'
 
-const API_BASE_URL = 'http://localhost:5000/api'
+const API_BASE_URL = 'http://10.240.50.99:5000/api'
 const REQUEST_TIMEOUT = 10000
 
 // Single token storage key for consistency
@@ -37,15 +37,13 @@ http.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor - EXTRACTS response.data automatically
+// Response interceptor - FIXED to return consistent structure
 http.interceptors.response.use(
   (response) => {
     if (process.env.NODE_ENV === 'development') {
       console.log(`✅ ${response.status} ${response.config.url}`)
     }
     
-    // Return the data property directly (not the whole response)
-    // Response structure: { success, message, timestamp, data, pagination? }
     return response.data
   },
   (error) => {

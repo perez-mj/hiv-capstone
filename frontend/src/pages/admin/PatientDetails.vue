@@ -1,12 +1,10 @@
-<!-- frontend/src/pages/admin/PatientDetails.vue -->
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- Header with Back Button -->
     <div class="d-flex align-center mb-4">
-      <v-btn icon="mdi-arrow-left" variant="text" size="small" @click="goBack" class="mr-2"
-        :style="{ color: 'var(--color-text-secondary)' }" />
+      <v-btn icon="mdi-arrow-left" variant="text" size="small" @click="goBack" class="mr-2" />
       <div>
-        <h1 class="text-h5 font-weight-bold" :style="{ color: 'var(--color-primary)' }">
+        <h1 class="text-h5 font-weight-bold text-primary">
           Patient Details
         </h1>
         <p class="text-body-2 text-medium-emphasis mt-1">
@@ -17,12 +15,10 @@
       <!-- Action Buttons -->
       <v-spacer />
       <div class="d-flex gap-2">
-        <v-btn variant="outlined" size="small" prepend-icon="mdi-pencil" @click="editPatient" :disabled="loading"
-          :style="{ borderColor: 'var(--color-border)' }">
+        <v-btn variant="outlined" size="small" prepend-icon="mdi-pencil" @click="editPatient" :disabled="loading">
           Edit
         </v-btn>
-        <v-btn variant="outlined" size="small" prepend-icon="mdi-history" @click="viewHistory" :disabled="loading"
-          :style="{ borderColor: 'var(--color-border)' }">
+        <v-btn variant="outlined" size="small" prepend-icon="mdi-history" @click="viewHistory" :disabled="loading">
           History
         </v-btn>
       </div>
@@ -34,8 +30,7 @@
     </div>
 
     <!-- Error State -->
-    <v-alert v-else-if="error" type="error" variant="tonal" class="mb-4"
-      :style="{ backgroundColor: 'var(--color-error-light)', color: 'var(--color-error-dark)' }">
+    <v-alert v-else-if="error" type="error" variant="tonal" class="mb-4">
       {{ error }}
       <template v-slot:append>
         <v-btn color="error" size="small" variant="text" @click="loadPatientData">
@@ -47,8 +42,7 @@
     <!-- Patient Details Content -->
     <template v-else-if="patient">
       <!-- Patient ID Banner -->
-      <v-card class="mb-4" elevation="0" border
-        :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
+      <v-card class="mb-4" elevation="0" variant="outlined">
         <v-card-text class="pa-4">
           <div class="d-flex flex-wrap align-center justify-space-between">
             <div class="d-flex align-center">
@@ -65,7 +59,7 @@
                 <div class="d-flex flex-wrap gap-3 mt-1">
                   <span class="text-caption text-medium-emphasis">
                     <span class="font-weight-medium">ID:</span>
-                    <span :style="{ color: 'var(--color-info)' }">{{ patient.patient_facility_code || '—' }}</span>
+                    <span class="text-info">{{ patient.patient_facility_code || '—' }}</span>
                   </span>
                   <span class="text-caption text-medium-emphasis">
                     <span class="font-weight-medium">DOB:</span> {{ formatDate(patient.date_of_birth) }}
@@ -111,7 +105,7 @@
             </div>
             <div v-else class="mt-2 mt-sm-0">
               <v-btn size="small" color="primary" prepend-icon="mdi-account-plus" @click="openCreateAccountDialog"
-                :loading="checkingAccount" :style="{ backgroundColor: 'var(--color-primary)' }">
+                :loading="checkingAccount">
                 Create Account
               </v-btn>
             </div>
@@ -123,12 +117,11 @@
       <v-row>
         <!-- Left Column - Personal Information -->
         <v-col cols="12" md="6">
-          <v-card elevation="0" border class="h-100"
-            :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
+          <v-card elevation="0" variant="outlined" class="h-100">
             <v-card-title class="py-3 px-4 text-subtitle-1 font-weight-medium">
               Personal Information
             </v-card-title>
-            <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+            <v-divider />
             <v-card-text class="pa-4">
               <div class="info-grid">
                 <div class="info-item">
@@ -150,12 +143,11 @@
 
         <!-- Right Column - Medical Information -->
         <v-col cols="12" md="6">
-          <v-card elevation="0" border class="h-100"
-            :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
+          <v-card elevation="0" variant="outlined" class="h-100">
             <v-card-title class="py-3 px-4 text-subtitle-1 font-weight-medium">
               Medical Information
             </v-card-title>
-            <v-divider :style="{ borderColor: 'var(--color-divider)' }" />
+            <v-divider />
             <v-card-text class="pa-4">
               <div class="info-grid">
                 <div class="info-item">
@@ -195,8 +187,7 @@
       <!-- Quick Stats Cards -->
       <v-row class="mt-2">
         <v-col cols="12" sm="6" md="3" v-for="stat in quickStats" :key="stat.label">
-          <v-card elevation="0" border
-            :style="{ borderColor: 'var(--color-border)', borderRadius: 'var(--radius-md)' }">
+          <v-card elevation="0" variant="outlined">
             <v-card-text class="pa-3 d-flex align-center">
               <v-avatar size="40" :color="stat.color" class="mr-3">
                 <v-icon :icon="stat.icon" size="24" color="white"></v-icon>
@@ -211,7 +202,7 @@
       </v-row>
     </template>
 
-    <!-- Create Account Dialog - Fixed Design -->
+    <!-- Create Account Dialog -->
     <v-dialog v-model="showAccountDialog" max-width="500px" persistent>
       <v-card class="dialog-card">
         <v-card-title class="dialog-title pa-4">
@@ -229,7 +220,7 @@
 
         <v-card-text class="pa-4">
           <v-form ref="accountFormRef" v-model="accountFormValid" @submit.prevent="saveAccount">
-            <!-- Auto-generated Username Field -->
+            <!-- Username Field -->
             <div class="mb-4">
               <div class="text-subtitle-2 mb-2">Username</div>
               <div class="d-flex align-center gap-2">
@@ -298,7 +289,7 @@
       </v-card>
     </v-dialog>
 
-    <!-- Manage Account Dialog - Fixed Design -->
+    <!-- Manage Account Dialog -->
     <v-dialog v-model="showManageDialog" max-width="500px" persistent>
       <v-card class="dialog-card">
         <v-card-title class="dialog-title pa-4">
@@ -334,8 +325,7 @@
             <div class="mb-4">
               <div class="text-subtitle-2 mb-2">Account Status</div>
               <v-select v-model="manageFormData.is_active" :items="statusOptions" item-title="title" item-value="value"
-                density="comfortable" variant="outlined" hide-details
-                :bg-color="manageFormData.is_active ? 'bg-success-lighten-5' : 'bg-error-lighten-5'">
+                density="comfortable" variant="outlined" hide-details>
                 <template v-slot:item="{ props, item }">
                   <v-list-item v-bind="props">
                     <template v-slot:prepend>
@@ -383,7 +373,7 @@
       </v-card>
     </v-dialog>
 
-    <!-- Password Reset Dialog - Fixed Design -->
+    <!-- Password Reset Dialog -->
     <v-dialog v-model="showResetDialog" max-width="450px" persistent>
       <v-card class="dialog-card">
         <v-card-title class="dialog-title pa-4">
@@ -513,7 +503,7 @@ const manageFormValid = ref(false)
 const manageFormData = ref({
   username: '',
   email: '',
-  is_active: true // Use boolean
+  is_active: true
 })
 
 // Password reset dialog
@@ -552,7 +542,7 @@ const resetConfirmPasswordRules = [
   v => v === resetFormData.value.password || 'Passwords do not match'
 ]
 
-// Status options for select - use boolean values
+// Status options for select
 const statusOptions = [
   { title: 'Active', value: true, color: 'success', icon: 'mdi-check-circle' },
   { title: 'Inactive', value: false, color: 'error', icon: 'mdi-close-circle' }
@@ -564,17 +554,14 @@ function calculatePasswordStrength(password) {
   
   let score = 0
   
-  // Length check
   if (password.length >= 8) score++
   if (password.length >= 12) score++
   
-  // Character variety checks
   if (/[a-z]/.test(password)) score++
   if (/[A-Z]/.test(password)) score++
   if (/[0-9]/.test(password)) score++
   if (/[^a-zA-Z0-9]/.test(password)) score++
   
-  // Cap at 4
   score = Math.min(score, 4)
   
   const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong']
@@ -695,20 +682,18 @@ async function loadPatientData() {
   error.value = ''
 
   try {
-    // Load patient details
     const response = await patientsApi.getById(patientId)
     
-    // The patient data is directly in response.data
-    if (response && response.data && response.data.id) {
+    // Handle backend response structure: { success, message, timestamp, data }
+    if (response && response.success && response.data) {
       patient.value = response.data
-      console.log('Patient loaded:', patient.value)
       await checkUserAccount()
     } else {
       throw new Error('Invalid patient data received')
     }
   } catch (err) {
     console.error('Error loading patient:', err)
-    error.value = err.response?.data?.message || err.message || 'Failed to load patient details'
+    error.value = err.message || err.response?.data?.message || 'Failed to load patient details'
     showToast(error.value, 'error')
   } finally {
     loading.value = false
@@ -725,8 +710,9 @@ async function checkUserAccount() {
 
   try {
     const response = await usersApi.getById(patient.value.user_id)
-    if (response.data.success) {
-      userAccount.value = response.data.user
+    // Handle backend response structure: { success, message, data }
+    if (response && response.success && response.data) {
+      userAccount.value = response.data
     } else {
       userAccount.value = null
     }
@@ -768,10 +754,9 @@ function openCreateAccountDialog() {
     password: '',
     confirmPassword: ''
   }
-  generateUsername() // Auto-generate username
+  generateUsername()
   showAccountDialog.value = true
   
-  // Reset form validation on next tick
   setTimeout(() => {
     if (accountFormRef.value) {
       accountFormRef.value.resetValidation()
@@ -787,7 +772,6 @@ function openManageAccountDialog() {
   }
   showManageDialog.value = true
   
-  // Reset form validation on next tick
   setTimeout(() => {
     if (manageFormRef.value) {
       manageFormRef.value.resetValidation()
@@ -801,32 +785,59 @@ async function saveAccount() {
   const { valid } = await accountFormRef.value.validate()
   if (!valid) return
 
+  // Prevent creating account if patient already has one
+  if (patient.value.user_id) {
+    showToast('This patient already has a user account', 'warning')
+    showAccountDialog.value = false
+    return
+  }
+
   accountLoading.value = true
 
   try {
-    // Create new user account for patient - send is_active as boolean
-    const response = await usersApi.create({
+    // Step 1: Create the user account
+    const createResponse = await usersApi.create({
       username: accountFormData.value.username,
       email: accountFormData.value.email,
       password: accountFormData.value.password,
-      role: 'PATIENT',
-      patient_id: patient.value.id,
-      is_active: true // Send as boolean
+      role: 'PATIENT'
     })
     
-    if (response.data.success) {
-      // Update patient's user_id in local state
-      patient.value.user_id = response.data.user.id
-      
-      // Refresh user account data
-      await checkUserAccount()
-      
-      showToast('Account created successfully', 'success')
-      showAccountDialog.value = false
+    console.log('Create response:', createResponse)
+    
+    // Check if creation was successful
+    if (!createResponse || !createResponse.success) {
+      throw new Error(createResponse?.message || 'Failed to create user account')
     }
+    
+    // Extract user ID from response.data
+    const newUserId = createResponse.data?.id
+    
+    if (!newUserId) {
+      throw new Error('No user ID returned from creation')
+    }
+    
+    console.log('New user ID:', newUserId)
+    
+    // Step 2: Link the user account to the patient
+    const linkResponse = await patientsApi.linkUserAccount(patient.value.id, newUserId)
+    
+    console.log('Link response:', linkResponse)
+    
+    if (!linkResponse || !linkResponse.success) {
+      throw new Error(linkResponse?.message || 'Failed to link account to patient')
+    }
+    
+    // Step 3: Refresh patient data to show the linked account
+    await loadPatientData()
+    
+    showToast(`Account successfully created and linked to ${patient.value.first_name} ${patient.value.last_name}`, 'success')
+    showAccountDialog.value = false
+    
   } catch (err) {
     console.error('Error creating account:', err)
-    showToast(err.response?.data?.error || 'Failed to create account', 'error')
+    const errorMessage = err.message || err.error || 'Failed to create account'
+    showToast(errorMessage, 'error')
   } finally {
     accountLoading.value = false
   }
@@ -843,19 +854,19 @@ async function updateAccount() {
   try {
     const response = await usersApi.update(userAccount.value.id, {
       email: manageFormData.value.email,
-      is_active: manageFormData.value.is_active // This is already a boolean
+      is_active: manageFormData.value.is_active
     })
     
-    if (response.data.success) {
-      // Refresh user account data
+    if (response && response.success) {
       await checkUserAccount()
-      
       showToast('Account updated successfully', 'success')
       showManageDialog.value = false
+    } else {
+      throw new Error(response?.message || 'Failed to update account')
     }
   } catch (err) {
     console.error('Error updating account:', err)
-    showToast(err.response?.data?.error || 'Failed to update account', 'error')
+    showToast(err.message || err.response?.data?.error || 'Failed to update account', 'error')
   } finally {
     accountLoading.value = false
   }
@@ -866,7 +877,6 @@ function resetPassword() {
   resetFormData.value = { password: '', confirmPassword: '' }
   showResetDialog.value = true
   
-  // Reset form validation on next tick
   setTimeout(() => {
     if (resetFormRef.value) {
       resetFormRef.value.resetValidation()
@@ -887,13 +897,15 @@ async function confirmResetPassword() {
       password: resetFormData.value.password
     })
     
-    if (response.data.success) {
+    if (response && response.success) {
       showToast('Password reset successfully', 'success')
       showResetDialog.value = false
+    } else {
+      throw new Error(response?.message || 'Failed to reset password')
     }
   } catch (err) {
     console.error('Error resetting password:', err)
-    showToast(err.response?.data?.error || 'Failed to reset password', 'error')
+    showToast(err.message || err.response?.data?.error || 'Failed to reset password', 'error')
   } finally {
     resetPasswordLoading.value = false
   }
@@ -967,21 +979,28 @@ function formatDateTime(dateString) {
 </script>
 
 <style scoped>
-@import '@/styles/variables.css';
-
+/* ===== LAYOUT UTILITIES ===== */
 .gap-2 {
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .gap-3 {
-  gap: var(--spacing-md);
+  gap: 16px;
 }
 
-/* Info grid layout */
+.gap-1 {
+  gap: 4px;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+/* ===== INFO GRID ===== */
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-md);
+  gap: 16px;
 }
 
 .info-item {
@@ -994,18 +1013,16 @@ function formatDateTime(dateString) {
 }
 
 .info-label {
-  margin-bottom: var(--spacing-xs);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  font-size: 0.75rem;
 }
 
 .info-value {
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
   font-weight: 500;
-  color: var(--color-text-primary);
 }
 
-/* Height utilities */
+/* ===== UTILITIES ===== */
 .h-100 {
   height: 100%;
 }
@@ -1014,7 +1031,15 @@ function formatDateTime(dateString) {
   cursor: pointer;
 }
 
-/* Dialog Styles */
+.flex-grow-1 {
+  flex-grow: 1;
+}
+
+.rounded {
+  border-radius: 8px;
+}
+
+/* ===== DIALOG STYLES ===== */
 .dialog-card {
   border-radius: 16px !important;
   overflow: hidden;
@@ -1024,8 +1049,6 @@ function formatDateTime(dateString) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-divider);
 }
 
 .generate-btn {
@@ -1037,13 +1060,11 @@ function formatDateTime(dateString) {
 .cancel-btn {
   min-width: 100px !important;
   border-radius: 8px !important;
-  border: 1px solid var(--color-border) !important;
 }
 
 .save-btn {
   min-width: 140px !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.2) !important;
 }
 
 .reset-btn {
@@ -1051,7 +1072,12 @@ function formatDateTime(dateString) {
   height: 48px !important;
 }
 
-/* Toast Container and Notifications */
+/* ===== BACKGROUND COLOR UTILITIES ===== */
+.bg-grey-lighten-4 {
+  background-color: #f5f5f5;
+}
+
+/* ===== TOAST NOTIFICATIONS ===== */
 .toast-container {
   position: fixed;
   top: 24px;
@@ -1085,29 +1111,28 @@ function formatDateTime(dateString) {
 }
 
 .toast-success {
-  border-left-color: var(--color-success);
+  border-left-color: #4CAF50;
   background: linear-gradient(135deg, #f0f9f0 0%, #ffffff 100%);
 }
 
 .toast-error {
-  border-left-color: var(--color-error);
+  border-left-color: #B00020;
   background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
 }
 
 .toast-warning {
-  border-left-color: var(--color-warning);
+  border-left-color: #FB8C00;
   background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
 }
 
 .toast-info {
-  border-left-color: var(--color-info);
+  border-left-color: #2196F3;
   background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
 }
 
 .toast-content {
   display: flex;
   align-items: flex-start;
-  color: var(--color-text-primary);
   position: relative;
   z-index: 1;
 }
@@ -1118,14 +1143,12 @@ function formatDateTime(dateString) {
 
 .toast-title {
   font-weight: 600;
-  font-size: var(--font-size-sm);
+  font-size: 0.875rem;
   margin-bottom: 4px;
-  color: var(--color-text-primary);
 }
 
 .toast-description {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 
@@ -1139,19 +1162,19 @@ function formatDateTime(dateString) {
 }
 
 .toast-success .toast-progress {
-  background: var(--color-success);
+  background: #4CAF50;
 }
 
 .toast-error .toast-progress {
-  background: var(--color-error);
+  background: #B00020;
 }
 
 .toast-warning .toast-progress {
-  background: var(--color-warning);
+  background: #FB8C00;
 }
 
 .toast-info .toast-progress {
-  background: var(--color-info);
+  background: #2196F3;
 }
 
 @keyframes toast-slide-in {
@@ -1159,7 +1182,6 @@ function formatDateTime(dateString) {
     transform: translateX(100%) scale(0.8);
     opacity: 0;
   }
-
   to {
     transform: translateX(0) scale(1);
     opacity: 1;
@@ -1170,7 +1192,6 @@ function formatDateTime(dateString) {
   from {
     width: 100%;
   }
-
   to {
     width: 0%;
   }
@@ -1185,84 +1206,5 @@ function formatDateTime(dateString) {
 .toast-leave-to {
   transform: translateX(100%) scale(0.8);
   opacity: 0;
-}
-
-/* Dark theme support */
-:root.dark-theme .toast {
-  background: #2d2d2d;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-}
-
-:root.dark-theme .toast-success {
-  background: linear-gradient(135deg, #1a3b1a 0%, #2d2d2d 100%);
-}
-
-:root.dark-theme .toast-error {
-  background: linear-gradient(135deg, #3b1a1a 0%, #2d2d2d 100%);
-}
-
-:root.dark-theme .toast-warning {
-  background: linear-gradient(135deg, #3b2b1a 0%, #2d2d2d 100%);
-}
-
-:root.dark-theme .toast-info {
-  background: linear-gradient(135deg, #1a2b3b 0%, #2d2d2d 100%);
-}
-
-:root.dark-theme .toast-title {
-  color: #ffffff;
-}
-
-:root.dark-theme .toast-description {
-  color: #b0b0b0;
-}
-
-:root.dark-theme .info-value {
-  color: var(--color-text-primary);
-}
-
-:root.dark-theme .info-label {
-  color: var(--color-text-secondary);
-}
-
-:root.dark-theme .dialog-card {
-  background: var(--color-surface);
-}
-
-:root.dark-theme .generate-btn {
-  background: var(--color-primary-dark) !important;
-}
-
-:root.dark-theme .bg-grey-lighten-4 {
-  background-color: #2d2d2d !important;
-}
-
-:root.dark-theme .bg-success-lighten-5 {
-  background-color: #1a3b1a !important;
-}
-
-:root.dark-theme .bg-error-lighten-5 {
-  background-color: #3b1a1a !important;
-}
-
-.flex-grow-1 {
-  flex-grow: 1;
-}
-
-/* Background color utilities */
-.bg-grey-lighten-4 {
-  background-color: #f5f5f5;
-}
-
-.bg-success-lighten-5 {
-  background-color: #e8f5e9;
-}
-
-.bg-error-lighten-5 {
-  background-color: #ffebee;
-}
-
-.rounded {
-  border-radius: 8px;
 }
 </style>
