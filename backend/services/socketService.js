@@ -1,3 +1,4 @@
+// backend/services/socketService.js
 class SocketService {
   constructor() {
     this.io = null;

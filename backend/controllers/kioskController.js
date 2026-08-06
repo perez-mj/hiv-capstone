@@ -1,5 +1,6 @@
 // backend/controllers/kioskController.js
 const kioskService = require('../services/kioskService');
+const printerService = require('../services/printerService');
 
 class KioskController {
 
@@ -36,14 +37,13 @@ class KioskController {
     } catch (err) {
       console.error('Kiosk check-in error:', err.message);
       
-      // Map specific errors to appropriate status codes
       let statusCode = 400;
       let message = err.message;
 
       if (err.message.includes('not found')) {
         statusCode = 404;
       } else if (err.message.includes('already checked in')) {
-        statusCode = 409; // Conflict
+        statusCode = 409;
       }
 
       return res.status(statusCode).json({
@@ -71,7 +71,6 @@ class KioskController {
         office 
       } = req.body;
 
-      // Validate required fields
       const requiredFields = ['first_name', 'last_name', 'birth_date', 'gender', 'contact_number'];
       const missingFields = requiredFields.filter(field => !req.body[field]);
 
@@ -82,7 +81,6 @@ class KioskController {
         });
       }
 
-      // Validate birth date (must be valid date)
       if (isNaN(Date.parse(birth_date))) {
         return res.status(400).json({
           success: false,
@@ -90,7 +88,6 @@ class KioskController {
         });
       }
 
-      // Validate gender
       if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
         return res.status(400).json({
           success: false,
@@ -98,7 +95,6 @@ class KioskController {
         });
       }
 
-      // Validate phone format
       if (!/^[0-9+\-\s()]{7,20}$/.test(contact_number)) {
         return res.status(400).json({
           success: false,
@@ -125,7 +121,6 @@ class KioskController {
     } catch (err) {
       console.error('Kiosk walk-in error:', err.message);
       
-      // Check if patient already exists
       if (err.message.includes('already registered')) {
         return res.status(409).json({
           success: false,
@@ -148,7 +143,6 @@ class KioskController {
     try {
       const { office } = req.params;
 
-      // Validate office
       if (!['testing', 'treatment'].includes(office)) {
         return res.status(400).json({
           success: false,
@@ -184,6 +178,81 @@ class KioskController {
       return res.status(500).json({
         status: 'error',
         message: err.message
+      });
+    }
+  }
+
+  /**
+   * Print queue slip ticket
+   * POST /api/kiosk/print
+   */
+  async print(req, res) {
+    try {
+      const { ticketData } = req.body;
+      if (!ticketData || !ticketData.queue_number) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing or invalid ticketData payload.'
+        });
+      }
+
+      const printResult = await printerService.printTicket(ticketData);
+      return res.json({
+        success: true,
+        ...printResult
+      });
+    } catch (err) {
+      console.error('Kiosk print error:', err.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Printing failed: ' + err.message
+      });
+    }
+  }
+
+  /**
+   * Get thermal printer connection status
+   * GET /api/kiosk/printer-status
+   */
+  async printerStatus(req, res) {
+    try {
+      const status = await printerService.detectPrinter();
+      return res.json({
+        success: true,
+        status
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        message: err.message
+      });
+    }
+  }
+
+  /**
+   * Execute printer test sequence
+   * POST /api/kiosk/printer-test
+   */
+  async printerTest(req, res) {
+    try {
+      const testData = {
+        office: 'TESTING',
+        queue_number: 'T-000',
+        patient_name: 'TEST PATIENT',
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        wait_time: '0 minutes'
+      };
+      const result = await printerService.printTicket(testData);
+      return res.json({
+        success: true,
+        message: 'Test slip issued',
+        ...result
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        message: 'Printer test failed: ' + err.message
       });
     }
   }

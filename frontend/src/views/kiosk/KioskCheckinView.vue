@@ -329,7 +329,7 @@
       <v-card style="background: linear-gradient(135deg, rgb(var(--v-theme-success)), rgb(var(--v-theme-primary)));">
         <v-card-text class="text-center pa-8">
           <v-icon size="80" color="white" class="mb-4" :style="{ opacity: 0.95 }">
-            mdi-check-circle
+            mdi-printer-check
           </v-icon>
           <div class="text-h4 text-white font-weight-bold">Check-in Successful!</div>
           <div class="text-h1 text-white font-weight-bold my-4">
@@ -341,8 +341,8 @@
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.75 }">
             Position in queue: {{ kioskStore.ticketPosition || '1' }}
           </div>
-          <div class="text-body-2 text-white mt-1" :style="{ opacity: 0.75 }">
-            Please wait for your turn. You will be called shortly.
+          <div class="text-body-2 text-white mt-1" :style="{ opacity: 0.9 }">
+            Printing your queue slip... Please take your ticket!
           </div>
           
           <v-btn
@@ -387,6 +387,7 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import VirtualKeyboard from '@/components/common/VirtualKeyboard.vue'
 import { useKioskStore } from '@/stores/kioskStore'
 import { storeToRefs } from 'pinia'
+import printerService from '@/services/printerService'
 
 // Store
 const kioskStore = useKioskStore()
@@ -428,11 +429,23 @@ const walkinData = reactive({
   address: ''
 })
 
+// Dispatch Print Job
+const issuePrintTicket = async () => {
+  const payload = {
+    office: kioskStore.ticketOffice || 'Testing',
+    queue_number: kioskStore.ticketNumber || 'T-000',
+    patient_name: walkinData.firstName ? `${walkinData.firstName} ${walkinData.lastName}` : 'Patient',
+    date: new Date().toLocaleDateString(),
+    time: new Date().toLocaleTimeString(),
+    wait_time: `${(kioskStore.ticketPosition || 1) * 5} mins`
+  }
+  await printerService.printTicket(payload)
+}
+
 // Methods
 const openKeyboard = (field) => {
   keyboardField.value = field
   
-  // Set initial value
   switch(field) {
     case 'appointment':
       keyboardValue.value = appointmentPhone.value
@@ -461,7 +474,6 @@ const handleKeyboardInput = (value) => {
 }
 
 const handleKeyboardDone = (value) => {
-  // Apply the input to the appropriate field
   switch(keyboardField.value) {
     case 'appointment':
       appointmentPhone.value = value
@@ -489,8 +501,6 @@ const checkReturningPatient = async (phoneNumber) => {
   
   checkingReturning.value = true
   try {
-    // Try to check if patient exists by checking in (will fail if not found)
-    // This is a simple way to check without making a separate API call
     const result = await kioskService.checkIn(phoneNumber)
     isReturningPatient.value = true
   } catch (error) {
@@ -534,10 +544,13 @@ const checkInWithAppointment = async () => {
   appointmentError.value = ''
 
   try {
-    const result = await kioskStore.checkInPatient(appointmentPhone.value)
+    await kioskStore.checkInPatient(appointmentPhone.value)
     
     showAppointmentCheckin.value = false
     showSuccess.value = true
+
+    // Trigger Print
+    await issuePrintTicket()
 
   } catch (error) {
     appointmentError.value = error.message || 'Failed to check in. Please try again.'
@@ -550,7 +563,6 @@ const processWalkin = async () => {
     return
   }
 
-  // Validate new patient info
   if (!isReturningPatient.value) {
     if (!walkinData.firstName || !walkinData.lastName) {
       walkinError.value = 'Please enter your full name.'
@@ -565,7 +577,6 @@ const processWalkin = async () => {
   walkinError.value = ''
 
   try {
-    // Prepare patient data
     const patientData = {
       first_name: walkinData.firstName || 'Walk-in',
       last_name: walkinData.lastName || 'Patient',
@@ -575,10 +586,13 @@ const processWalkin = async () => {
       address: walkinData.address || 'To be updated'
     }
 
-    const result = await kioskStore.registerWalkIn(patientData)
+    await kioskStore.registerWalkIn(patientData)
     
     showWalkinDialog.value = false
     showSuccess.value = true
+
+    // Trigger Print
+    await issuePrintTicket()
 
   } catch (error) {
     walkinError.value = error.message || 'Failed to process walk-in. Please try again.'
@@ -595,17 +609,14 @@ const resetInactivityTimer = () => {
     if (!showSuccess.value) {
       resetAll()
     }
-  }, 300000) // 5 minutes
+  }, 300000)
 }
 
-// Track user activity
 const trackActivity = () => {
   resetInactivityTimer()
 }
 
-// Lifecycle
 onMounted(() => {
-  // Add event listeners for activity tracking
   document.addEventListener('click', trackActivity)
   document.addEventListener('touchstart', trackActivity)
   document.addEventListener('keydown', trackActivity)
@@ -659,7 +670,6 @@ onUnmounted(() => {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
 }
 
-/* Touchscreen optimization */
 .checkin-card:active {
   transform: scale(0.97);
   transition-duration: 0.1s;
@@ -689,7 +699,6 @@ onUnmounted(() => {
   letter-spacing: 0.3px;
 }
 
-/* Responsive */
 @media (max-width: 600px) {
   .kiosk-checkin {
     padding: 12px;
