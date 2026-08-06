@@ -1,3 +1,4 @@
+<!-- frontend/src/views/kiosk/KioskDisplayView.vue -->
 <template>
   <div class="kiosk-display">
     <v-row>
@@ -17,10 +18,10 @@
             <div class="text-center mb-4">
               <div class="text-caption text-medium-emphasis font-weight-medium">Now Serving</div>
               <div class="text-h1 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
-                {{ testingQueue.currentServing || '---' }}
+                {{ kioskStore.testingQueue?.current_serving?.queue_number || '---' }}
               </div>
               <div class="text-subtitle-1 text-medium-emphasis">
-                {{ testingQueue.currentPatientName || 'Waiting for next patient...' }}
+                {{ kioskStore.testingQueue?.current_serving ? 'Being served now' : 'Waiting for next patient...' }}
               </div>
             </div>
 
@@ -30,21 +31,21 @@
               <div class="text-center">
                 <div class="text-caption text-medium-emphasis font-weight-medium">Waiting</div>
                 <div class="text-h3 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
-                  {{ testingQueue.waitingCount || 0 }}
+                  {{ kioskStore.testingQueue?.waiting_count || 0 }}
                 </div>
               </div>
               <v-divider vertical class="mx-2" style="height: 48px;"></v-divider>
               <div class="text-center">
                 <div class="text-caption text-medium-emphasis font-weight-medium">Completed</div>
                 <div class="text-h4 font-weight-bold" style="color: rgb(var(--v-theme-success));">
-                  {{ testingQueue.completedCount || 0 }}
+                  {{ kioskStore.testingQueue?.stats?.completed || 0 }}
                 </div>
               </div>
               <v-divider vertical class="mx-2" style="height: 48px;"></v-divider>
               <div class="text-center">
                 <div class="text-caption text-medium-emphasis font-weight-medium">Est. Wait</div>
                 <div class="text-h5 font-weight-bold" style="color: rgb(var(--v-theme-warning));">
-                  {{ estimatedWaitTime(testingQueue.waitingCount) }}
+                  {{ estimatedWaitTime(kioskStore.testingQueue?.waiting_count || 0) }}
                 </div>
               </div>
             </div>
@@ -52,13 +53,13 @@
             <v-divider class="my-4"></v-divider>
 
             <!-- Waiting List -->
-            <div v-if="testingQueue.waitingList && testingQueue.waitingList.length > 0">
+            <div v-if="kioskStore.testingQueue?.waiting_list && kioskStore.testingQueue.waiting_list.length > 0">
               <div class="text-subtitle-2 font-weight-bold mb-2 text-medium-emphasis">
                 Next in Line
               </div>
               <div class="waiting-list">
                 <div 
-                  v-for="(item, index) in testingQueue.waitingList.slice(0, 5)" 
+                  v-for="(item, index) in kioskStore.testingQueue.waiting_list.slice(0, 5)" 
                   :key="index"
                   class="waiting-item d-flex align-center pa-2"
                   :class="{ 
@@ -77,20 +78,11 @@
                     #{{ item.queue_number }}
                   </v-chip>
                   <span class="text-body-1" :class="{ 'text-white': index === 0 }">
-                    {{ item.patient_name }}
-                  </span>
-                  <v-spacer></v-spacer>
-                  <v-chip 
-                    size="x-small" 
-                    color="surface-variant" 
-                    variant="text"
-                    :class="{ 'text-white': index === 0 }"
-                  >
                     {{ item.position }}
-                  </v-chip>
+                  </span>
                 </div>
-                <div v-if="testingQueue.waitingList.length > 5" class="text-caption text-medium-emphasis mt-1">
-                  + {{ testingQueue.waitingList.length - 5 }} more waiting
+                <div v-if="kioskStore.testingQueue.waiting_list.length > 5" class="text-caption text-medium-emphasis mt-1">
+                  + {{ kioskStore.testingQueue.waiting_list.length - 5 }} more waiting
                 </div>
               </div>
             </div>
@@ -118,10 +110,10 @@
             <div class="text-center mb-4">
               <div class="text-caption text-medium-emphasis font-weight-medium">Now Serving</div>
               <div class="text-h1 font-weight-bold" style="color: rgb(var(--v-theme-success));">
-                {{ treatmentQueue.currentServing || '---' }}
+                {{ kioskStore.treatmentQueue?.current_serving?.queue_number || '---' }}
               </div>
               <div class="text-subtitle-1 text-medium-emphasis">
-                {{ treatmentQueue.currentPatientName || 'Waiting for next patient...' }}
+                {{ kioskStore.treatmentQueue?.current_serving ? 'Being served now' : 'Waiting for next patient...' }}
               </div>
             </div>
 
@@ -131,21 +123,21 @@
               <div class="text-center">
                 <div class="text-caption text-medium-emphasis font-weight-medium">Waiting</div>
                 <div class="text-h3 font-weight-bold" style="color: rgb(var(--v-theme-success));">
-                  {{ treatmentQueue.waitingCount || 0 }}
+                  {{ kioskStore.treatmentQueue?.waiting_count || 0 }}
                 </div>
               </div>
               <v-divider vertical class="mx-2" style="height: 48px;"></v-divider>
               <div class="text-center">
                 <div class="text-caption text-medium-emphasis font-weight-medium">Completed</div>
                 <div class="text-h4 font-weight-bold" style="color: rgb(var(--v-theme-success));">
-                  {{ treatmentQueue.completedCount || 0 }}
+                  {{ kioskStore.treatmentQueue?.stats?.completed || 0 }}
                 </div>
               </div>
               <v-divider vertical class="mx-2" style="height: 48px;"></v-divider>
               <div class="text-center">
                 <div class="text-caption text-medium-emphasis font-weight-medium">Est. Wait</div>
                 <div class="text-h5 font-weight-bold" style="color: rgb(var(--v-theme-warning));">
-                  {{ estimatedWaitTime(treatmentQueue.waitingCount) }}
+                  {{ estimatedWaitTime(kioskStore.treatmentQueue?.waiting_count || 0) }}
                 </div>
               </div>
             </div>
@@ -153,13 +145,13 @@
             <v-divider class="my-4"></v-divider>
 
             <!-- Waiting List -->
-            <div v-if="treatmentQueue.waitingList && treatmentQueue.waitingList.length > 0">
+            <div v-if="kioskStore.treatmentQueue?.waiting_list && kioskStore.treatmentQueue.waiting_list.length > 0">
               <div class="text-subtitle-2 font-weight-bold mb-2 text-medium-emphasis">
                 Next in Line
               </div>
               <div class="waiting-list">
                 <div 
-                  v-for="(item, index) in treatmentQueue.waitingList.slice(0, 5)" 
+                  v-for="(item, index) in kioskStore.treatmentQueue.waiting_list.slice(0, 5)" 
                   :key="index"
                   class="waiting-item d-flex align-center pa-2"
                   :class="{ 
@@ -178,20 +170,11 @@
                     #{{ item.queue_number }}
                   </v-chip>
                   <span class="text-body-1" :class="{ 'text-white': index === 0 }">
-                    {{ item.patient_name }}
-                  </span>
-                  <v-spacer></v-spacer>
-                  <v-chip 
-                    size="x-small" 
-                    color="surface-variant" 
-                    variant="text"
-                    :class="{ 'text-white': index === 0 }"
-                  >
                     {{ item.position }}
-                  </v-chip>
+                  </span>
                 </div>
-                <div v-if="treatmentQueue.waitingList.length > 5" class="text-caption text-medium-emphasis mt-1">
-                  + {{ treatmentQueue.waitingList.length - 5 }} more waiting
+                <div v-if="kioskStore.treatmentQueue.waiting_list.length > 5" class="text-caption text-medium-emphasis mt-1">
+                  + {{ kioskStore.treatmentQueue.waiting_list.length - 5 }} more waiting
                 </div>
               </div>
             </div>
@@ -219,7 +202,7 @@
           color="primary"
           variant="text"
           size="small"
-          @click="refreshQueue"
+          @click="refreshAll"
           prepend-icon="mdi-refresh"
           class="font-weight-medium"
         >
@@ -232,26 +215,15 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import queueService from '@/services/queueService'
-// Fix: Import from the correct path
+import { useKioskStore } from '@/stores/kioskStore'
+import { storeToRefs } from 'pinia'
 import socketService from '@/services/socketService'
 
-const testingQueue = ref({
-  currentServing: null,
-  currentPatientName: null,
-  waitingCount: 0,
-  completedCount: 0,
-  waitingList: []
-})
+// Store
+const kioskStore = useKioskStore()
+const { lastUpdated: storeLastUpdated } = storeToRefs(kioskStore)
 
-const treatmentQueue = ref({
-  currentServing: null,
-  currentPatientName: null,
-  waitingCount: 0,
-  completedCount: 0,
-  waitingList: []
-})
-
+// Local state
 const lastUpdated = ref('')
 let updateInterval = null
 
@@ -267,26 +239,12 @@ const estimatedWaitTime = (count) => {
   return `${hours}h ${minutes}m`
 }
 
-const fetchQueueData = async () => {
-  try {
-    const [testing, treatment] = await Promise.all([
-      queueService.getQueueState('testing'),
-      queueService.getQueueState('treatment')
-    ])
-    
-    testingQueue.value = testing
-    treatmentQueue.value = treatment
-    lastUpdated.value = new Date().toLocaleTimeString()
-  } catch (error) {
-    console.error('Failed to fetch queue data:', error)
-  }
+const refreshAll = async () => {
+  await kioskStore.refreshAllDisplays()
+  lastUpdated.value = new Date().toLocaleTimeString()
 }
 
-const refreshQueue = () => {
-  fetchQueueData()
-}
-
-// Socket.IO setup using the correct socket service
+// Socket.IO setup
 const setupSocketListeners = () => {
   // Connect socket if not already connected
   socketService.connect()
@@ -297,29 +255,40 @@ const setupSocketListeners = () => {
 
   // Listen for queue updates
   socketService.on('queue-updated', (data) => {
-    fetchQueueData()
+    if (data.office) {
+      kioskStore.refreshDisplay(data.office)
+      lastUpdated.value = new Date().toLocaleTimeString()
+    }
   })
 
   socketService.on('next-called', (data) => {
-    fetchQueueData()
+    if (data.office) {
+      kioskStore.refreshDisplay(data.office)
+      lastUpdated.value = new Date().toLocaleTimeString()
+    }
+  })
+
+  socketService.on('queue-reset', (data) => {
+    if (data.office) {
+      kioskStore.refreshDisplay(data.office)
+      lastUpdated.value = new Date().toLocaleTimeString()
+    }
   })
 }
 
 onMounted(() => {
-  fetchQueueData()
+  refreshAll()
   setupSocketListeners()
-  updateInterval = setInterval(fetchQueueData, 30000) // Refresh every 30 seconds
+  updateInterval = setInterval(refreshAll, 30000) // Refresh every 30 seconds
 })
 
 onUnmounted(() => {
   if (updateInterval) {
     clearInterval(updateInterval)
   }
-  // Leave rooms and disconnect socket
+  // Leave rooms
   socketService.leaveRoom('testing')
   socketService.leaveRoom('treatment')
-  // Optional: disconnect socket when component unmounts
-  // socketService.disconnect()
 })
 </script>
 

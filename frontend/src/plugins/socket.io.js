@@ -1,3 +1,4 @@
+// frontend/src/plugins/socket.io.js
 import socketService from '@/services/socketService';
 
 export default {

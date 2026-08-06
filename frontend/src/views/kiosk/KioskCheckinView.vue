@@ -91,19 +91,19 @@
         <v-card-text class="pa-6">
           <v-form ref="appointmentForm" @submit.prevent="checkInWithAppointment">
             <div class="text-subtitle-2 text-medium-emphasis mb-2">
-              Enter your Appointment ID or Phone Number
+              Enter your Phone Number
             </div>
             
             <div class="d-flex align-center">
               <v-text-field
-                v-model="appointmentIdentifier"
-                label="Appointment ID or Phone Number"
+                v-model="appointmentPhone"
+                label="Phone Number"
                 placeholder="Tap to enter"
                 variant="outlined"
                 density="comfortable"
-                prepend-inner-icon="mdi-identifier"
+                prepend-inner-icon="mdi-phone"
                 clearable
-                :rules="[v => !!v || 'This field is required']"
+                :rules="[v => !!v || 'Phone number is required', v => v.length >= 10 || 'Phone number must be at least 10 digits']"
                 color="primary"
                 readonly
                 hide-details="auto"
@@ -145,9 +145,9 @@
                 color="primary"
                 type="submit"
                 size="large"
-                :loading="loading"
+                :loading="kioskStore.isCheckingIn"
                 prepend-icon="mdi-check"
-                :disabled="!appointmentIdentifier"
+                :disabled="!appointmentPhone || appointmentPhone.length < 10"
               >
                 Check In
               </v-btn>
@@ -184,6 +184,7 @@
                 density="comfortable"
                 prepend-inner-icon="mdi-phone"
                 clearable
+                :rules="[v => !!v || 'Phone number is required', v => v.length >= 10 || 'Phone number must be at least 10 digits']"
                 color="primary"
                 readonly
                 hide-details="auto"
@@ -268,6 +269,21 @@
                     </div>
                   </v-col>
                 </v-row>
+
+                <div class="d-flex align-center mt-2">
+                  <v-select
+                    v-model="walkinData.gender"
+                    :items="['male', 'female', 'other']"
+                    label="Gender"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-gender-male-female"
+                    :rules="[v => !!v || 'Gender is required']"
+                    color="primary"
+                    hide-details="auto"
+                    class="flex-grow-1"
+                  ></v-select>
+                </div>
               </div>
             </v-expand-transition>
 
@@ -296,9 +312,9 @@
                 color="success"
                 type="submit"
                 size="large"
-                :loading="loading"
+                :loading="kioskStore.isWalkingIn"
                 prepend-icon="mdi-check"
-                :disabled="!walkinData.phoneNumber || (walkinData.phoneNumber.length >= 10 && !isReturningPatient && (!walkinData.firstName || !walkinData.lastName))"
+                :disabled="!walkinData.phoneNumber || walkinData.phoneNumber.length < 10 || (!isReturningPatient && (!walkinData.firstName || !walkinData.lastName || !walkinData.gender))"
               >
                 Check In
               </v-btn>
@@ -317,12 +333,15 @@
           </v-icon>
           <div class="text-h4 text-white font-weight-bold">Check-in Successful!</div>
           <div class="text-h1 text-white font-weight-bold my-4">
-            {{ queueNumber }}
+            {{ kioskStore.ticketNumber || '---' }}
           </div>
           <div class="text-subtitle-1 text-white" :style="{ opacity: 0.9 }">
-            Your queue number for {{ selectedOffice }}
+            Your queue number for {{ kioskStore.ticketOffice || 'Testing' }}
           </div>
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.75 }">
+            Position in queue: {{ kioskStore.ticketPosition || '1' }}
+          </div>
+          <div class="text-body-2 text-white mt-1" :style="{ opacity: 0.75 }">
             Please wait for your turn. You will be called shortly.
           </div>
           
@@ -342,7 +361,7 @@
     </v-dialog>
 
     <!-- Loading Overlay -->
-    <v-overlay :model-value="loading" class="align-center justify-center" scrim-color="background" scrim-opacity="0.7">
+    <v-overlay :model-value="kioskStore.loading" class="align-center justify-center" scrim-color="background" scrim-opacity="0.7">
       <v-progress-circular
         color="primary"
         indeterminate
@@ -364,22 +383,29 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import VirtualKeyboard from '@/components/common/VirtualKeyboard.vue'
-import appointmentService from '@/services/appointmentService'
-import queueService from '@/services/queueService'
-import patientService from '@/services/patientService'
+import { useKioskStore } from '@/stores/kioskStore'
+import { storeToRefs } from 'pinia'
 
-// State
+// Store
+const kioskStore = useKioskStore()
+const { 
+  isCheckingIn, 
+  isWalkingIn, 
+  loading,
+  checkInError: storeCheckInError,
+  walkInError: storeWalkInError,
+  currentTicket
+} = storeToRefs(kioskStore)
+
+// Local state
 const showAppointmentCheckin = ref(false)
 const showWalkinDialog = ref(false)
 const showSuccess = ref(false)
-const loading = ref(false)
-const appointmentIdentifier = ref('')
+const appointmentPhone = ref('')
 const appointmentError = ref('')
 const walkinError = ref('')
-const queueNumber = ref('')
-const selectedOffice = ref('Testing')
 const isReturningPatient = ref(false)
 const checkingReturning = ref(false)
 
@@ -393,12 +419,12 @@ const keyboardField = ref('')
 const keyboardLabel = ref('')
 const tempInput = ref('')
 
-const walkinData = ref({
+const walkinData = reactive({
   phoneNumber: '',
   firstName: '',
   lastName: '',
-  birthDate: '',
   gender: '',
+  birthDate: '',
   address: ''
 })
 
@@ -409,19 +435,19 @@ const openKeyboard = (field) => {
   // Set initial value
   switch(field) {
     case 'appointment':
-      keyboardValue.value = appointmentIdentifier.value
-      keyboardLabel.value = 'Enter Appointment ID or Phone Number'
+      keyboardValue.value = appointmentPhone.value
+      keyboardLabel.value = 'Enter Phone Number'
       break
     case 'walkin':
-      keyboardValue.value = walkinData.value.phoneNumber
+      keyboardValue.value = walkinData.phoneNumber
       keyboardLabel.value = 'Enter Phone Number'
       break
     case 'firstName':
-      keyboardValue.value = walkinData.value.firstName
+      keyboardValue.value = walkinData.firstName
       keyboardLabel.value = 'Enter First Name'
       break
     case 'lastName':
-      keyboardValue.value = walkinData.value.lastName
+      keyboardValue.value = walkinData.lastName
       keyboardLabel.value = 'Enter Last Name'
       break
   }
@@ -438,17 +464,17 @@ const handleKeyboardDone = (value) => {
   // Apply the input to the appropriate field
   switch(keyboardField.value) {
     case 'appointment':
-      appointmentIdentifier.value = value
+      appointmentPhone.value = value
       break
     case 'walkin':
-      walkinData.value.phoneNumber = value
+      walkinData.phoneNumber = value
       checkReturningPatient(value)
       break
     case 'firstName':
-      walkinData.value.firstName = value
+      walkinData.firstName = value
       break
     case 'lastName':
-      walkinData.value.lastName = value
+      walkinData.lastName = value
       break
   }
   
@@ -463,10 +489,11 @@ const checkReturningPatient = async (phoneNumber) => {
   
   checkingReturning.value = true
   try {
-    const patients = await patientService.getPatients(1, 1, phoneNumber)
-    isReturningPatient.value = patients.data && patients.data.length > 0
+    // Try to check if patient exists by checking in (will fail if not found)
+    // This is a simple way to check without making a separate API call
+    const result = await kioskService.checkIn(phoneNumber)
+    isReturningPatient.value = true
   } catch (error) {
-    console.error('Error checking returning patient:', error)
     isReturningPatient.value = false
   } finally {
     checkingReturning.value = false
@@ -475,28 +502,25 @@ const checkReturningPatient = async (phoneNumber) => {
 
 const closeAppointmentCheckin = () => {
   showAppointmentCheckin.value = false
-  appointmentIdentifier.value = ''
+  appointmentPhone.value = ''
   appointmentError.value = ''
 }
 
 const closeWalkin = () => {
   showWalkinDialog.value = false
-  walkinData.value = {
-    phoneNumber: '',
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    gender: '',
-    address: ''
-  }
+  walkinData.phoneNumber = ''
+  walkinData.firstName = ''
+  walkinData.lastName = ''
+  walkinData.gender = ''
+  walkinData.birthDate = ''
+  walkinData.address = ''
   isReturningPatient.value = false
   walkinError.value = ''
 }
 
 const resetAll = () => {
   showSuccess.value = false
-  queueNumber.value = ''
-  selectedOffice.value = 'Testing'
+  kioskStore.resetCheckIn()
   closeAppointmentCheckin()
   closeWalkin()
 }
@@ -507,140 +531,95 @@ const checkInWithAppointment = async () => {
   const { valid } = await appointmentForm.value.validate()
   if (!valid) return
 
-  loading.value = true
   appointmentError.value = ''
 
   try {
-    // Search for appointment by identifier
-    const appointments = await appointmentService.getMyAppointments()
-    const appointment = appointments.find(a => 
-      a.id === appointmentIdentifier.value || 
-      a.patient.phone_number === appointmentIdentifier.value
-    )
-
-    if (!appointment) {
-      appointmentError.value = 'No appointment found. Please check your ID or try walk-in.'
-      loading.value = false
-      return
-    }
-
-    if (appointment.status === 'checked-in') {
-      appointmentError.value = 'You are already checked in.'
-      loading.value = false
-      return
-    }
-
-    if (appointment.status === 'completed') {
-      appointmentError.value = 'This appointment has already been completed.'
-      loading.value = false
-      return
-    }
-
-    // Check in the appointment
-    await appointmentService.checkInPatient(appointment.id)
-    
-    // Add to queue
-    const queueResult = await queueService.addToQueue(
-      appointment.office,
-      appointment.patient_id,
-      appointment.id
-    )
-
-    queueNumber.value = queueResult.queue_number
-    selectedOffice.value = appointment.office.charAt(0).toUpperCase() + appointment.office.slice(1)
+    const result = await kioskStore.checkInPatient(appointmentPhone.value)
     
     showAppointmentCheckin.value = false
     showSuccess.value = true
 
   } catch (error) {
-    appointmentError.value = error.response?.data?.message || 'Failed to check in. Please try again.'
-  } finally {
-    loading.value = false
+    appointmentError.value = error.message || 'Failed to check in. Please try again.'
   }
 }
 
 const processWalkin = async () => {
-  if (!walkinData.value.phoneNumber) {
-    walkinError.value = 'Please enter your phone number.'
+  if (!walkinData.phoneNumber || walkinData.phoneNumber.length < 10) {
+    walkinError.value = 'Please enter a valid phone number.'
     return
   }
 
   // Validate new patient info
-  if (!isReturningPatient.value && (!walkinData.value.firstName || !walkinData.value.lastName)) {
-    walkinError.value = 'Please enter your name.'
-    return
+  if (!isReturningPatient.value) {
+    if (!walkinData.firstName || !walkinData.lastName) {
+      walkinError.value = 'Please enter your full name.'
+      return
+    }
+    if (!walkinData.gender) {
+      walkinError.value = 'Please select your gender.'
+      return
+    }
   }
 
-  loading.value = true
   walkinError.value = ''
 
   try {
-    let patientId = null
-    let patient = null
-    const phoneNumber = walkinData.value.phoneNumber
-
-    // Check if returning patient
-    const patients = await patientService.getPatients(1, 50, phoneNumber)
-    if (patients.data && patients.data.length > 0) {
-      patient = patients.data[0]
-      patientId = patient.id
+    // Prepare patient data
+    const patientData = {
+      first_name: walkinData.firstName || 'Walk-in',
+      last_name: walkinData.lastName || 'Patient',
+      birth_date: walkinData.birthDate || '1900-01-01',
+      gender: walkinData.gender || 'other',
+      contact_number: walkinData.phoneNumber,
+      address: walkinData.address || 'To be updated'
     }
 
-    // If new patient, create with minimal info
-    if (!patientId) {
-      const firstName = walkinData.value.firstName || 'Walk-in'
-      const lastName = walkinData.value.lastName || 'Patient'
-      
-      const newPatient = await patientService.createPatient({
-        first_name: firstName,
-        last_name: lastName,
-        birth_date: '1900-01-01', // Placeholder
-        gender: 'Unknown',
-        contact_number: phoneNumber,
-        address: 'To be updated',
-        status: 'testing'
-      })
-      patientId = newPatient.id
-    }
-
-    if (!patientId) {
-      walkinError.value = 'Unable to process walk-in. Please try again.'
-      loading.value = false
-      return
-    }
-
-    // Determine which office based on patient status
-    const office = patient?.status === 'treatment' ? 'treatment' : 'testing'
-    
-    // Create walk-in appointment
-    const today = new Date().toISOString().split('T')[0]
-    const appointment = await appointmentService.createAppointment({
-      patient_id: patientId,
-      office: office,
-      appointment_date: today,
-      type: 'walk-in',
-      status: 'pending'
-    })
-
-    // Add to queue
-    const queueResult = await queueService.addToQueue(
-      office,
-      patientId,
-      appointment.id
-    )
-
-    queueNumber.value = queueResult.queue_number
-    selectedOffice.value = office.charAt(0).toUpperCase() + office.slice(1)
+    const result = await kioskStore.registerWalkIn(patientData)
     
     showWalkinDialog.value = false
     showSuccess.value = true
 
   } catch (error) {
-    walkinError.value = error.response?.data?.message || 'Failed to process walk-in. Please try again.'
-  } finally {
-    loading.value = false
+    walkinError.value = error.message || 'Failed to process walk-in. Please try again.'
   }
 }
+
+// Auto-reset after inactivity (5 minutes)
+let inactivityTimer = null
+const resetInactivityTimer = () => {
+  if (inactivityTimer) {
+    clearTimeout(inactivityTimer)
+  }
+  inactivityTimer = setTimeout(() => {
+    if (!showSuccess.value) {
+      resetAll()
+    }
+  }, 300000) // 5 minutes
+}
+
+// Track user activity
+const trackActivity = () => {
+  resetInactivityTimer()
+}
+
+// Lifecycle
+onMounted(() => {
+  // Add event listeners for activity tracking
+  document.addEventListener('click', trackActivity)
+  document.addEventListener('touchstart', trackActivity)
+  document.addEventListener('keydown', trackActivity)
+  resetInactivityTimer()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', trackActivity)
+  document.removeEventListener('touchstart', trackActivity)
+  document.removeEventListener('keydown', trackActivity)
+  if (inactivityTimer) {
+    clearTimeout(inactivityTimer)
+  }
+})
 </script>
 
 <style scoped>

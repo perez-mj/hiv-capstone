@@ -193,17 +193,24 @@ const routes = [
   },
   // Kiosk routes (no auth required)
   {
-    path: '/kiosk',
-    name: 'KioskCheckin',
-    component: () => import('@/views/kiosk/KioskCheckinView.vue'),
-    meta: { requiresAuth: false }
-  },
-  {
-    path: '/kiosk/display',
-    name: 'KioskDisplay',
-    component: () => import('@/views/kiosk/KioskDisplayView.vue'),
-    meta: { requiresAuth: false }
-  },
+  path: '/kiosk',
+  component: () => import('@/layouts/KioskLayout.vue'),
+  meta: { requiresAuth: false },
+  children: [
+    {
+      path: '',
+      name: 'KioskCheckin',
+      component: () => import('@/views/kiosk/KioskCheckinView.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: 'display',
+      name: 'KioskDisplay',
+      component: () => import('@/views/kiosk/KioskDisplayView.vue'),
+      meta: { requiresAuth: false }
+    }
+  ]
+},
   // 404
   {
     path: '/:pathMatch(.*)*',
