@@ -13,10 +13,7 @@
           mdi-hand-wave
         </v-icon>
         <div class="text-h3 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
-          Welcome to HIV Clinic
-        </div>
-        <div class="text-subtitle-1 text-medium-emphasis mt-2">
-          Please select your check-in option below
+          Welcome to Purple Rain Clinic
         </div>
       </v-card-text>
     </v-card>
@@ -245,6 +242,34 @@
                   <v-col cols="6">
                     <div class="d-flex align-center">
                       <v-text-field
+                        v-model="walkinData.middleName"
+                        label="Middle Name"
+                        placeholder="Tap to enter (optional)"
+                        variant="outlined"
+                        density="comfortable"
+                        prepend-inner-icon="mdi-account"
+                        color="primary"
+                        readonly
+                        hide-details="auto"
+                        class="flex-grow-1"
+                        @click="openKeyboard('middleName')"
+                      ></v-text-field>
+                      <v-btn
+                        icon="mdi-keyboard"
+                        variant="text"
+                        color="primary"
+                        class="ml-2"
+                        size="large"
+                        @click="openKeyboard('middleName')"
+                      ></v-btn>
+                    </div>
+                  </v-col>
+                </v-row>
+
+                <v-row>
+                  <v-col cols="6">
+                    <div class="d-flex align-center">
+                      <v-text-field
                         v-model="walkinData.lastName"
                         label="Last Name"
                         placeholder="Tap to enter"
@@ -268,22 +293,23 @@
                       ></v-btn>
                     </div>
                   </v-col>
+                  <v-col cols="6">
+                    <div class="d-flex align-center">
+                      <v-select
+                        v-model="walkinData.gender"
+                        :items="['male', 'female', 'other']"
+                        label="Gender"
+                        variant="outlined"
+                        density="comfortable"
+                        prepend-inner-icon="mdi-gender-male-female"
+                        :rules="[v => !!v || 'Gender is required']"
+                        color="primary"
+                        hide-details="auto"
+                        class="flex-grow-1"
+                      ></v-select>
+                    </div>
+                  </v-col>
                 </v-row>
-
-                <div class="d-flex align-center mt-2">
-                  <v-select
-                    v-model="walkinData.gender"
-                    :items="['male', 'female', 'other']"
-                    label="Gender"
-                    variant="outlined"
-                    density="comfortable"
-                    prepend-inner-icon="mdi-gender-male-female"
-                    :rules="[v => !!v || 'Gender is required']"
-                    color="primary"
-                    hide-details="auto"
-                    class="flex-grow-1"
-                  ></v-select>
-                </div>
               </div>
             </v-expand-transition>
 
@@ -341,6 +367,10 @@
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.75 }">
             Position in queue: {{ kioskStore.ticketPosition || '1' }}
           </div>
+          <!-- Display Facility Code instead of patient name -->
+          <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.9 }">
+            Patient Code: <strong>{{ patientFacilityCode || 'N/A' }}</strong>
+          </div>
           <div class="text-body-2 text-white mt-1" :style="{ opacity: 0.9 }">
             Printing your queue slip... Please take your ticket!
           </div>
@@ -383,11 +413,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import VirtualKeyboard from '@/components/common/VirtualKeyboard.vue'
 import { useKioskStore } from '@/stores/kioskStore'
 import { storeToRefs } from 'pinia'
 import printerService from '@/services/printerService'
+import kioskService from '@/services/kioskService'
 
 // Store
 const kioskStore = useKioskStore()
@@ -395,10 +426,21 @@ const {
   isCheckingIn, 
   isWalkingIn, 
   loading,
-  checkInError: storeCheckInError,
-  walkInError: storeWalkInError,
   currentTicket
 } = storeToRefs(kioskStore)
+
+// Computed - Get facility code from current ticket or store
+const patientFacilityCode = computed(() => {
+  // Check if the ticket has patient_facility_code
+  if (currentTicket.value?.patient_facility_code) {
+    return currentTicket.value.patient_facility_code
+  }
+  // Check if we stored it separately
+  if (storedFacilityCode.value) {
+    return storedFacilityCode.value
+  }
+  return null
+})
 
 // Local state
 const showAppointmentCheckin = ref(false)
@@ -409,6 +451,7 @@ const appointmentError = ref('')
 const walkinError = ref('')
 const isReturningPatient = ref(false)
 const checkingReturning = ref(false)
+const storedFacilityCode = ref(null)
 
 const appointmentForm = ref(null)
 const walkinForm = ref(null)
@@ -423,23 +466,33 @@ const tempInput = ref('')
 const walkinData = reactive({
   phoneNumber: '',
   firstName: '',
+  middleName: '',
   lastName: '',
   gender: '',
-  birthDate: '',
   address: ''
 })
 
 // Dispatch Print Job
 const issuePrintTicket = async () => {
-  const payload = {
-    office: kioskStore.ticketOffice || 'Testing',
-    queue_number: kioskStore.ticketNumber || 'T-000',
-    patient_name: walkinData.firstName ? `${walkinData.firstName} ${walkinData.lastName}` : 'Patient',
+  // Get patient name for the ticket
+  let patientName = 'Patient'
+  if (walkinData.firstName) {
+    patientName = `${walkinData.firstName} ${walkinData.middleName || ''} ${walkinData.lastName}`.trim()
+  } else if (currentTicket.value?.patient_name) {
+    patientName = currentTicket.value.patient_name
+  }
+  
+  const ticketData = {
+    office: currentTicket.value?.office || kioskStore.ticketOffice || 'Testing',
+    queue_number: currentTicket.value?.queue_number || kioskStore.ticketNumber || 'T-000',
+    patient_name: patientName,
+    patient_code: patientFacilityCode.value || 'N/A',
     date: new Date().toLocaleDateString(),
     time: new Date().toLocaleTimeString(),
     wait_time: `${(kioskStore.ticketPosition || 1) * 5} mins`
   }
-  await printerService.printTicket(payload)
+  
+  await printerService.printTicket(ticketData)
 }
 
 // Methods
@@ -458,6 +511,10 @@ const openKeyboard = (field) => {
     case 'firstName':
       keyboardValue.value = walkinData.firstName
       keyboardLabel.value = 'Enter First Name'
+      break
+    case 'middleName':
+      keyboardValue.value = walkinData.middleName
+      keyboardLabel.value = 'Enter Middle Name (optional)'
       break
     case 'lastName':
       keyboardValue.value = walkinData.lastName
@@ -485,6 +542,9 @@ const handleKeyboardDone = (value) => {
     case 'firstName':
       walkinData.firstName = value
       break
+    case 'middleName':
+      walkinData.middleName = value
+      break
     case 'lastName':
       walkinData.lastName = value
       break
@@ -501,9 +561,31 @@ const checkReturningPatient = async (phoneNumber) => {
   
   checkingReturning.value = true
   try {
-    const result = await kioskService.checkIn(phoneNumber)
-    isReturningPatient.value = true
+    // Check if patient exists with this phone number using kioskService
+    const result = await kioskService.checkPatientExists(phoneNumber)
+    
+    if (result && result.exists) {
+      isReturningPatient.value = true
+      // Auto-fill name if available
+      if (result.patient) {
+        walkinData.firstName = result.patient.first_name || ''
+        walkinData.middleName = result.patient.middle_name || ''
+        walkinData.lastName = result.patient.last_name || ''
+        walkinData.gender = result.patient.gender || ''
+        // Store facility code
+        storedFacilityCode.value = result.patient.patient_facility_code || null
+      }
+    } else {
+      isReturningPatient.value = false
+      // Clear auto-filled data if patient doesn't exist
+      if (!walkinData.firstName && !walkinData.lastName) {
+        // Only clear if they were auto-filled
+        walkinData.middleName = ''
+        walkinData.gender = ''
+      }
+    }
   } catch (error) {
+    console.error('Error checking patient existence:', error)
     isReturningPatient.value = false
   } finally {
     checkingReturning.value = false
@@ -520,16 +602,18 @@ const closeWalkin = () => {
   showWalkinDialog.value = false
   walkinData.phoneNumber = ''
   walkinData.firstName = ''
+  walkinData.middleName = ''
   walkinData.lastName = ''
   walkinData.gender = ''
-  walkinData.birthDate = ''
   walkinData.address = ''
   isReturningPatient.value = false
+  storedFacilityCode.value = null
   walkinError.value = ''
 }
 
 const resetAll = () => {
   showSuccess.value = false
+  storedFacilityCode.value = null
   kioskStore.resetCheckIn()
   closeAppointmentCheckin()
   closeWalkin()
@@ -544,7 +628,22 @@ const checkInWithAppointment = async () => {
   appointmentError.value = ''
 
   try {
-    await kioskStore.checkInPatient(appointmentPhone.value)
+    const result = await kioskStore.checkInPatient(appointmentPhone.value)
+    
+    // Store facility code from result if available
+    if (result?.ticket?.patient_facility_code) {
+      storedFacilityCode.value = result.ticket.patient_facility_code
+    }
+    
+    // Get patient name from result for print
+    if (result?.patient) {
+      walkinData.firstName = result.patient.first_name || ''
+      walkinData.middleName = result.patient.middle_name || ''
+      walkinData.lastName = result.patient.last_name || ''
+      if (result.patient.patient_facility_code) {
+        storedFacilityCode.value = result.patient.patient_facility_code
+      }
+    }
     
     showAppointmentCheckin.value = false
     showSuccess.value = true
@@ -579,14 +678,22 @@ const processWalkin = async () => {
   try {
     const patientData = {
       first_name: walkinData.firstName || 'Walk-in',
+      middle_name: walkinData.middleName || '',
       last_name: walkinData.lastName || 'Patient',
-      birth_date: walkinData.birthDate || '1900-01-01',
+      birth_date: '1900-01-01', // Default date since we removed the field
       gender: walkinData.gender || 'other',
       contact_number: walkinData.phoneNumber,
       address: walkinData.address || 'To be updated'
     }
 
-    await kioskStore.registerWalkIn(patientData)
+    const result = await kioskStore.registerWalkIn(patientData)
+    
+    // Store facility code from result
+    if (result?.patient?.facility_code) {
+      storedFacilityCode.value = result.patient.facility_code
+    } else if (result?.patient?.patient_facility_code) {
+      storedFacilityCode.value = result.patient.patient_facility_code
+    }
     
     showWalkinDialog.value = false
     showSuccess.value = true

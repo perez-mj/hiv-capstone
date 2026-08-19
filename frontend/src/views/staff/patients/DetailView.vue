@@ -35,6 +35,15 @@
                     <v-divider></v-divider>
                     <v-list-item>
                       <v-list-item-content>
+                        <v-list-item-title class="text-caption text-grey">Facility Code</v-list-item-title>
+                        <v-list-item-subtitle>
+                          <v-chip color="primary" small>{{ patient.patient_facility_code }}</v-chip>
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                    <v-divider></v-divider>
+                    <v-list-item>
+                      <v-list-item-content>
                         <v-list-item-title class="text-caption text-grey">Date of Birth</v-list-item-title>
                         <v-list-item-subtitle>{{ formatDate(patient.birth_date) }} ({{ calculateAge(patient.birth_date) }} years)</v-list-item-subtitle>
                       </v-list-item-content>
@@ -80,6 +89,35 @@
                       No Portal Access
                     </v-chip>
                   </div>
+                </v-card>
+
+                <!-- Enrollment Information -->
+                <v-card outlined class="pa-4 mb-4">
+                  <div class="text-subtitle-1 font-weight-bold mb-3">Enrollment Information</div>
+                  <v-list dense>
+                    <v-list-item>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-caption text-grey">Enrollment Date</v-list-item-title>
+                        <v-list-item-subtitle>
+                          <v-icon small color="primary" class="mr-1">mdi-calendar-plus</v-icon>
+                          {{ formatDate(patient.enrollment_date) }}
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                    <v-divider v-if="patient.treatment_transition_date"></v-divider>
+                    <v-list-item v-if="patient.treatment_transition_date">
+                      <v-list-item-content>
+                        <v-list-item-title class="text-caption text-grey">Treatment Transition Date</v-list-item-title>
+                        <v-list-item-subtitle>
+                          <v-icon small color="success" class="mr-1">mdi-calendar-check</v-icon>
+                          {{ formatDate(patient.treatment_transition_date) }}
+                          <span class="text-caption text-grey ml-2">
+                            (Moved to treatment)
+                          </span>
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                  </v-list>
                 </v-card>
 
                 <v-card outlined class="pa-4">
@@ -407,14 +445,13 @@ export default {
 
       loadingHistory.value = true
       try {
-        const [testing, treatment, appts] = await Promise.all([
-          testingService.getPatientEncounters(patientId),
-          treatmentService.getPatientEncounters(patientId),
-          appointmentService.getMyAppointments() // Would need patient-specific endpoint
-        ])
-        testingHistory.value = testing || []
-        treatmentHistory.value = treatment || []
-        appointments.value = appts || []
+        const history = await patientService.getPatientHistory(patientId)
+        testingHistory.value = history.testing || []
+        treatmentHistory.value = history.treatment || []
+        
+        // Load appointments - you may want to use a different endpoint
+        // This is a placeholder - you'd need an endpoint to get patient appointments
+        appointments.value = []
       } catch (error) {
         console.error('Failed to load history:', error)
       } finally {
@@ -455,7 +492,11 @@ export default {
 
     const formatDate = (date) => {
       if (!date) return 'N/A'
-      return new Date(date).toLocaleDateString()
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
     }
 
     const formatTimeSlot = (time) => {

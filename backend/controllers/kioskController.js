@@ -183,6 +183,29 @@ class KioskController {
   }
 
   /**
+   * Check if patient exists by phone number
+   * GET /api/kiosk/patient-exists/:phone
+   */
+  async patientExists(req, res) {
+    try {
+      const { phone } = req.params;
+      
+      // Delegate to service layer
+      const result = await kioskService.patientExists(phone);
+      
+      return res.json(result);
+      
+    } catch (error) {
+      console.error('Error checking patient existence:', error);
+      res.status(500).json({ 
+        exists: false, 
+        patient: null,
+        error: error.message 
+      });
+    }
+  }
+
+  /**
    * Print queue slip ticket
    * POST /api/kiosk/print
    */

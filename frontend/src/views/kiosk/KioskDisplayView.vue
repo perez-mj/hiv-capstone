@@ -188,7 +188,7 @@
     </v-row>
 
     <!-- Status Bar -->
-    <v-card class="mt-4" elevation="2" color="surface-variant">
+    <!-- <v-card class="mt-4" elevation="2" color="surface-variant">
       <v-card-text class="d-flex justify-space-between align-center pa-3">
         <div class="d-flex align-center">
           <v-icon color="success" class="mr-2" size="24">mdi-check-circle</v-icon>
@@ -209,7 +209,7 @@
           Refresh
         </v-btn>
       </v-card-text>
-    </v-card>
+    </v-card> -->
   </div>
 </template>
 

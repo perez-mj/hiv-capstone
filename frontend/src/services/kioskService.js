@@ -1,84 +1,104 @@
 // frontend/src/services/kioskService.js
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import api from '@/plugins/axios'
 
 class KioskService {
-  /**
-   * Check in patient with existing appointment
-   * @param {string} phone - Patient's phone number
-   * @returns {Promise} Check-in result with ticket
-   */
   async checkIn(phone) {
     try {
-      const response = await axios.post(`${API_URL}/kiosk/checkin`, { phone });
-      return response.data;
+      const response = await api.post('/kiosk/checkin', { phone })
+      return response.data
     } catch (error) {
-      if (error.response) {
-        throw new Error(error.response.data.message || 'Check-in failed');
-      }
-      throw new Error('Network error. Please check your connection.');
+      console.error('Check-in failed:', error)
+      throw error
     }
   }
 
-  /**
-   * Register walk-in patient
-   * @param {Object} patientData - Patient information
-   * @param {string} patientData.first_name - First name
-   * @param {string} patientData.last_name - Last name
-   * @param {string} patientData.birth_date - Birth date (YYYY-MM-DD)
-   * @param {string} patientData.gender - Gender (male/female/other)
-   * @param {string} patientData.contact_number - Phone number
-   * @param {string} patientData.address - Address (optional)
-   * @param {string} patientData.guardian_name - Guardian name (optional)
-   * @param {string} patientData.guardian_contact - Guardian contact (optional)
-   * @param {string} office - Office to check in (testing/treatment)
-   * @returns {Promise} Walk-in result with ticket
-   */
   async walkIn(patientData, office = 'testing') {
     try {
-      const response = await axios.post(`${API_URL}/kiosk/walkin`, {
-        ...patientData,
-        office
-      });
-      return response.data;
+      const response = await api.post('/kiosk/walkin', { 
+        ...patientData, 
+        office 
+      })
+      return response.data
     } catch (error) {
-      if (error.response) {
-        throw new Error(error.response.data.message || 'Walk-in registration failed');
-      }
-      throw new Error('Network error. Please check your connection.');
+      console.error('Walk-in failed:', error)
+      throw error
     }
   }
 
   /**
-   * Get display state for public screen
-   * @param {string} office - Office (testing/treatment)
-   * @returns {Promise} Display state with queue information
+   * Check if patient exists by phone number
+   * This is used by the kiosk to auto-fill returning patient info
    */
+  async checkPatientExists(phone) {
+    try {
+      const response = await api.get(`/kiosk/patient-exists/${phone}`)
+      return response.data
+    } catch (error) {
+      // If the endpoint doesn't exist yet, return a friendly response
+      if (error.response?.status === 404) {
+        console.warn('Patient exists endpoint not implemented yet, falling back to check-in attempt')
+        // Try to check in as a fallback - if it succeeds, patient exists
+        try {
+          await this.checkIn(phone)
+          return { exists: true, patient: null }
+        } catch {
+          return { exists: false, patient: null }
+        }
+      }
+      console.error('Failed to check patient existence:', error)
+      return { exists: false, patient: null }
+    }
+  }
+
   async getDisplayState(office) {
     try {
-      const response = await axios.get(`${API_URL}/kiosk/display/${office}`);
-      return response.data;
+      const response = await api.get(`/kiosk/display/${office}`)
+      return response.data
     } catch (error) {
-      if (error.response) {
-        throw new Error(error.response.data.message || 'Failed to get display state');
-      }
-      throw new Error('Network error. Please check your connection.');
+      console.error('Failed to get display state:', error)
+      throw error
     }
   }
 
-  /**
-   * Get kiosk status
-   * @returns {Promise} Kiosk status
-   */
   async getStatus() {
     try {
-      const response = await axios.get(`${API_URL}/kiosk/status`);
-      return response.data;
+      const response = await api.get('/kiosk/status')
+      return response.data
     } catch (error) {
-      return { status: 'offline', error: error.message };
+      console.error('Failed to get kiosk status:', error)
+      throw error
+    }
+  }
+
+  async printTicket(ticketData) {
+    try {
+      const response = await api.post('/kiosk/print', ticketData)
+      return response.data
+    } catch (error) {
+      console.error('Failed to print ticket:', error)
+      throw error
+    }
+  }
+
+  async getPrinterStatus() {
+    try {
+      const response = await api.get('/kiosk/printer-status')
+      return response.data
+    } catch (error) {
+      console.error('Failed to get printer status:', error)
+      throw error
+    }
+  }
+
+  async testPrinter() {
+    try {
+      const response = await api.post('/kiosk/printer-test')
+      return response.data
+    } catch (error) {
+      console.error('Printer test failed:', error)
+      throw error
     }
   }
 }
 
-export default new KioskService();
+export default new KioskService()

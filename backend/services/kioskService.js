@@ -1,6 +1,7 @@
 // backend/services/kioskService.js
 const db = require('../models');
 const queueService = require('./queueService');
+const patientCodeService = require('./patientCodeService');
 const { Op } = require('sequelize');
 
 class KioskService {
@@ -128,7 +129,27 @@ class KioskService {
 
     // Use transaction for all operations
     return await db.sequelize.transaction(async (transaction) => {
-      // Create patient
+      // Generate facility code BEFORE creating patient
+      // This ensures the code is available when the hook runs
+      let facilityCode;
+      try {
+        facilityCode = await patientCodeService.generateFacilityCode({
+          first_name: patientData.first_name,
+          middle_name: patientData.middle_name || '',
+          last_name: patientData.last_name,
+          status: 'testing',
+          enrollment_date: new Date().toISOString().split('T')[0],
+          treatment_transition_date: null
+        });
+      } catch (error) {
+        console.error('Error generating facility code:', error);
+        // Fallback: generate a temporary code
+        const timestamp = Date.now().toString().slice(-6);
+        const initials = `${patientData.first_name.charAt(0)}${patientData.last_name.charAt(0)}`.toUpperCase();
+        facilityCode = `P${new Date().getFullYear().toString().slice(-2)}-${initials}${timestamp}`;
+      }
+
+      // Create patient with pre-generated facility code
       const patient = await db.Patient.create({
         first_name: patientData.first_name,
         last_name: patientData.last_name,
@@ -138,7 +159,9 @@ class KioskService {
         address: patientData.address || null,
         guardian_name: patientData.guardian_name || null,
         guardian_contact: patientData.guardian_contact || null,
-        status: 'testing' // Default to testing
+        status: 'testing', // Default to testing
+        patient_facility_code: facilityCode, // Explicitly set the code
+        enrollment_date: new Date().toISOString().split('T')[0]
       }, { transaction });
 
       // Today's date
@@ -177,7 +200,8 @@ class KioskService {
         success: true,
         patient: {
           id: patient.id,
-          name: `${patient.first_name} ${patient.last_name}`
+          name: `${patient.first_name} ${patient.last_name}`,
+          facility_code: patient.patient_facility_code
         },
         appointment: {
           id: appointment.id,
@@ -233,6 +257,36 @@ class KioskService {
       status: 'online',
       timestamp: new Date().toISOString(),
       version: '1.0.0'
+    };
+  }
+
+  // backend/services/kioskService.js
+// Add this method to the KioskService class
+
+  /**
+   * Check if patient exists by phone number
+   * @param {string} phone - Patient's contact number
+   * @returns {Promise<Object>} Patient existence check result
+   */
+  async patientExists(phone) {
+    // Normalize phone number
+    const normalizedPhone = phone.trim();
+    
+    const patient = await db.Patient.findOne({
+      where: { contact_number: normalizedPhone },
+      attributes: ['id', 'first_name', 'middle_name', 'last_name', 'gender', 'birth_date', 'patient_facility_code', 'status']
+    });
+    
+    if (patient) {
+      return {
+        exists: true,
+        patient: patient.toJSON()
+      };
+    }
+    
+    return {
+      exists: false,
+      patient: null
     };
   }
 }

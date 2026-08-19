@@ -16,7 +16,7 @@
                   <v-icon size="48" color="white" class="mr-4">mdi-hospital</v-icon>
                   <div>
                     <div class="text-h5 font-weight-bold text-white">
-                      HIV Clinic Kiosk
+                      Purple Rain Clinic Kiosk
                     </div>
                     <div class="text-subtitle-1 text-white text-opacity-90">
                       {{ currentDate }}

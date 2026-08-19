@@ -3,6 +3,7 @@ require('dotenv').config();
 const db = require('../models');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
+const patientCodeService = require('../services/patientCodeService');
 
 class DatabaseInitializer {
   constructor() {
@@ -16,12 +17,10 @@ class DatabaseInitializer {
     this.expectedCredentials = {
       // Admin
       'admin': 'Admin@123',
-      // Staff
-      'dr_santos': 'Doctor@123',
-      'nurse_reyes': 'Nurse@123',
-      'counselor_cruz': 'Counselor@123',
-      'pharmacist_lim': 'Pharma@123',
-      'receptionist_garcia': 'Reception@123',
+      // Testing Staff
+      'nurse': 'Nurse@123',
+      // Treatment Staff
+      'pharma': 'Pharma@123',
       // Patients
       'juan.delacruz': 'Patient@123',
       'maria.santos': 'Patient@123',
@@ -49,8 +48,7 @@ class DatabaseInitializer {
 
   async validateAllPasswords() {
     console.log('\n🔐 Validating stored passwords...');
-    
-    // Get all users without associations to avoid eager loading errors
+
     const users = await db.User.findAll({
       attributes: ['id', 'username', 'password_hash', 'role']
     });
@@ -61,7 +59,7 @@ class DatabaseInitializer {
 
     for (const user of users) {
       const expectedPassword = this.expectedCredentials[user.username];
-      
+
       if (!expectedPassword) {
         uncheckedCount++;
         console.log(`  ⚠️ ${user.username}: No expected password defined (skipping validation)`);
@@ -273,6 +271,7 @@ class DatabaseInitializer {
 
   async createUsers() {
     const users = [
+      // Admin
       {
         username: 'admin',
         email: 'admin@hivclinic.com',
@@ -281,44 +280,22 @@ class DatabaseInitializer {
         office: null,
         is_active: true
       },
+      // Testing Staff
       {
-        username: 'dr_santos',
-        email: 'dr.santos@hivclinic.com',
-        password: 'Doctor@123',
-        role: 'staff',
-        office: 'treatment',
-        is_active: true
-      },
-      {
-        username: 'nurse_reyes',
+        username: 'nurse',
         email: 'nurse.reyes@hivclinic.com',
         password: 'Nurse@123',
         role: 'staff',
         office: 'testing',
         is_active: true
       },
+      // Treatment Staff
       {
-        username: 'counselor_cruz',
-        email: 'counselor.cruz@hivclinic.com',
-        password: 'Counselor@123',
-        role: 'staff',
-        office: 'testing',
-        is_active: true
-      },
-      {
-        username: 'pharmacist_lim',
+        username: 'pharma',
         email: 'pharmacist.lim@hivclinic.com',
         password: 'Pharma@123',
         role: 'staff',
         office: 'treatment',
-        is_active: true
-      },
-      {
-        username: 'receptionist_garcia',
-        email: 'receptionist@hivclinic.com',
-        password: 'Reception@123',
-        role: 'staff',
-        office: 'testing',
         is_active: true
       }
     ];
@@ -327,14 +304,12 @@ class DatabaseInitializer {
       const existingUser = await db.User.findOne({
         where: { username: userData.username }
       });
-      
+
       if (!existingUser) {
-        // Let the model's beforeCreate hook handle password hashing
-        // Just pass the plain password, the model will hash it
         const user = await db.User.create({
           username: userData.username,
           email: userData.email,
-          password_hash: userData.password, // Pass plain password, model will hash it
+          password_hash: userData.password,
           role: userData.role,
           office: userData.office,
           is_active: userData.is_active
@@ -346,9 +321,14 @@ class DatabaseInitializer {
   }
 
   async createPatients() {
+    // Get current date for enrollment dates
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    
     const patients = [
       {
         first_name: 'Juan',
+        middle_name: 'Cruz',
         last_name: 'Dela Cruz',
         birth_date: '1990-05-15',
         gender: 'Male',
@@ -359,6 +339,8 @@ class DatabaseInitializer {
         emergency_phone: '09171234568',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear - 2}-01-15`, // Enrolled 2 years ago
+        treatment_transition_date: `${currentYear - 2}-02-01`, // Transitioned to treatment
         user: {
           username: 'juan.delacruz',
           email: 'juan.delacruz@email.com',
@@ -368,6 +350,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Maria',
+        middle_name: 'Isabel',
         last_name: 'Santos',
         birth_date: '1985-08-22',
         gender: 'Female',
@@ -378,6 +361,8 @@ class DatabaseInitializer {
         emergency_phone: '09179876544',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear}-01-10`, // Enrolled this year
+        treatment_transition_date: null, // Still in testing
         user: {
           username: 'maria.santos',
           email: 'maria.santos@email.com',
@@ -387,6 +372,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Jose',
+        middle_name: 'Protacio',
         last_name: 'Reyes',
         birth_date: '1978-03-10',
         gender: 'Male',
@@ -397,6 +383,8 @@ class DatabaseInitializer {
         emergency_phone: '09175678902',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear - 3}-06-20`, // Enrolled 3 years ago
+        treatment_transition_date: `${currentYear - 3}-07-15`, // Transitioned to treatment
         user: {
           username: 'jose.reyes',
           email: 'jose.reyes@email.com',
@@ -406,6 +394,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Ana',
+        middle_name: 'Marie',
         last_name: 'Gonzales',
         birth_date: '1995-12-01',
         gender: 'Female',
@@ -416,6 +405,8 @@ class DatabaseInitializer {
         emergency_phone: '09172345679',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear}-03-05`, // Enrolled this year
+        treatment_transition_date: null, // Still in testing
         user: {
           username: 'ana.gonzales',
           email: 'ana.gonzales@email.com',
@@ -425,6 +416,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Michael',
+        middle_name: 'James',
         last_name: 'Fernandez',
         birth_date: '1982-07-19',
         gender: 'Male',
@@ -435,6 +427,8 @@ class DatabaseInitializer {
         emergency_phone: '09173456790',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear - 1}-08-10`, // Enrolled last year
+        treatment_transition_date: `${currentYear - 1}-09-01`, // Transitioned to treatment
         user: {
           username: 'michael.fernandez',
           email: 'michael.fernandez@email.com',
@@ -444,6 +438,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Kristine',
+        middle_name: 'Joy',
         last_name: 'Villanueva',
         birth_date: '2000-03-25',
         gender: 'Female',
@@ -454,6 +449,8 @@ class DatabaseInitializer {
         emergency_phone: '09174567891',
         guardian_name: 'Ramon Villanueva (Father)',
         guardian_contact: '09174567891',
+        enrollment_date: `${currentYear}-02-14`, // Enrolled this year
+        treatment_transition_date: null, // Still in testing
         user: {
           username: 'kristine.villanueva',
           email: 'kristine@email.com',
@@ -463,6 +460,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Roberto',
+        middle_name: 'Manuel',
         last_name: 'Aquino',
         birth_date: '1975-11-30',
         gender: 'Male',
@@ -473,6 +471,8 @@ class DatabaseInitializer {
         emergency_phone: '09175678902',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear - 4}-04-10`, // Enrolled 4 years ago
+        treatment_transition_date: `${currentYear - 4}-05-01`, // Transitioned to treatment
         user: {
           username: 'roberto.aquino',
           email: 'roberto.aquino@email.com',
@@ -482,6 +482,7 @@ class DatabaseInitializer {
       },
       {
         first_name: 'Carmen',
+        middle_name: 'Rosa',
         last_name: 'Ramirez',
         birth_date: '1988-09-14',
         gender: 'Female',
@@ -492,6 +493,8 @@ class DatabaseInitializer {
         emergency_phone: '09176789013',
         guardian_name: null,
         guardian_contact: null,
+        enrollment_date: `${currentYear - 1}-11-20`, // Enrolled last year
+        treatment_transition_date: `${currentYear - 1}-12-01`, // Transitioned to treatment
         user: {
           username: 'carmen.ramirez',
           email: 'carmen.ramirez@email.com',
@@ -505,34 +508,59 @@ class DatabaseInitializer {
       const existingPatient = await db.Patient.findOne({
         where: { contact_number: patientData.contact_number }
       });
-      
+
       if (!existingPatient) {
-        // Let the model's beforeCreate hook handle password hashing
         const user = await db.User.create({
           username: patientData.user.username,
           email: patientData.user.email,
-          password_hash: patientData.user.password, // Pass plain password, model will hash it
+          password_hash: patientData.user.password,
           role: patientData.user.role,
           is_active: true
         });
-        
+
+        // Generate facility code with enrollment and transition dates
+        const patientCode = await patientCodeService.generateFacilityCode({
+          first_name: patientData.first_name,
+          middle_name: patientData.middle_name || '',
+          last_name: patientData.last_name,
+          status: patientData.status,
+          enrollment_date: patientData.enrollment_date,
+          treatment_transition_date: patientData.treatment_transition_date
+        });
+
+        // Create patient with all fields including new date fields
         const patient = await db.Patient.create({
           user_id: user.id,
           first_name: patientData.first_name,
+          middle_name: patientData.middle_name,
           last_name: patientData.last_name,
           birth_date: patientData.birth_date,
           gender: patientData.gender,
           contact_number: patientData.contact_number,
           address: patientData.address,
           status: patientData.status,
+          patient_facility_code: patientCode,
           emergency_contact: patientData.emergency_contact,
           emergency_phone: patientData.emergency_phone,
           guardian_name: patientData.guardian_name,
-          guardian_contact: patientData.guardian_contact
+          guardian_contact: patientData.guardian_contact,
+          enrollment_date: patientData.enrollment_date,
+          treatment_transition_date: patientData.treatment_transition_date
         });
-        
+
         this.createdRecords.patients.push(patient);
-        console.log(`  ✓ Created patient: ${patientData.first_name} ${patientData.last_name}`);
+        
+        // Log the facility code generation details
+        const codeYear = patientData.status === 'treatment' ? 
+          patientData.treatment_transition_date?.slice(0,4) : 
+          patientData.enrollment_date.slice(0,4);
+        
+        console.log(`  ✓ Created patient: ${patientData.first_name} ${patientData.middle_name || ''} ${patientData.last_name}`);
+        console.log(`    → Facility Code: ${patient.patient_facility_code} (${patientData.status}, ${codeYear})`);
+        console.log(`    → Enrolled: ${patientData.enrollment_date}`);
+        if (patientData.treatment_transition_date) {
+          console.log(`    → Transitioned to treatment: ${patientData.treatment_transition_date}`);
+        }
       }
     }
   }
@@ -540,15 +568,21 @@ class DatabaseInitializer {
   async createTestingEncounters() {
     const patients = await db.Patient.findAll({
       where: { status: 'testing' },
-      include: [{ model: db.User }]
+      include: [{ model: db.User, as: 'User' }]
     });
-    
+
     const staff = await db.User.findOne({
-      where: { office: 'testing', role: 'staff' }
+      where: {
+        office: 'testing',
+        role: 'staff'
+      }
     });
-    
-    if (!staff) return;
-    
+
+    if (!staff) {
+      console.log('  ⚠️ No testing staff found, skipping testing encounters');
+      return;
+    }
+
     const encounters = [
       {
         patient: patients.find(p => p.first_name === 'Maria'),
@@ -569,10 +603,13 @@ class DatabaseInitializer {
         posttest_notes: 'Indeterminate result explained. Scheduled for repeat testing in 2 weeks.'
       }
     ];
-    
+
     for (const enc of encounters) {
-      if (!enc.patient) continue;
-      
+      if (!enc.patient) {
+        console.log(`  ⚠️ Skipping testing encounter - patient not found`);
+        continue;
+      }
+
       const encounter = await db.TestingEncounter.create({
         patient_id: enc.patient.id,
         staff_id: staff.id,
@@ -613,10 +650,13 @@ class DatabaseInitializer {
           referred_at: enc.result === 'positive' ? new Date().toISOString() : null
         }
       });
-      
+
       if (enc.result === 'positive') {
+        // Update patient status to treatment
+        // The beforeUpdate hook will set treatment_transition_date
         await enc.patient.update({ status: 'treatment' });
         console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result}) - Referred to treatment`);
+        console.log(`    → Patient transitioned to treatment on ${new Date().toISOString().split('T')[0]}`);
       } else {
         console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result})`);
       }
@@ -626,15 +666,21 @@ class DatabaseInitializer {
   async createTreatmentEncounters() {
     const patients = await db.Patient.findAll({
       where: { status: 'treatment' },
-      include: [{ model: db.User }]
+      include: [{ model: db.User, as: 'User' }]
     });
-    
+
     const staff = await db.User.findOne({
-      where: { office: 'treatment', role: 'staff' }
+      where: {
+        office: 'treatment',
+        role: 'staff'
+      }
     });
-    
-    if (!staff) return;
-    
+
+    if (!staff) {
+      console.log('  ⚠️ No treatment staff found, skipping treatment encounters');
+      return;
+    }
+
     const encounters = [
       {
         patient: patients.find(p => p.first_name === 'Juan'),
@@ -677,13 +723,13 @@ class DatabaseInitializer {
         next_appointment_days: 90
       }
     ];
-    
+
     for (const enc of encounters) {
       if (!enc.patient) {
-        console.log(`  ⚠️ Skipping treatment encounter for patient not found`);
+        console.log(`  ⚠️ Skipping treatment encounter - patient not found`);
         continue;
       }
-      
+
       const encounter = await db.TreatmentEncounter.create({
         patient_id: enc.patient.id,
         staff_id: staff.id,
@@ -724,8 +770,9 @@ class DatabaseInitializer {
         },
         next_appointment_date: new Date(Date.now() + enc.next_appointment_days * 24 * 60 * 60 * 1000)
       });
-      
+
       console.log(`  ✓ Created treatment encounter for ${enc.patient.first_name} ${enc.patient.last_name}`);
+      console.log(`    → ART Regimen: ${enc.art_regimen}, CD4: ${enc.cd4}, VL: ${enc.viral_load}`);
     }
   }
 
@@ -733,25 +780,25 @@ class DatabaseInitializer {
     const patients = await db.Patient.findAll();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const dates = [
       today,
       new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000),
       new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000),
       new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
     ];
-    
+
     const timeSlots = ['09:00:00', '10:30:00', '13:00:00', '14:30:00', '16:00:00'];
-    
+
     for (let i = 0; i < patients.length; i++) {
       const patient = patients[i];
       const numAppointments = Math.floor(Math.random() * 3) + 1;
-      
+
       for (let j = 0; j < numAppointments; j++) {
         const date = dates[Math.floor(Math.random() * dates.length)];
         const timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
         const office = patient.status === 'treatment' ? 'treatment' : 'testing';
-        
+
         const existingAppointment = await db.Appointment.findOne({
           where: {
             patient_id: patient.id,
@@ -759,7 +806,7 @@ class DatabaseInitializer {
             time_slot: timeSlot
           }
         });
-        
+
         if (!existingAppointment) {
           const appointment = await db.Appointment.create({
             patient_id: patient.id,
@@ -770,21 +817,21 @@ class DatabaseInitializer {
             status: date < today ? 'completed' : (date.getTime() === today.getTime() ? 'pending' : 'scheduled'),
             queue_number: null
           });
-          
+
           this.createdRecords.appointments.push(appointment);
         }
       }
     }
-    
+
     console.log(`  ✓ Created ${this.createdRecords.appointments.length} appointments`);
   }
 
   async createQueues() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const offices = ['testing', 'treatment'];
-    
+
     for (const office of offices) {
       const [queue, created] = await db.Queue.findOrCreate({
         where: {
@@ -800,7 +847,7 @@ class DatabaseInitializer {
           noshow_count: 0
         }
       });
-      
+
       if (created) {
         console.log(`  ✓ Created queue for ${office} office (${today.toDateString()})`);
       }
@@ -809,15 +856,15 @@ class DatabaseInitializer {
 
   async createAuditLogs() {
     const users = await db.User.findAll();
-    
+
     const actions = ['CREATE', 'UPDATE', 'VIEW', 'LOGIN', 'LOGOUT'];
     const entities = ['Patient', 'Appointment', 'User', 'SystemSetting'];
-    
+
     for (let i = 0; i < 50; i++) {
       const user = users[Math.floor(Math.random() * users.length)];
       const action = actions[Math.floor(Math.random() * actions.length)];
       const entity = entities[Math.floor(Math.random() * entities.length)];
-      
+
       await db.AuditLog.create({
         user_id: user.id,
         action: action,
@@ -830,27 +877,23 @@ class DatabaseInitializer {
         created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000)
       });
     }
-    
+
     console.log('  ✓ Created 50 sample audit logs');
   }
 
   displayCredentials() {
     console.log('\n🔐 LOGIN CREDENTIALS (All passwords validated):');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
-    // Group credentials by role
+
     const credentials = {
       'Administrator': [
         { username: 'admin', password: 'Admin@123' }
       ],
-      'Staff - Testing Office': [
-        { username: 'nurse_reyes', password: 'Nurse@123' },
-        { username: 'counselor_cruz', password: 'Counselor@123' },
-        { username: 'receptionist_garcia', password: 'Reception@123' }
+      'Testing Staff': [
+        { username: 'nurse', password: 'Nurse@123' }
       ],
-      'Staff - Treatment Office': [
-        { username: 'dr_santos', password: 'Doctor@123' },
-        { username: 'pharmacist_lim', password: 'Pharma@123' }
+      'Treatment Staff': [
+        { username: 'pharma', password: 'Pharma@123' }
       ],
       'Patients': [
         { username: 'juan.delacruz', password: 'Patient@123' },
@@ -864,7 +907,6 @@ class DatabaseInitializer {
       ]
     };
 
-    // Display credentials with validation status
     for (const [role, users] of Object.entries(credentials)) {
       console.log(`\n📌 ${role}:`);
       for (const cred of users) {
@@ -884,12 +926,11 @@ class DatabaseInitializer {
     }
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
-    // Display validation summary
+
     const validCount = this.passwordValidationResults.filter(r => r.isValid).length;
     const totalCount = this.passwordValidationResults.length;
     const uncheckedCount = Object.keys(this.expectedCredentials).length - totalCount;
-    
+
     if (validCount === totalCount && totalCount > 0 && uncheckedCount === 0) {
       console.log('✅ ALL PASSWORDS VALIDATED SUCCESSFULLY');
     } else {
@@ -909,40 +950,37 @@ class DatabaseInitializer {
       console.log('\n=================================');
       console.log('Database Initialization Started');
       console.log('=================================\n');
-      
-      // Sync database
+
       console.log('Syncing database schema...');
       await db.sequelize.sync({ force: true });
       console.log('✓ Database schema synced\n');
-      
-      // Create data
+
       console.log('Creating system settings...');
       await this.createSystemSettings();
-      
+
       console.log('\nCreating users...');
       await this.createUsers();
-      
+
       console.log('\nCreating patients...');
       await this.createPatients();
-      
+
       console.log('\nCreating testing encounters...');
       await this.createTestingEncounters();
-      
+
       console.log('\nCreating treatment encounters...');
       await this.createTreatmentEncounters();
-      
+
       console.log('\nCreating appointments...');
       await this.createAppointments();
-      
+
       console.log('\nCreating queues...');
       await this.createQueues();
-      
+
       console.log('\nCreating audit logs...');
       await this.createAuditLogs();
-      
-      // Validate all passwords before displaying credentials
+
       await this.validateAllPasswords();
-      
+
       console.log('\n=================================');
       console.log('Database Initialization Complete!');
       console.log('=================================');
@@ -951,12 +989,11 @@ class DatabaseInitializer {
       console.log(`  • Patients: ${this.createdRecords.patients.length}`);
       console.log(`  • Settings: ${this.createdRecords.settings.length}`);
       console.log(`  • Appointments: ${this.createdRecords.appointments.length}`);
-      
-      // Display validated credentials
+
       this.displayCredentials();
-      
+
       console.log('✨ You can now start the server: npm run dev\n');
-      
+
     } catch (error) {
       console.error('\n❌ Error initializing database:', error);
       process.exit(1);
@@ -964,6 +1001,5 @@ class DatabaseInitializer {
   }
 }
 
-// Run the initializer
 const initializer = new DatabaseInitializer();
 initializer.run();

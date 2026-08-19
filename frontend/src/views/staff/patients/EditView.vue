@@ -106,7 +106,44 @@
                     :items="statusOptions"
                     label="Status"
                     outlined
+                    hint="Changing to Treatment will set transition date automatically"
+                    persistent-hint
                   ></v-select>
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="patient.patient_facility_code"
+                    label="Facility Code"
+                    readonly
+                    outlined
+                    prepend-inner-icon="mdi-barcode"
+                  ></v-text-field>
+                </v-col>
+              </v-row>
+
+              <v-divider class="my-4"></v-divider>
+
+              <div class="text-subtitle-1 font-weight-bold mb-3">Enrollment Information</div>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="patient.enrollment_date"
+                    label="Enrollment Date"
+                    prepend-inner-icon="mdi-calendar-plus"
+                    readonly
+                    outlined
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="patient.treatment_transition_date"
+                    label="Treatment Transition Date"
+                    prepend-inner-icon="mdi-calendar-check"
+                    readonly
+                    outlined
+                    :hint="patient.treatment_transition_date ? 'Set automatically when moved to treatment' : 'Not yet in treatment'"
+                    persistent-hint
+                  ></v-text-field>
                 </v-col>
               </v-row>
 
@@ -196,6 +233,9 @@ export default {
       email: '',
       address: '',
       status: 'testing',
+      patient_facility_code: '',
+      enrollment_date: '',
+      treatment_transition_date: '',
       guardian_name: '',
       guardian_contact: '',
       emergency_contact: '',
@@ -239,7 +279,23 @@ export default {
 
       submitting.value = true
       try {
-        await patientService.updatePatient(route.params.id, { ...patient })
+        // Only send updatable fields
+        const updateData = {
+          first_name: patient.first_name,
+          last_name: patient.last_name,
+          birth_date: patient.birth_date,
+          gender: patient.gender,
+          contact_number: patient.contact_number,
+          email: patient.email,
+          address: patient.address,
+          status: patient.status,
+          guardian_name: patient.guardian_name,
+          guardian_contact: patient.guardian_contact,
+          emergency_contact: patient.emergency_contact,
+          emergency_phone: patient.emergency_phone
+        }
+
+        await patientService.updatePatient(route.params.id, updateData)
         showSnackbar('Patient updated successfully!', 'success')
         setTimeout(() => {
           router.push(`/patients/${route.params.id}`)

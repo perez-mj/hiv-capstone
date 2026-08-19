@@ -94,6 +94,23 @@
 
               <v-divider class="my-4"></v-divider>
 
+              <div class="text-subtitle-1 font-weight-bold mb-3">Enrollment Information</div>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="patient.enrollment_date"
+                    label="Enrollment Date"
+                    prepend-inner-icon="mdi-calendar"
+                    readonly
+                    outlined
+                    hint="Auto-set to today's date"
+                    persistent-hint
+                  ></v-text-field>
+                </v-col>
+              </v-row>
+
+              <v-divider class="my-4"></v-divider>
+
               <div class="text-subtitle-1 font-weight-bold mb-3">Guardian Information (for minors under 18)</div>
               <v-row>
                 <v-col cols="12" md="6">
@@ -185,7 +202,7 @@
 </template>
 
 <script>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import patientService from '@/services/patientService'
 
@@ -197,6 +214,9 @@ export default {
     const valid = ref(false)
     const submitting = ref(false)
     const dateMenu = ref(false)
+
+    // Get today's date for enrollment
+    const today = new Date().toISOString().split('T')[0]
 
     const patient = reactive({
       first_name: '',
@@ -210,6 +230,7 @@ export default {
       guardian_contact: '',
       emergency_contact: '',
       emergency_phone: '',
+      enrollment_date: today, // Auto-set to today
       create_portal_account: false,
       username: '',
       password: ''
@@ -233,6 +254,7 @@ export default {
       submitting.value = true
       try {
         const data = { ...patient }
+        
         // Remove portal account fields if not creating account
         if (!data.create_portal_account) {
           delete data.username
