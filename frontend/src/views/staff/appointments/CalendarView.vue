@@ -8,13 +8,13 @@
             <v-icon start>mdi-calendar</v-icon>
             Appointment Calendar
             <v-spacer></v-spacer>
-            <v-btn color="primary" @click="navigateToList" class="mr-2">
+            <v-btn color="success" @click="navigateToCreate" class="mr-2">
+              <v-icon start>mdi-plus</v-icon>
+              New
+            </v-btn>
+            <v-btn color="primary" @click="navigateToList">
               <v-icon start>mdi-format-list-bulleted</v-icon>
               List View
-            </v-btn>
-            <v-btn color="success" @click="navigateToCreate">
-              <v-icon start>mdi-plus</v-icon>
-              New Appointment
             </v-btn>
           </v-card-title>
           <v-divider></v-divider>

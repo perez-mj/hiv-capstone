@@ -4,14 +4,6 @@
     <!-- Welcome Message -->
     <v-card class="mb-6" elevation="2" border="primary">
       <v-card-text class="text-center pa-8">
-        <v-icon 
-          size="72" 
-          color="primary" 
-          class="mb-4"
-          :style="{ opacity: 0.9 }"
-        >
-          mdi-hand-wave
-        </v-icon>
         <div class="text-h3 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
           Welcome to Purple Rain Clinic
         </div>
@@ -367,7 +359,6 @@
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.75 }">
             Position in queue: {{ kioskStore.ticketPosition || '1' }}
           </div>
-          <!-- Display Facility Code instead of patient name -->
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.9 }">
             Patient Code: <strong>{{ patientFacilityCode || 'N/A' }}</strong>
           </div>
@@ -409,6 +400,100 @@
       @input="handleKeyboardInput"
       @done="handleKeyboardDone"
     />
+
+    <!-- Power Off Button - Discreetly placed at the bottom -->
+    <div class="power-control mt-8 pt-4 text-center">
+      <v-btn
+        color="error"
+        variant="text"
+        size="small"
+        prepend-icon="mdi-power-standby"
+        @click="showPowerOffDialog = true"
+        class="power-btn"
+      >
+        Power Off System
+      </v-btn>
+    </div>
+
+    <!-- Power Off Confirmation Dialog -->
+    <v-dialog v-model="showPowerOffDialog" max-width="400" persistent>
+      <v-card>
+        <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-error)); color: white;">
+          <v-icon color="white" class="mr-2">mdi-power-standby</v-icon>
+          Shutdown System
+        </v-card-title>
+        
+        <v-card-text class="pa-6">
+          <div class="text-body-1 mb-4">
+            Are you sure you want to shut down the kiosk system?
+            This will turn off the Orange Pi.
+          </div>
+          
+          <v-alert
+            v-if="shutdownError"
+            type="error"
+            variant="tonal"
+            class="mb-4"
+            closable
+            @click:close="shutdownError = ''"
+          >
+            {{ shutdownError }}
+          </v-alert>
+
+          <v-alert
+            v-if="shutdownSuccess"
+            type="success"
+            variant="tonal"
+            class="mb-4"
+          >
+            {{ shutdownSuccess }}
+          </v-alert>
+          
+          <div class="d-flex justify-space-between">
+            <v-btn
+              variant="text"
+              size="large"
+              @click="closePowerOffDialog"
+              prepend-icon="mdi-cancel"
+              :disabled="isShuttingDown"
+            >
+              Cancel
+            </v-btn>
+            <v-btn
+              color="error"
+              size="large"
+              :loading="isShuttingDown"
+              @click="shutdownSystem"
+              prepend-icon="mdi-power"
+              :disabled="isShuttingDown"
+            >
+              {{ isShuttingDown ? 'Shutting Down...' : 'Shut Down' }}
+            </v-btn>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <!-- Shutdown in progress overlay -->
+    <v-overlay 
+      v-model="isShuttingDown" 
+      class="align-center justify-center" 
+      scrim-color="background" 
+      scrim-opacity="0.8"
+      persistent
+    >
+      <div class="text-center">
+        <v-progress-circular
+          color="error"
+          indeterminate
+          size="64"
+          width="6"
+          class="mb-4"
+        ></v-progress-circular>
+        <div class="text-h5 font-weight-bold">Shutting Down System...</div>
+        <div class="text-subtitle-1 text-medium-emphasis mt-2">Please wait for the system to power off</div>
+      </div>
+    </v-overlay>
   </div>
 </template>
 
@@ -429,13 +514,15 @@ const {
   currentTicket
 } = storeToRefs(kioskStore)
 
+// Configuration - Point to local kiosk service
+const API_BASE_URL = import.meta.env.VITE_KIOSK_API_URL || 'http://localhost:5000'
+const SHUTDOWN_TOKEN = import.meta.env.VITE_SHUTDOWN_TOKEN || 'your_secure_token_here'
+
 // Computed - Get facility code from current ticket or store
 const patientFacilityCode = computed(() => {
-  // Check if the ticket has patient_facility_code
   if (currentTicket.value?.patient_facility_code) {
     return currentTicket.value.patient_facility_code
   }
-  // Check if we stored it separately
   if (storedFacilityCode.value) {
     return storedFacilityCode.value
   }
@@ -452,6 +539,12 @@ const walkinError = ref('')
 const isReturningPatient = ref(false)
 const checkingReturning = ref(false)
 const storedFacilityCode = ref(null)
+
+// Power off state
+const showPowerOffDialog = ref(false)
+const isShuttingDown = ref(false)
+const shutdownError = ref('')
+const shutdownSuccess = ref('')
 
 const appointmentForm = ref(null)
 const walkinForm = ref(null)
@@ -472,9 +565,8 @@ const walkinData = reactive({
   address: ''
 })
 
-// Dispatch Print Job
+// Dispatch Print Job - Direct call to local service
 const issuePrintTicket = async () => {
-  // Get patient name for the ticket
   let patientName = 'Patient'
   if (walkinData.firstName) {
     patientName = `${walkinData.firstName} ${walkinData.middleName || ''} ${walkinData.lastName}`.trim()
@@ -492,7 +584,26 @@ const issuePrintTicket = async () => {
     wait_time: `${(kioskStore.ticketPosition || 1) * 5} mins`
   }
   
-  await printerService.printTicket(ticketData)
+  // Call the local printer service directly
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/kiosk/print`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ticketData })
+    })
+    
+    if (!response.ok) {
+      throw new Error('Print failed')
+    }
+    
+    return await response.json()
+  } catch (error) {
+    console.error('Print error:', error)
+    // Fallback to printerService if needed
+    await printerService.printTicket(ticketData)
+  }
 }
 
 // Methods
@@ -561,25 +672,20 @@ const checkReturningPatient = async (phoneNumber) => {
   
   checkingReturning.value = true
   try {
-    // Check if patient exists with this phone number using kioskService
     const result = await kioskService.checkPatientExists(phoneNumber)
     
     if (result && result.exists) {
       isReturningPatient.value = true
-      // Auto-fill name if available
       if (result.patient) {
         walkinData.firstName = result.patient.first_name || ''
         walkinData.middleName = result.patient.middle_name || ''
         walkinData.lastName = result.patient.last_name || ''
         walkinData.gender = result.patient.gender || ''
-        // Store facility code
         storedFacilityCode.value = result.patient.patient_facility_code || null
       }
     } else {
       isReturningPatient.value = false
-      // Clear auto-filled data if patient doesn't exist
       if (!walkinData.firstName && !walkinData.lastName) {
-        // Only clear if they were auto-filled
         walkinData.middleName = ''
         walkinData.gender = ''
       }
@@ -630,12 +736,10 @@ const checkInWithAppointment = async () => {
   try {
     const result = await kioskStore.checkInPatient(appointmentPhone.value)
     
-    // Store facility code from result if available
     if (result?.ticket?.patient_facility_code) {
       storedFacilityCode.value = result.ticket.patient_facility_code
     }
     
-    // Get patient name from result for print
     if (result?.patient) {
       walkinData.firstName = result.patient.first_name || ''
       walkinData.middleName = result.patient.middle_name || ''
@@ -648,7 +752,6 @@ const checkInWithAppointment = async () => {
     showAppointmentCheckin.value = false
     showSuccess.value = true
 
-    // Trigger Print
     await issuePrintTicket()
 
   } catch (error) {
@@ -680,7 +783,7 @@ const processWalkin = async () => {
       first_name: walkinData.firstName || 'Walk-in',
       middle_name: walkinData.middleName || '',
       last_name: walkinData.lastName || 'Patient',
-      birth_date: '1900-01-01', // Default date since we removed the field
+      birth_date: '1900-01-01',
       gender: walkinData.gender || 'other',
       contact_number: walkinData.phoneNumber,
       address: walkinData.address || 'To be updated'
@@ -688,7 +791,6 @@ const processWalkin = async () => {
 
     const result = await kioskStore.registerWalkIn(patientData)
     
-    // Store facility code from result
     if (result?.patient?.facility_code) {
       storedFacilityCode.value = result.patient.facility_code
     } else if (result?.patient?.patient_facility_code) {
@@ -698,11 +800,63 @@ const processWalkin = async () => {
     showWalkinDialog.value = false
     showSuccess.value = true
 
-    // Trigger Print
     await issuePrintTicket()
 
   } catch (error) {
     walkinError.value = error.message || 'Failed to process walk-in. Please try again.'
+  }
+}
+
+// Power Off Methods
+const closePowerOffDialog = () => {
+  showPowerOffDialog.value = false
+  shutdownError.value = ''
+  shutdownSuccess.value = ''
+}
+
+const shutdownSystem = async () => {
+  isShuttingDown.value = true
+  shutdownError.value = ''
+  shutdownSuccess.value = ''
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/system/shutdown`, {
+      method: 'POST',
+      headers: {
+        'Authorization': SHUTDOWN_TOKEN,  // Single token
+        'Content-Type': 'application/json'
+      }
+    })
+
+    const data = await response.json()
+
+    if (response.ok && data.success) {
+      shutdownSuccess.value = data.message || 'Shutdown command sent successfully. System is powering off...'
+      
+      setTimeout(() => {
+        showPowerOffDialog.value = false
+      }, 2000)
+    } else {
+      throw new Error(data.message || 'Shutdown failed')
+    }
+  } catch (error) {
+    console.error('Shutdown failed:', error)
+    shutdownError.value = `Failed to shutdown: ${error.message || 'Unknown error'}`
+    
+    // Show manual shutdown option
+    shutdownError.value += ' Please use the physical power button if the system does not shut down.'
+  } finally {
+    isShuttingDown.value = false
+  }
+}
+
+// Keyboard shortcut for power off (Ctrl+Shift+P)
+const handleKeyPress = (event) => {
+  if (event.ctrlKey && event.shiftKey && event.key === 'P') {
+    event.preventDefault()
+    if (!showPowerOffDialog.value && !isShuttingDown.value) {
+      showPowerOffDialog.value = true
+    }
   }
 }
 
@@ -713,7 +867,7 @@ const resetInactivityTimer = () => {
     clearTimeout(inactivityTimer)
   }
   inactivityTimer = setTimeout(() => {
-    if (!showSuccess.value) {
+    if (!showSuccess.value && !showPowerOffDialog.value && !isShuttingDown.value) {
       resetAll()
     }
   }, 300000)
@@ -726,6 +880,7 @@ const trackActivity = () => {
 onMounted(() => {
   document.addEventListener('click', trackActivity)
   document.addEventListener('touchstart', trackActivity)
+  document.addEventListener('keydown', handleKeyPress)
   document.addEventListener('keydown', trackActivity)
   resetInactivityTimer()
 })
@@ -733,6 +888,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', trackActivity)
   document.removeEventListener('touchstart', trackActivity)
+  document.removeEventListener('keydown', handleKeyPress)
   document.removeEventListener('keydown', trackActivity)
   if (inactivityTimer) {
     clearTimeout(inactivityTimer)
@@ -806,6 +962,27 @@ onUnmounted(() => {
   letter-spacing: 0.3px;
 }
 
+/* Power button styles */
+.power-btn {
+  opacity: 0.3;
+  transition: all 0.3s ease;
+  font-size: 0.75rem;
+}
+
+.power-btn:hover {
+  opacity: 0.8 !important;
+  transform: scale(1.05);
+}
+
+.power-btn:active {
+  transform: scale(0.95);
+}
+
+.power-control {
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.06);
+  padding-top: 16px !important;
+}
+
 @media (max-width: 600px) {
   .kiosk-checkin {
     padding: 12px;
@@ -817,6 +994,10 @@ onUnmounted(() => {
   
   .checkin-card :deep(.v-card-text) {
     padding: 24px !important;
+  }
+
+  .power-btn {
+    font-size: 0.7rem;
   }
 }
 </style>

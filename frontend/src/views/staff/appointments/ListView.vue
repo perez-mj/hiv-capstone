@@ -10,7 +10,7 @@
             <v-spacer></v-spacer>
             <v-btn color="success" @click="navigateToCreate" class="mr-2">
               <v-icon left>mdi-plus</v-icon>
-              New Appointment
+              New
             </v-btn>
             <v-btn color="primary" @click="navigateToCalendar">
               <v-icon left>mdi-calendar</v-icon>

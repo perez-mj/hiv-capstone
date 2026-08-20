@@ -1,4 +1,4 @@
-// micro-services/printer/printerService.js
+// micro-services/kiosk/printerService.js
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
