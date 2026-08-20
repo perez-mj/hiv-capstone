@@ -73,7 +73,7 @@
                       {{ getInitials(item) }}
                     </span>
                   </v-avatar>
-                  {{ item.first_name }} {{ getMiddleInitial(item.middle_name) }}. {{ item.last_name }}
+                  {{ item.first_name }} {{ getMiddleInitial(item.middle_name) }} {{ item.last_name }}
                 </div>
               </template>
 
@@ -263,7 +263,7 @@ export default {
 
     const getMiddleInitial = (middleName) => {
       if (!middleName) return ''
-      return middleName.charAt(0).toUpperCase()
+      return middleName.charAt(0).toUpperCase() + '.'
     }
 
     const calculateAge = (birthDate) => {

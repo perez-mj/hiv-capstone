@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const { roleCheck, officeCheck } = require('../middleware/roleCheck');
 const db = require('../models');
 const crypto = require('crypto');
+const socketService = require('../services/socketService');
 
 // Save testing encounter
 router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['testing']), async (req, res) => {
@@ -39,10 +40,12 @@ router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['testi
     encounter.blockchain_hash = hash;
     await encounter.save();
     
+    // Handle positive result
     if (hiv_test && hiv_test.result === 'positive') {
       const patient = await db.Patient.findByPk(patient_id);
       if (patient) {
         patient.status = 'treatment';
+        patient.treatment_transition_date = new Date().toISOString().split('T')[0];
         await patient.save();
         
         await db.AuditLog.create({
@@ -67,14 +70,65 @@ router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['testi
       user_agent: req.get('User-Agent')
     });
     
-    const io = req.app.get('io');
-    io.to('queue-testing').emit('encounter-completed', {
+    // ✅ Use socketService directly (imported, not from app)
+    // Emit encounter completed
+    socketService.emitEncounterCompleted('testing', {
       patient_id,
-      encounter_id: encounter.id
+      encounter_id: encounter.id,
+      result: hiv_test?.result || 'unknown'
     });
+    
+    // Also update queue if patient was in progress
+    const today = new Date().toISOString().split('T')[0];
+    const queueEntry = await db.QueueEntry.findOne({
+      where: {
+        patient_id,
+        status: 'in-progress'
+      },
+      include: [{
+        model: db.Queue,
+        as: 'Queue',
+        where: {
+          office: 'testing',
+          date: today
+        }
+      }]
+    });
+    
+    if (queueEntry) {
+      queueEntry.status = 'completed';
+      queueEntry.completed_at = new Date();
+      await queueEntry.save();
+      
+      const queue = await db.Queue.findByPk(queueEntry.queue_id);
+      if (queue) {
+        queue.completed_count = (queue.completed_count || 0) + 1;
+        await queue.save();
+      }
+      
+      // Emit queue update
+      const waitingCount = await db.QueueEntry.count({
+        where: { status: 'waiting' },
+        include: [{
+          model: db.Queue,
+          as: 'Queue',
+          where: {
+            office: 'testing',
+            date: today
+          }
+        }]
+      });
+      
+      socketService.emitQueueUpdated('testing', {
+        queue_number: queueEntry.queue_number,
+        waiting_count: waitingCount,
+        completed_count: queue?.completed_count || 0
+      });
+    }
     
     res.status(201).json(encounter);
   } catch (error) {
+    console.error('Create testing encounter error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -103,6 +157,7 @@ router.get('/encounters/:patientId', auth, async (req, res) => {
     
     res.json(encounters);
   } catch (error) {
+    console.error('Get testing encounters error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -114,7 +169,7 @@ router.get('/encounter/:id', auth, async (req, res) => {
     
     const encounter = await db.TestingEncounter.findByPk(id, {
       include: [
-        { model: db.Patient, attributes: ['id', 'first_name', 'last_name', 'contact_number'] },
+        { model: db.Patient, attributes: ['id', 'first_name', 'last_name', 'contact_number', 'status', 'birth_date'] },
         { model: db.User, as: 'User', attributes: ['id', 'username'] }
       ]
     });
@@ -132,6 +187,7 @@ router.get('/encounter/:id', auth, async (req, res) => {
     
     res.json(encounter);
   } catch (error) {
+    console.error('Get testing encounter error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -176,6 +232,7 @@ router.put('/encounter/:id', auth, roleCheck('admin'), async (req, res) => {
     
     res.json(encounter);
   } catch (error) {
+    console.error('Update testing encounter error:', error);
     res.status(500).json({ error: error.message });
   }
 });

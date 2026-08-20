@@ -6,7 +6,7 @@
         <v-card>
           <v-card-title class="text-h5">
             <v-icon left>mdi-account</v-icon>
-            Patient Details
+            {{ patient?.patient_facility_code || 'N/A' }}
             <v-spacer></v-spacer>
             <v-btn color="primary" @click="editPatient" v-if="patient">
               <v-icon left>mdi-pencil</v-icon>
@@ -29,7 +29,7 @@
                     <v-list-item>
                       <v-list-item-content>
                         <v-list-item-title class="text-caption text-grey">Full Name</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.first_name }} {{ patient.last_name }}</v-list-item-subtitle>
+                        <v-list-item-subtitle>{{ patient.first_name }} {{ patient.middle_name }} {{ patient.last_name }}</v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
                     <v-divider></v-divider>

@@ -1,3 +1,4 @@
+// frontend/src/services/treatmentService.js
 import api from '@/plugins/axios'
 
 export default {

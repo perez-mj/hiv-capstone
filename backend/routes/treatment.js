@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const { roleCheck, officeCheck } = require('../middleware/roleCheck');
 const db = require('../models');
 const crypto = require('crypto');
+const socketService = require('../services/socketService');
 
 // Save treatment encounter
 router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['treatment']), async (req, res) => {
@@ -68,18 +69,65 @@ router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['treat
       user_agent: req.get('User-Agent')
     });
     
-    const io = req.app.get('io');
-    io.to('queue-treatment').emit('encounter-completed', {
+    // ✅ Use socketService directly
+    socketService.emitEncounterCompleted('treatment', {
       patient_id,
       encounter_id: encounter.id
     });
     
+    // Update queue
+    const today = new Date().toISOString().split('T')[0];
+    const queueEntry = await db.QueueEntry.findOne({
+      where: {
+        patient_id,
+        status: 'in-progress'
+      },
+      include: [{
+        model: db.Queue,
+        as: 'Queue',
+        where: {
+          office: 'treatment',
+          date: today
+        }
+      }]
+    });
+    
+    if (queueEntry) {
+      queueEntry.status = 'completed';
+      queueEntry.completed_at = new Date();
+      await queueEntry.save();
+      
+      const queue = await db.Queue.findByPk(queueEntry.queue_id);
+      if (queue) {
+        queue.completed_count = (queue.completed_count || 0) + 1;
+        await queue.save();
+      }
+      
+      const waitingCount = await db.QueueEntry.count({
+        where: { status: 'waiting' },
+        include: [{
+          model: db.Queue,
+          as: 'Queue',
+          where: {
+            office: 'treatment',
+            date: today
+          }
+        }]
+      });
+      
+      socketService.emitQueueUpdated('treatment', {
+        queue_number: queueEntry.queue_number,
+        waiting_count: waitingCount,
+        completed_count: queue?.completed_count || 0
+      });
+    }
+    
     res.status(201).json(encounter);
   } catch (error) {
+    console.error('Create treatment encounter error:', error);
     res.status(500).json({ error: error.message });
   }
 });
-
 // Get all treatment encounters for patient
 router.get('/encounters/:patientId', auth, async (req, res) => {
   try {
