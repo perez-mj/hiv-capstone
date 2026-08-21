@@ -5,7 +5,8 @@ import api from '../plugins/axios';
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null,
-    token: null,
+    accessToken: null,
+    refreshToken: null,
     isAuthenticated: false
   }),
 
@@ -21,16 +22,18 @@ export const useAuthStore = defineStore('auth', {
     async login(username, password) {
       try {
         const response = await api.post('/auth/login', { username, password });
-        const { token, user } = response.data;
+        const { access_token, refresh_token, user } = response.data;
         
-        this.token = token;
+        this.accessToken = access_token;
+        this.refreshToken = refresh_token;
         this.user = user;
         this.isAuthenticated = true;
         
-        localStorage.setItem('token', token);
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
         localStorage.setItem('user', JSON.stringify(user));
         
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
         
         return { success: true, user };
       } catch (error) {
@@ -39,23 +42,29 @@ export const useAuthStore = defineStore('auth', {
     },
 
     logout() {
-      this.token = null;
+      this.accessToken = null;
+      this.refreshToken = null;
       this.user = null;
       this.isAuthenticated = false;
-      localStorage.removeItem('token');
+      
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('user');
+      
       delete api.defaults.headers.common['Authorization'];
     },
 
     checkAuth() {
-      const token = localStorage.getItem('token');
+      const accessToken = localStorage.getItem('access_token');
+      const refreshToken = localStorage.getItem('refresh_token');
       const user = localStorage.getItem('user');
       
-      if (token && user) {
-        this.token = token;
+      if (accessToken && refreshToken && user) {
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
         this.user = JSON.parse(user);
         this.isAuthenticated = true;
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
         return true;
       }
       return false;

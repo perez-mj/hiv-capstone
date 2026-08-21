@@ -12,9 +12,4 @@ router.get('/status', kioskController.status);
 // Patient check endpoint
 router.get('/patient-exists/:phone', kioskController.patientExists);
 
-// Printer endpoints
-router.post('/print', kioskController.print);
-router.get('/printer-status', kioskController.printerStatus);
-router.post('/printer-test', kioskController.printerTest);
-
 module.exports = router;

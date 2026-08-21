@@ -4,6 +4,7 @@ const db = require('../models');
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
 const patientCodeService = require('../services/patientCodeService');
+const crypto = require('crypto');
 
 class DatabaseInitializer {
   constructor() {
@@ -11,7 +12,8 @@ class DatabaseInitializer {
       users: [],
       patients: [],
       settings: [],
-      appointments: []
+      appointments: [],
+      refreshTokens: []
     };
     this.passwordValidationResults = [];
     this.expectedCredentials = {
@@ -253,6 +255,28 @@ class DatabaseInitializer {
         description: 'Viral load below which is considered suppressed',
         data_type: 'number',
         category: 'clinical'
+      },
+      // New settings for token management
+      {
+        key: 'access_token_expiry_minutes',
+        value: '15',
+        description: 'Access token expiry time in minutes',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'refresh_token_expiry_days',
+        value: '7',
+        description: 'Refresh token expiry time in days',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'enable_refresh_token_rotation',
+        value: 'true',
+        description: 'Enable refresh token rotation for enhanced security',
+        data_type: 'boolean',
+        category: 'security'
       }
     ];
 
@@ -320,6 +344,46 @@ class DatabaseInitializer {
     }
   }
 
+  // Helper method to generate refresh token
+  generateRefreshToken() {
+    return crypto.randomBytes(40).toString('hex');
+  }
+
+  async createRefreshTokens() {
+    console.log('\nCreating refresh tokens for users...');
+    
+    const users = await db.User.findAll({
+      where: { is_active: true }
+    });
+
+    for (const user of users) {
+      // Create 1-2 refresh tokens per user
+      const numTokens = Math.floor(Math.random() * 2) + 1;
+      
+      for (let i = 0; i < numTokens; i++) {
+        const token = this.generateRefreshToken();
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+        
+        const refreshToken = await db.RefreshToken.create({
+          token: token,
+          user_id: user.id,
+          expires_at: expiresAt,
+          revoked: i === 1 ? true : false, // Randomly revoke some tokens for testing
+          ip_address: `192.168.1.${Math.floor(Math.random() * 255)}`,
+          user_agent: i === 0 
+            ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            : 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15'
+        });
+
+        this.createdRecords.refreshTokens.push(refreshToken);
+        console.log(`  ✓ Created refresh token for ${user.username} (${refreshToken.revoked ? 'revoked' : 'active'})`);
+      }
+    }
+
+    console.log(`✓ Created ${this.createdRecords.refreshTokens.length} refresh tokens`);
+  }
+
   async createPatients() {
     // Get current date for enrollment dates
     const today = new Date();
@@ -339,8 +403,8 @@ class DatabaseInitializer {
         emergency_phone: '09171234568',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear - 2}-01-15`, // Enrolled 2 years ago
-        treatment_transition_date: `${currentYear - 2}-02-01`, // Transitioned to treatment
+        enrollment_date: `${currentYear - 2}-01-15`,
+        treatment_transition_date: `${currentYear - 2}-02-01`,
         user: {
           username: 'juan.delacruz',
           email: 'juan.delacruz@email.com',
@@ -361,8 +425,8 @@ class DatabaseInitializer {
         emergency_phone: '09179876544',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear}-01-10`, // Enrolled this year
-        treatment_transition_date: null, // Still in testing
+        enrollment_date: `${currentYear}-01-10`,
+        treatment_transition_date: null,
         user: {
           username: 'maria.santos',
           email: 'maria.santos@email.com',
@@ -383,8 +447,8 @@ class DatabaseInitializer {
         emergency_phone: '09175678902',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear - 3}-06-20`, // Enrolled 3 years ago
-        treatment_transition_date: `${currentYear - 3}-07-15`, // Transitioned to treatment
+        enrollment_date: `${currentYear - 3}-06-20`,
+        treatment_transition_date: `${currentYear - 3}-07-15`,
         user: {
           username: 'jose.reyes',
           email: 'jose.reyes@email.com',
@@ -405,8 +469,8 @@ class DatabaseInitializer {
         emergency_phone: '09172345679',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear}-03-05`, // Enrolled this year
-        treatment_transition_date: null, // Still in testing
+        enrollment_date: `${currentYear}-03-05`,
+        treatment_transition_date: null,
         user: {
           username: 'ana.gonzales',
           email: 'ana.gonzales@email.com',
@@ -427,8 +491,8 @@ class DatabaseInitializer {
         emergency_phone: '09173456790',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear - 1}-08-10`, // Enrolled last year
-        treatment_transition_date: `${currentYear - 1}-09-01`, // Transitioned to treatment
+        enrollment_date: `${currentYear - 1}-08-10`,
+        treatment_transition_date: `${currentYear - 1}-09-01`,
         user: {
           username: 'michael.fernandez',
           email: 'michael.fernandez@email.com',
@@ -449,8 +513,8 @@ class DatabaseInitializer {
         emergency_phone: '09174567891',
         guardian_name: 'Ramon Villanueva (Father)',
         guardian_contact: '09174567891',
-        enrollment_date: `${currentYear}-02-14`, // Enrolled this year
-        treatment_transition_date: null, // Still in testing
+        enrollment_date: `${currentYear}-02-14`,
+        treatment_transition_date: null,
         user: {
           username: 'kristine.villanueva',
           email: 'kristine@email.com',
@@ -471,8 +535,8 @@ class DatabaseInitializer {
         emergency_phone: '09175678902',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear - 4}-04-10`, // Enrolled 4 years ago
-        treatment_transition_date: `${currentYear - 4}-05-01`, // Transitioned to treatment
+        enrollment_date: `${currentYear - 4}-04-10`,
+        treatment_transition_date: `${currentYear - 4}-05-01`,
         user: {
           username: 'roberto.aquino',
           email: 'roberto.aquino@email.com',
@@ -493,8 +557,8 @@ class DatabaseInitializer {
         emergency_phone: '09176789013',
         guardian_name: null,
         guardian_contact: null,
-        enrollment_date: `${currentYear - 1}-11-20`, // Enrolled last year
-        treatment_transition_date: `${currentYear - 1}-12-01`, // Transitioned to treatment
+        enrollment_date: `${currentYear - 1}-11-20`,
+        treatment_transition_date: `${currentYear - 1}-12-01`,
         user: {
           username: 'carmen.ramirez',
           email: 'carmen.ramirez@email.com',
@@ -653,7 +717,6 @@ class DatabaseInitializer {
 
       if (enc.result === 'positive') {
         // Update patient status to treatment
-        // The beforeUpdate hook will set treatment_transition_date
         await enc.patient.update({ status: 'treatment' });
         console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result}) - Referred to treatment`);
         console.log(`    → Patient transitioned to treatment on ${new Date().toISOString().split('T')[0]}`);
@@ -857,8 +920,8 @@ class DatabaseInitializer {
   async createAuditLogs() {
     const users = await db.User.findAll();
 
-    const actions = ['CREATE', 'UPDATE', 'VIEW', 'LOGIN', 'LOGOUT'];
-    const entities = ['Patient', 'Appointment', 'User', 'SystemSetting'];
+    const actions = ['CREATE', 'UPDATE', 'VIEW', 'LOGIN', 'LOGOUT', 'TOKEN_REFRESH', 'PASSWORD_CHANGE'];
+    const entities = ['Patient', 'Appointment', 'User', 'SystemSetting', 'RefreshToken'];
 
     for (let i = 0; i < 50; i++) {
       const user = users[Math.floor(Math.random() * users.length)];
@@ -964,6 +1027,9 @@ class DatabaseInitializer {
       console.log('\nCreating patients...');
       await this.createPatients();
 
+      console.log('\nCreating refresh tokens...');
+      await this.createRefreshTokens();
+
       console.log('\nCreating testing encounters...');
       await this.createTestingEncounters();
 
@@ -989,6 +1055,7 @@ class DatabaseInitializer {
       console.log(`  • Patients: ${this.createdRecords.patients.length}`);
       console.log(`  • Settings: ${this.createdRecords.settings.length}`);
       console.log(`  • Appointments: ${this.createdRecords.appointments.length}`);
+      console.log(`  • Refresh Tokens: ${this.createdRecords.refreshTokens.length}`);
 
       this.displayCredentials();
 

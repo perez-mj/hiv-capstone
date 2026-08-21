@@ -34,6 +34,7 @@ db.TestingEncounter = require('./TestingEncounter')(sequelize);
 db.TreatmentEncounter = require('./TreatmentEncounter')(sequelize);
 db.Queue = require('./Queue')(sequelize);
 db.QueueEntry = require('./QueueEntry')(sequelize);
+db.RefreshToken = require('./RefreshToken')(sequelize);
 
 // Define associations after all models are loaded
 Object.keys(db).forEach(modelName => {
