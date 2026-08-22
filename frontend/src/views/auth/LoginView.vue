@@ -241,7 +241,6 @@ const login = async () => {
 .logo-img {
   width: 100px;
   height: auto;
-  filter: drop-shadow(0 0 15px rgba(76, 175, 80, 0.5));
   display: block;
 }
 

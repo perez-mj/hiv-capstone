@@ -5,14 +5,13 @@
     max-width="800"
     fullscreen
     hide-overlay
-    persistent
-    @click:outside="handleClose"
+    :persistent="true"
   >
     <v-card class="keyboard-container" color="surface" elevation="24">
-      <v-card-text class="pa-4">
+      <v-card-text class="pa-3 pa-sm-4">
         <!-- Display current input -->
-        <div class="input-display mb-4 pa-4 rounded-lg" :style="{ background: `rgba(var(--v-theme-surface-variant), 0.5)` }">
-          <div class="text-h4 font-weight-bold text-center" style="word-break: break-all; min-height: 48px;">
+        <div class="input-display mb-3 pa-3 rounded-lg">
+          <div class="text-h5 text-sm-h4 font-weight-bold text-center" style="word-break: break-all; min-height: 40px;">
             {{ displayValue }}
             <span class="cursor-blink"></span>
           </div>
@@ -21,137 +20,112 @@
           </div>
         </div>
 
-        <!-- Keyboard layout -->
+        <!-- Keyboard layout - SIMPLIFIED -->
         <div class="keyboard-grid">
           <!-- Row 1: Numbers -->
           <div class="keyboard-row">
-            <v-btn
+            <button
               v-for="key in numbers"
               :key="key"
               class="key-btn"
-              variant="flat"
-              color="surface-variant"
+              type="button"
               @click="addCharacter(key)"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
               {{ key }}
-            </v-btn>
-            <v-btn
+            </button>
+            <button
               class="key-btn key-backspace"
-              variant="flat"
-              color="error"
+              type="button"
               @click="backspace"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
-              <v-icon size="28">mdi-backspace</v-icon>
-            </v-btn>
+              ⌫
+            </button>
           </div>
 
           <!-- Row 2: Letters row 1 -->
           <div class="keyboard-row">
-            <v-btn
+            <button
               v-for="key in lettersRow1"
               :key="key"
               class="key-btn"
-              variant="flat"
-              color="surface-variant"
+              type="button"
               @click="addCharacter(key)"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
               {{ key }}
-            </v-btn>
+            </button>
           </div>
 
           <!-- Row 3: Letters row 2 -->
           <div class="keyboard-row">
-            <v-btn
+            <button
               v-for="key in lettersRow2"
               :key="key"
               class="key-btn"
-              variant="flat"
-              color="surface-variant"
+              type="button"
               @click="addCharacter(key)"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
               {{ key }}
-            </v-btn>
+            </button>
           </div>
 
           <!-- Row 4: Letters row 3 -->
           <div class="keyboard-row">
-            <v-btn
+            <button
               v-for="key in lettersRow3"
               :key="key"
               class="key-btn"
-              variant="flat"
-              color="surface-variant"
+              type="button"
               @click="addCharacter(key)"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
               {{ key }}
-            </v-btn>
+            </button>
           </div>
 
           <!-- Row 5: Special characters and space -->
           <div class="keyboard-row">
-            <v-btn
+            <button
               v-for="key in specialChars"
               :key="key"
               class="key-btn key-special"
-              variant="flat"
-              color="surface-variant"
+              type="button"
               @click="addCharacter(key)"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
               {{ key }}
-            </v-btn>
-            <v-btn
+            </button>
+            <button
               class="key-btn key-space"
-              variant="flat"
-              color="surface-variant"
+              type="button"
               @click="addCharacter(' ')"
-              @touchstart="touchStart"
-              :ripple="false"
+              @touchstart="preventZoom"
             >
-              <v-icon size="20" class="mr-1">mdi-keyboard-space</v-icon>
               Space
-            </v-btn>
+            </button>
           </div>
 
-          <!-- Row 6: Control buttons - Improved Design -->
-          <div class="keyboard-row control-row mt-3">
-            <v-btn
+          <!-- Row 6: Control buttons -->
+          <div class="keyboard-row control-row">
+            <button
               class="key-btn key-clear"
-              variant="outlined"
-              color="error"
+              type="button"
               @click="clearInput"
-              @touchstart="touchStart"
-              :ripple="false"
-              size="large"
+              @touchstart="preventZoom"
             >
-              <v-icon class="mr-2" size="24">mdi-close-circle</v-icon>
-              Clear All
-            </v-btn>
-            
-            <v-btn
+              ✕ Clear
+            </button>
+            <button
               class="key-btn key-done"
-              variant="flat"
-              color="primary"
+              type="button"
               @click="done"
-              @touchstart="touchStart"
-              :ripple="false"
-              size="large"
-              elevation="2"
+              @touchstart="preventZoom"
             >
-              <v-icon class="mr-2" size="24">mdi-check-circle</v-icon>
-              Done
-            </v-btn>
+              ✓ Done
+            </button>
           </div>
         </div>
       </v-card-text>
@@ -199,7 +173,6 @@ const specialChars = ['-', '.', '_', '@', '+', '(', ')']
 // State
 const dialogVisible = ref(false)
 const inputValue = ref('')
-const isTouch = ref(false)
 
 // Computed
 const displayValue = computed(() => {
@@ -218,7 +191,7 @@ watch(dialogVisible, (newVal) => {
   emit('update:modelValue', newVal)
 })
 
-// Methods
+// Methods - SIMPLIFIED
 const addCharacter = (char) => {
   if (inputValue.value.length >= props.maxLength) return
   inputValue.value += char
@@ -240,12 +213,9 @@ const done = () => {
   dialogVisible.value = false
 }
 
-const handleClose = () => {
-  // Don't close on outside click for kiosk mode
-}
-
-const touchStart = (event) => {
-  // Prevent double-tap zoom on mobile
+// Prevent zoom on double-tap
+const preventZoom = (event) => {
+  // Prevent default behavior that causes double-tap issues
   event.preventDefault()
 }
 
@@ -265,7 +235,6 @@ const handleKeyPress = (event) => {
     dialogVisible.value = false
     event.preventDefault()
   } else if (key.length === 1) {
-    // Allow only alphanumeric and special chars
     if (/[a-zA-Z0-9\-\_\.\@\+\()]/.test(key)) {
       addCharacter(key.toUpperCase())
       event.preventDefault()
@@ -292,159 +261,139 @@ onUnmounted(() => {
   max-height: 75vh;
   z-index: 1000;
   border-radius: 24px 24px 0 0 !important;
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12) !important;
 }
 
 .keyboard-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   max-width: 900px;
   margin: 0 auto;
-  padding: 4px;
+  padding: 2px;
 }
 
 .keyboard-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: center;
 }
 
+/* SIMPLIFIED button styles - native feel */
 .key-btn {
-  min-width: 48px;
-  height: 56px;
-  font-size: 1.2rem;
+  min-width: 44px;
+  height: 48px;
+  font-size: 1.1rem;
   font-weight: 600;
   flex: 1;
-  max-width: 64px;
-  border-radius: 12px !important;
+  max-width: 60px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-surface-variant), 0.4);
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  text-transform: none;
-  letter-spacing: 0.5px;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0 4px;
+  transition: background 0.08s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .key-btn:active {
-  transform: scale(0.92);
-  opacity: 0.8;
+  background: rgba(var(--v-theme-primary), 0.15);
+  transform: scale(0.95);
 }
-
-/* Number and letter keys hover state
-.key-btn:not(.key-backspace):not(.key-clear):not(.key-done):not(.key-space):not(.key-special):hover {
-  background-color: rgba(var(--v-theme-primary), 0.08) !important;
-} */
 
 /* Backspace button */
 .key-backspace {
-  flex: 1.5;
-  max-width: 80px;
-  min-height: 56px;
-  background: rgba(var(--v-theme-error), 0.1) !important;
+  flex: 1.3;
+  max-width: 72px;
+  font-size: 1.2rem;
+  background: rgba(var(--v-theme-error), 0.08) !important;
   color: rgb(var(--v-theme-error)) !important;
-  font-weight: 700;
 }
 
 .key-backspace:active {
-  background: rgba(var(--v-theme-error), 0.25) !important;
+  background: rgba(var(--v-theme-error), 0.2) !important;
 }
 
 /* Special characters */
 .key-special {
-  flex: 0.8;
-  max-width: 52px;
+  flex: 0.7;
+  max-width: 44px;
   font-weight: 500;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 /* Space button */
 .key-space {
   flex: 2.5;
-  max-width: 160px;
-  background-color: rgba(var(--v-theme-surface-variant), 0.5) !important;
+  max-width: 140px;
+  font-size: 0.85rem;
   font-weight: 500;
-  letter-spacing: 1px;
+  background: rgba(var(--v-theme-surface-variant), 0.3) !important;
+  letter-spacing: 0.5px;
 }
 
 .key-space:active {
-  background-color: rgba(var(--v-theme-surface-variant), 0.8) !important;
+  background: rgba(var(--v-theme-surface-variant), 0.6) !important;
 }
 
-/* Control row - improved design */
+/* Control row */
 .control-row {
-  gap: 16px;
-  margin-top: 8px;
-  padding: 0 4px;
+  gap: 12px;
+  margin-top: 4px;
 }
 
 .key-clear {
   flex: 1;
-  max-width: 200px;
-  min-height: 60px;
-  border-width: 2px !important;
+  max-width: 160px;
+  height: 52px;
+  font-size: 0.95rem;
   font-weight: 600;
-  font-size: 1.1rem;
-  letter-spacing: 0.5px;
+  background: rgba(var(--v-theme-error), 0.04) !important;
   color: rgb(var(--v-theme-error)) !important;
-  border-color: rgba(var(--v-theme-error), 0.3) !important;
-  background: transparent !important;
-  transition: all 0.2s ease;
-}
-
-.key-clear:hover {
-  background: rgba(var(--v-theme-error), 0.05) !important;
-  border-color: rgb(var(--v-theme-error)) !important;
-  transform: translateY(-2px);
+  border: 2px solid rgba(var(--v-theme-error), 0.15) !important;
 }
 
 .key-clear:active {
-  transform: scale(0.95);
-  background: rgba(var(--v-theme-error), 0.15) !important;
+  background: rgba(var(--v-theme-error), 0.12) !important;
 }
 
 .key-done {
   flex: 1.5;
-  max-width: 250px;
-  min-height: 60px;
+  max-width: 200px;
+  height: 52px;
+  font-size: 1rem;
   font-weight: 700;
-  font-size: 1.2rem;
-  letter-spacing: 0.5px;
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)), rgb(var(--v-theme-primary-darken-2))) !important;
+  background: rgb(var(--v-theme-primary)) !important;
   color: white !important;
-  box-shadow: 0 4px 16px rgba(var(--v-theme-primary), 0.3) !important;
-  transition: all 0.2s ease;
-}
-
-.key-done:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(var(--v-theme-primary), 0.4) !important;
+  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.25) !important;
 }
 
 .key-done:active {
-  transform: scale(0.95);
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.2) !important;
+  transform: scale(0.96);
+  box-shadow: 0 1px 4px rgba(var(--v-theme-primary), 0.15) !important;
 }
 
 /* Input display */
 .input-display {
-  min-height: 80px;
+  min-height: 64px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  border: 2px solid rgba(var(--v-theme-surface-variant), 0.3);
-  border-radius: 16px !important;
-  transition: all 0.2s ease;
-}
-
-.input-display:focus-within {
-  border-color: rgba(var(--v-theme-primary), 0.5);
+  border: 2px solid rgba(var(--v-theme-surface-variant), 0.2);
+  border-radius: 12px !important;
 }
 
 .cursor-blink {
   display: inline-block;
-  width: 3px;
+  width: 2px;
   height: 1.2em;
   background-color: rgb(var(--v-theme-primary));
   margin-left: 2px;
@@ -464,111 +413,102 @@ onUnmounted(() => {
   }
 
   .key-btn {
-    height: 48px;
-    font-size: 0.95rem;
-    min-width: 36px;
-    max-width: 48px;
-    border-radius: 10px !important;
+    height: 42px;
+    font-size: 0.9rem;
+    min-width: 32px;
+    max-width: 44px;
+    border-radius: 8px;
   }
   
   .key-backspace {
-    max-width: 64px;
-    min-height: 48px;
+    max-width: 56px;
+    font-size: 1rem;
   }
   
   .key-space {
-    max-width: 100px;
-    font-size: 0.85rem;
+    max-width: 80px;
+    font-size: 0.75rem;
   }
 
   .key-special {
-    max-width: 42px;
-    font-size: 0.85rem;
+    max-width: 36px;
+    font-size: 0.8rem;
   }
 
   .key-clear {
-    max-width: 140px;
-    min-height: 50px;
-    font-size: 0.95rem;
+    max-width: 120px;
+    height: 44px;
+    font-size: 0.85rem;
   }
 
   .key-done {
-    max-width: 180px;
-    min-height: 50px;
-    font-size: 1rem;
+    max-width: 140px;
+    height: 44px;
+    font-size: 0.9rem;
   }
 
   .control-row {
-    gap: 12px;
+    gap: 8px;
   }
 
   .input-display {
-    min-height: 64px;
-    padding: 12px !important;
+    min-height: 52px;
+    padding: 8px !important;
   }
 
-  .input-display .text-h4 {
-    font-size: 1.5rem !important;
+  .input-display .text-h5 {
+    font-size: 1.2rem !important;
   }
 }
 
 @media (min-width: 768px) {
   .key-btn {
-    height: 64px;
-    font-size: 1.3rem;
-    min-width: 56px;
-    max-width: 72px;
-    border-radius: 14px !important;
+    height: 56px;
+    font-size: 1.2rem;
+    min-width: 52px;
+    max-width: 68px;
+    border-radius: 12px;
   }
   
   .key-backspace {
-    max-width: 100px;
-    min-height: 64px;
+    max-width: 88px;
   }
   
   .key-space {
-    max-width: 180px;
-    font-size: 1.1rem;
+    max-width: 160px;
+    font-size: 0.95rem;
   }
 
   .key-special {
-    max-width: 56px;
-    font-size: 1.1rem;
+    max-width: 48px;
+    font-size: 1rem;
   }
 
   .key-clear {
-    max-width: 220px;
-    min-height: 64px;
-    font-size: 1.15rem;
+    max-width: 180px;
+    height: 56px;
+    font-size: 1rem;
   }
 
   .key-done {
-    max-width: 280px;
-    min-height: 64px;
-    font-size: 1.25rem;
-  }
-
-  .control-row {
-    gap: 20px;
+    max-width: 220px;
+    height: 56px;
+    font-size: 1.1rem;
   }
 
   .input-display {
-    min-height: 96px;
-    padding: 20px !important;
-  }
-
-  .input-display .text-h4 {
-    font-size: 2rem !important;
+    min-height: 76px;
+    padding: 16px !important;
   }
 }
 
-/* Prevent text selection */
+/* Prevent text selection and improve touch */
 .key-btn::selection {
   background: transparent;
 }
 
-/* Touch feedback for all buttons */
 .key-btn {
-  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
 }
 </style>

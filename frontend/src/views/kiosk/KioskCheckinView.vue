@@ -5,7 +5,7 @@
     <v-card class="mb-6" elevation="2" border="primary">
       <v-card-text class="text-center pa-8">
         <div class="text-h3 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
-          Welcome to Purple Rain Clinic
+          Welcome
         </div>
       </v-card-text>
     </v-card>
@@ -32,9 +32,6 @@
             </v-icon>
             <div class="text-h5 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
               I Have an Appointment
-            </div>
-            <div class="text-subtitle-1 text-medium-emphasis">
-              Check-in with your appointment
             </div>
           </v-card-text>
         </v-card>
@@ -74,7 +71,7 @@
       <v-card>
         <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-primary)); color: white;">
           <v-icon color="white" class="mr-2">mdi-calendar-check</v-icon>
-          Appointment Check-in
+          Appointment
         </v-card-title>
         
         <v-card-text class="pa-6">
@@ -138,7 +135,7 @@
                 prepend-icon="mdi-check"
                 :disabled="!appointmentPhone || appointmentPhone.length < 10"
               >
-                Check In
+                Get Queue No.
               </v-btn>
             </div>
           </v-form>
@@ -151,7 +148,7 @@
       <v-card>
         <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-warning)); color: white;">
           <v-icon color="white" class="mr-2">mdi-walk</v-icon>
-          Walk-in Check-in
+          Walk-in
         </v-card-title>
         
         <v-card-text class="pa-6">
@@ -160,7 +157,7 @@
               Enter your Phone Number
             </div>
             <div class="text-caption text-medium-emphasis mb-3">
-              If you're a returning patient, enter your phone number to check in.
+              If you're a returning patient, enter your phone number to get your queue number.
               New patients will be registered with minimal information.
             </div>
             
@@ -334,7 +331,7 @@
                 prepend-icon="mdi-check"
                 :disabled="!walkinData.phoneNumber || walkinData.phoneNumber.length < 10 || (!isReturningPatient && (!walkinData.firstName || !walkinData.lastName || !walkinData.gender))"
               >
-                Check In
+                Get Queue No.
               </v-btn>
             </div>
           </v-form>
@@ -349,7 +346,7 @@
           <v-icon size="80" color="white" class="mb-4" :style="{ opacity: 0.95 }">
             mdi-printer-check
           </v-icon>
-          <div class="text-h4 text-white font-weight-bold">Check-in Successful!</div>
+          <div class="text-h4 text-white font-weight-bold">Successfully added to queue!</div>
           <div class="text-h1 text-white font-weight-bold my-4">
             {{ kioskStore.ticketNumber || '---' }}
           </div>
@@ -844,7 +841,7 @@ const shutdownSystem = async () => {
     shutdownError.value = `Failed to shutdown: ${error.message || 'Unknown error'}`
     
     // Show manual shutdown option
-    shutdownError.value += ' Please use the physical power button if the system does not shut down.'
+    shutdownError.value += ' Please safely unplug the power cable if the system does not shut down.'
   } finally {
     isShuttingDown.value = false
   }

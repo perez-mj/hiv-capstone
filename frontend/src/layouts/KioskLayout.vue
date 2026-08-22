@@ -13,7 +13,11 @@
             >
               <v-card-text class="d-flex align-center justify-space-between pa-4">
                 <div class="d-flex align-center">
-                  <v-icon size="48" color="white" class="mr-4">mdi-hospital</v-icon>
+                  <img 
+                    src="@/assets/logo.svg" 
+                    alt="Purple Rain Clinic Logo" 
+                    class="logo-icon mr-4"
+                  />
                   <div>
                     <div class="text-h5 font-weight-bold text-white">
                       Purple Rain Clinic Kiosk
@@ -95,10 +99,21 @@ onUnmounted(() => {
   min-height: 40px;
 }
 
+.logo-icon {
+  height: 48px;
+  width: 48px;
+  object-fit: contain;
+}
+
 /* Touchscreen optimization */
 @media (max-width: 600px) {
   .kiosk-header {
     min-height: 80px;
+  }
+  
+  .logo-icon {
+    height: 36px;
+    width: 36px;
   }
   
   :deep(.v-btn) {
