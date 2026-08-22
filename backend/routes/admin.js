@@ -302,28 +302,6 @@ router.get('/audit-logs', async (req, res) => {
   }
 });
 
-// router.get('/audit-logs/:id', async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const log = await db.AuditLog.findByPk(id, {
-//       include: [{
-//         model: db.User,
-//         as: 'User',  // Add this alias
-//         attributes: ['username', 'email', 'role']
-//       }]
-//     });
-    
-//     if (!log) {
-//       return res.status(404).json({ error: 'Audit log not found' });
-//     }
-    
-//     res.json(log);
-//   } catch (error) {
-//     console.error('Error fetching audit log:', error);
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
 router.get('/audit-logs/:id', async (req, res) => {
   try {
     const { id } = req.params;

@@ -94,35 +94,326 @@ class DatabaseInitializer {
   }
 
   async createSystemSettings() {
-    const settings = [
+    // ============================================
+    // CLINIC OPERATIONS & QUEUE MANAGEMENT
+    // ============================================
+    const clinicSettings = [
+      {
+        key: 'clinic_start_time',
+        value: '08:00',
+        description: 'Daily clinic opening time',
+        data_type: 'string',
+        category: 'clinic_operations'
+      },
+      {
+        key: 'clinic_end_time',
+        value: '17:00',
+        description: 'Daily clinic closing time',
+        data_type: 'string',
+        category: 'clinic_operations'
+      },
+      {
+        key: 'slot_duration_minutes',
+        value: '30',
+        description: 'Duration of each appointment slot in minutes',
+        data_type: 'number',
+        category: 'clinic_operations'
+      },
+      {
+        key: 'max_capacity_per_slot',
+        value: '5',
+        description: 'Maximum patients per time slot',
+        data_type: 'number',
+        category: 'clinic_operations'
+      },
+      {
+        key: 'lunch_break_start',
+        value: '12:00',
+        description: 'Lunch break start time',
+        data_type: 'string',
+        category: 'clinic_operations'
+      },
+      {
+        key: 'lunch_break_end',
+        value: '13:00',
+        description: 'Lunch break end time',
+        data_type: 'string',
+        category: 'clinic_operations'
+      },
       {
         key: 'daily_capacity_testing',
-        value: '50',
-        description: 'Maximum number of patients per day in testing office',
+        value: '16',
+        description: 'Max patients per day in Testing office',
         data_type: 'number',
-        category: 'capacity'
+        category: 'clinic_operations'
       },
       {
         key: 'daily_capacity_treatment',
-        value: '40',
-        description: 'Maximum number of patients per day in treatment office',
+        value: '16',
+        description: 'Max patients per day in Treatment office',
         data_type: 'number',
-        category: 'capacity'
+        category: 'clinic_operations'
+      },
+      {
+        key: 'max_walk_in_per_day',
+        value: '10',
+        description: 'Hard limit on unscheduled walk-ins to prevent overwhelming staff',
+        data_type: 'number',
+        category: 'clinic_operations'
       },
       {
         key: 'queue_prefix_testing',
         value: 'T',
-        description: 'Queue number prefix for testing office',
+        description: 'Prefix for queue numbers (T-001)',
         data_type: 'string',
-        category: 'queue'
+        category: 'clinic_operations'
       },
       {
         key: 'queue_prefix_treatment',
         value: 'R',
-        description: 'Queue number prefix for treatment office',
+        description: 'Prefix for treatment queue numbers (R-001)',
         data_type: 'string',
-        category: 'queue'
+        category: 'clinic_operations'
       },
+      {
+        key: 'no_show_grace_minutes',
+        value: '15',
+        description: 'Minutes after "called" before patient is marked as no-show',
+        data_type: 'number',
+        category: 'clinic_operations'
+      }
+    ];
+
+    // ============================================
+    // APPOINTMENT & SCHEDULING RULES
+    // ============================================
+    const appointmentSettings = [
+      {
+        key: 'booking_lead_time_minutes',
+        value: '60',
+        description: 'Minimum time before a slot a patient can book',
+        data_type: 'number',
+        category: 'appointment'
+      },
+      {
+        key: 'advance_booking_days',
+        value: '30',
+        description: 'How far into the future patients can book',
+        data_type: 'number',
+        category: 'appointment'
+      },
+      {
+        key: 'max_appointments_per_patient_per_day',
+        value: '1',
+        description: 'Prevents patients from booking multiple service slots on same day',
+        data_type: 'number',
+        category: 'appointment'
+      },
+      {
+        key: 'working_days',
+        value: JSON.stringify(['mon', 'tue', 'wed', 'thu', 'fri']),
+        description: 'Days of week when clinic operates',
+        data_type: 'json',
+        category: 'appointment'
+      },
+      {
+        key: 'holidays',
+        value: JSON.stringify(['2026-12-25', '2026-12-30']),
+        description: 'Specific closed dates',
+        data_type: 'json',
+        category: 'appointment'
+      }
+    ];
+
+    // ============================================
+    // CLINICAL WORKFLOW (HIV-Specific Rules)
+    // ============================================
+    const clinicalSettings = [
+      {
+        key: 'auto_refer_on_positive',
+        value: 'true',
+        description: 'Automatically change patient status to "treatment" on positive result',
+        data_type: 'boolean',
+        category: 'clinical'
+      },
+      {
+        key: 'default_art_refill_days',
+        value: '30',
+        description: 'Default days until next ART refill',
+        data_type: 'number',
+        category: 'clinical'
+      },
+      {
+        key: 'default_next_appointment_days',
+        value: '90',
+        description: 'Default follow-up interval for stable ART patients',
+        data_type: 'number',
+        category: 'clinical'
+      },
+      {
+        key: 'cd4_threshold_critical',
+        value: '200',
+        description: 'Low CD4 threshold triggering alerts',
+        data_type: 'number',
+        category: 'clinical'
+      },
+      {
+        key: 'viral_load_suppression_threshold',
+        value: '200',
+        description: 'Copies/mL threshold used in suppression rate reports',
+        data_type: 'number',
+        category: 'clinical'
+      },
+      {
+        key: 'require_pretest_counseling',
+        value: 'true',
+        description: 'Blocks saving test result without completed pre-test checklist',
+        data_type: 'boolean',
+        category: 'clinical'
+      },
+      {
+        key: 'require_posttest_counseling',
+        value: 'true',
+        description: 'Blocks saving test result without completed post-test counseling',
+        data_type: 'boolean',
+        category: 'clinical'
+      }
+    ];
+
+    // ============================================
+    // KIOSK & HARDWARE CONFIGURATION
+    // ============================================
+    const kioskSettings = [
+      {
+        key: 'kiosk_print_header',
+        value: 'CLINIC NAME HERE',
+        description: 'Header text printed on thermal receipts',
+        data_type: 'string',
+        category: 'kiosk'
+      },
+      {
+        key: 'kiosk_print_footer',
+        value: 'Please proceed to waiting area',
+        description: 'Footer text printed on the slip',
+        data_type: 'string',
+        category: 'kiosk'
+      },
+      {
+        key: 'kiosk_refresh_interval_seconds',
+        value: '5',
+        description: 'How often the Kiosk display polls Socket.IO for updates',
+        data_type: 'number',
+        category: 'kiosk'
+      }
+    ];
+
+    // ============================================
+    // SECURITY, AUDIT & DATA RETENTION
+    // ============================================
+    const securitySettings = [
+      {
+        key: 'blockchain_enabled',
+        value: 'true',
+        description: 'Master toggle for MultiChain logging',
+        data_type: 'boolean',
+        category: 'security'
+      },
+      {
+        key: 'max_login_attempts',
+        value: '5',
+        description: 'Lock account temporarily after X failed logins',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'audit_log_retention_years',
+        value: '7',
+        description: 'Overrides the standard retention period',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'access_token_expiry_minutes',
+        value: '15',
+        description: 'Access token expiry time in minutes',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'refresh_token_expiry_days',
+        value: '7',
+        description: 'Refresh token expiry time in days',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'enable_refresh_token_rotation',
+        value: 'true',
+        description: 'Enable refresh token rotation for enhanced security',
+        data_type: 'boolean',
+        category: 'security'
+      },
+      {
+        key: 'session_timeout_minutes',
+        value: '30',
+        description: 'User session timeout in minutes',
+        data_type: 'number',
+        category: 'security'
+      },
+      {
+        key: 'lockout_duration_minutes',
+        value: '15',
+        description: 'Account lockout duration after max attempts',
+        data_type: 'number',
+        category: 'security'
+      }
+    ];
+
+    // ============================================
+    // APPEARANCE & LOCALIZATION
+    // ============================================
+    const appearanceSettings = [
+      {
+        key: 'clinic_name',
+        value: 'Hope HIV Care Center',
+        description: 'Displayed on web portal headers and printed slips',
+        data_type: 'string',
+        category: 'appearance'
+      },
+      {
+        key: 'clinic_address',
+        value: '123 Main St, City',
+        description: 'Printed on slips and email footers',
+        data_type: 'string',
+        category: 'appearance'
+      },
+      {
+        key: 'clinic_contact',
+        value: '+63-2-888-1234',
+        description: 'Emergency contact number',
+        data_type: 'string',
+        category: 'appearance'
+      },
+      {
+        key: 'primary_color',
+        value: '#1A73E8',
+        description: 'Vue.js/Vuetify primary theme color',
+        data_type: 'string',
+        category: 'appearance'
+      },
+      {
+        key: 'timezone',
+        value: 'Asia/Manila',
+        description: 'Ensures correct date/time logic offset',
+        data_type: 'string',
+        category: 'appearance'
+      }
+    ];
+
+    // ============================================
+    // ADDITIONAL SETTINGS FROM ORIGINAL
+    // ============================================
+    const additionalSettings = [
       {
         key: 'appointment_reminder_days',
         value: '1',
@@ -180,13 +471,6 @@ class DatabaseInitializer {
         category: 'registration'
       },
       {
-        key: 'blockchain_enabled',
-        value: 'true',
-        description: 'Enable blockchain audit trail',
-        data_type: 'boolean',
-        category: 'security'
-      },
-      {
         key: 'blockchain_verify_on_read',
         value: 'true',
         description: 'Verify blockchain hash when reading records',
@@ -199,27 +483,6 @@ class DatabaseInitializer {
         description: 'Number of days to retain audit logs (7 years)',
         data_type: 'number',
         category: 'compliance'
-      },
-      {
-        key: 'session_timeout_minutes',
-        value: '30',
-        description: 'User session timeout in minutes',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'max_login_attempts',
-        value: '5',
-        description: 'Maximum failed login attempts before lockout',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'lockout_duration_minutes',
-        value: '15',
-        description: 'Account lockout duration after max attempts',
-        data_type: 'number',
-        category: 'security'
       },
       {
         key: 'enable_sms_notifications',
@@ -248,49 +511,31 @@ class DatabaseInitializer {
         description: 'CD4 count threshold for treatment initiation',
         data_type: 'number',
         category: 'clinical'
-      },
-      {
-        key: 'viral_load_suppression_threshold',
-        value: '1000',
-        description: 'Viral load below which is considered suppressed',
-        data_type: 'number',
-        category: 'clinical'
-      },
-      // New settings for token management
-      {
-        key: 'access_token_expiry_minutes',
-        value: '15',
-        description: 'Access token expiry time in minutes',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'refresh_token_expiry_days',
-        value: '7',
-        description: 'Refresh token expiry time in days',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'enable_refresh_token_rotation',
-        value: 'true',
-        description: 'Enable refresh token rotation for enhanced security',
-        data_type: 'boolean',
-        category: 'security'
       }
     ];
 
-    for (const setting of settings) {
+    // Combine all settings
+    const allSettings = [
+      ...clinicSettings,
+      ...appointmentSettings,
+      ...clinicalSettings,
+      ...kioskSettings,
+      ...securitySettings,
+      ...appearanceSettings,
+      ...additionalSettings
+    ];
+
+    for (const setting of allSettings) {
       const [record, created] = await db.SystemSetting.findOrCreate({
         where: { key: setting.key },
         defaults: setting
       });
       if (created) {
         this.createdRecords.settings.push(record);
-        console.log(`  ✓ Created setting: ${setting.key}`);
+        console.log(`  ✓ Created setting: ${setting.key} (${setting.category})`);
       }
     }
-    console.log(`✓ Created ${settings.length} system settings`);
+    console.log(`✓ Created ${allSettings.length} system settings`);
   }
 
   async createUsers() {
