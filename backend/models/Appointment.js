@@ -16,6 +16,14 @@ module.exports = (sequelize) => {
         key: 'id'
       }
     },
+    transaction_type_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'transaction_types',
+        key: 'id'
+      }
+    },
     office: {
       type: DataTypes.STRING(20),
       allowNull: false
@@ -28,12 +36,8 @@ module.exports = (sequelize) => {
       type: DataTypes.TIME,
       allowNull: false
     },
-    type: {
-      type: DataTypes.STRING(20),
-      defaultValue: 'scheduled'
-    },
     status: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.ENUM('pending', 'checked-in', 'completed', 'cancelled', 'no-show'),
       defaultValue: 'pending'
     },
     queue_number: {
@@ -47,16 +51,38 @@ module.exports = (sequelize) => {
     notes: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    checked_in_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    completed_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     tableName: 'appointments',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    indexes: [
+      { fields: ['patient_id', 'appointment_date'] },
+      { fields: ['office', 'appointment_date', 'status'] }
+    ]
   });
 
   Appointment.associate = (models) => {
-    Appointment.belongsTo(models.Patient, { foreignKey: 'patient_id' });
-    Appointment.hasOne(models.QueueEntry, { foreignKey: 'appointment_id' });
+    Appointment.belongsTo(models.Patient, { 
+      foreignKey: 'patient_id',
+      as: 'Patient' 
+    });
+    Appointment.belongsTo(models.TransactionType, { 
+      foreignKey: 'transaction_type_id',
+      as: 'TransactionType' 
+    });
+    Appointment.hasOne(models.QueueEntry, { 
+      foreignKey: 'appointment_id',
+      as: 'QueueEntry' 
+    });
   };
 
   return Appointment;

@@ -35,19 +35,75 @@
         </v-autocomplete>
       </v-col>
 
+      <!-- Transaction Type Selection (Replaces Office Selection) -->
       <v-col cols="12" md="6">
         <v-select
-          v-model="formData.office"
-          :items="officeOptions"
-          label="Office"
-          :rules="[v => !!v || 'Office is required']"
+          v-model="formData.transaction_type_id"
+          :items="transactionTypes"
+          label="Transaction Type"
+          prepend-inner-icon="mdi-clipboard-list"
+          :rules="[v => !!v || 'Transaction type is required']"
           required
           variant="outlined"
           density="comfortable"
-          :disabled="isStaff || isEdit"
-          item-title="title"
-          item-value="value"
-        ></v-select>
+          :disabled="isEdit"
+          item-title="display_name"
+          item-value="id"
+          @update:model-value="onTransactionTypeChange"
+        >
+          <template #item="{ props, item }">
+            <v-list-item v-bind="props">
+              <template #title>
+                <span>{{ item.raw.name }}</span>
+              </template>
+              <template #subtitle>
+                <v-chip 
+                  size="x-small" 
+                  :color="item.raw.office === 'testing' ? 'info' : 'primary'"
+                  class="mr-1"
+                >
+                  {{ item.raw.office }}
+                </v-chip>
+                <span class="text-caption text-medium-emphasis">
+                  ~{{ item.raw.estimated_duration_minutes }} min
+                </span>
+              </template>
+            </v-list-item>
+          </template>
+          <template #selection="{ item }">
+            <span>{{ item.raw.name }}</span>
+            <v-chip 
+              size="x-small" 
+              :color="item.raw.office === 'testing' ? 'info' : 'primary'"
+              class="ml-2"
+            >
+              {{ item.raw.office }}
+            </v-chip>
+          </template>
+        </v-select>
+        
+        <!-- Display selected transaction type details -->
+        <div v-if="selectedTransactionType" class="mt-1">
+          <v-row no-gutters>
+            <v-col cols="6">
+              <span class="text-caption text-medium-emphasis">Office:</span>
+              <v-chip 
+                size="x-small" 
+                :color="selectedTransactionType.office === 'testing' ? 'info' : 'primary'"
+                text-color="white"
+                class="ml-1"
+              >
+                {{ selectedTransactionType.office }}
+              </v-chip>
+            </v-col>
+            <v-col cols="6">
+              <span class="text-caption text-medium-emphasis">Duration:</span>
+              <span class="text-caption font-weight-medium ml-1">
+                {{ selectedTransactionType.estimated_duration_minutes }} min
+              </span>
+            </v-col>
+          </v-row>
+        </div>
       </v-col>
 
       <v-col cols="12" md="6">
@@ -69,6 +125,7 @@
               required
               variant="outlined"
               density="comfortable"
+              :disabled="!formData.transaction_type_id"
               @click="dateMenu = true"
             ></v-text-field>
           </template>
@@ -76,7 +133,9 @@
             v-model="selectedDate"
             @update:model-value="onDateSelected"
             :min="minDate"
+            :max="maxDate"
             locale="en-US"
+            :allowed-dates="allowedDates"
           ></v-date-picker>
         </v-menu>
       </v-col>
@@ -98,6 +157,8 @@
         >
           <template #item="{ props, item }">
             <v-list-item v-bind="props" :disabled="item.raw.disabled">
+              <template #title>
+                <span>{{ item.raw.title }}</span>
                 <v-chip
                   v-if="item.raw.booked"
                   color="error"
@@ -122,6 +183,7 @@
                 >
                   Available
                 </v-chip>
+              </template>
             </v-list-item>
           </template>
           <template #selection="{ item }">
@@ -185,6 +247,7 @@
           rows="2"
           variant="outlined"
           density="comfortable"
+          hint="Any special instructions or notes for this appointment"
         ></v-textarea>
       </v-col>
     </v-row>
@@ -216,6 +279,7 @@
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import patientService from '@/services/patientService'
 import appointmentService from '@/services/appointmentService'
+import transactionTypeService from '@/services/transactionTypeService'
 import { useAuthStore } from '@/stores/authStore'
 
 export default {
@@ -253,6 +317,7 @@ export default {
     const patientSearch = ref('')
     const selectedDate = ref('')
     const isInitialized = ref(false)
+    const transactionTypes = ref([])
 
     // Local snackbar for form-level notifications
     const localSnackbar = ref({
@@ -274,9 +339,25 @@ export default {
     }
 
     const minDate = computed(() => getTodayDate())
+    
+    const maxDate = computed(() => {
+      const now = new Date()
+      now.setDate(now.getDate() + 30) // 30 days advance booking
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      const day = String(now.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    })
+
+    // Selected transaction type for display
+    const selectedTransactionType = computed(() => {
+      return transactionTypes.value.find(t => t.id === formData.transaction_type_id)
+    })
 
     const formData = reactive({
       patient_id: null,
+      transaction_type_id: null,
+      // office is now derived from transaction type, not directly selected
       office: props.office || authStore.userOffice || 'testing',
       appointment_date: '',
       time_slot: '',
@@ -309,10 +390,6 @@ export default {
       }
     })
 
-    const officeOptions = [
-      { title: 'Testing', value: 'testing' },
-      { title: 'Treatment', value: 'treatment' }
-    ]
     const typeOptions = [
       { title: 'Scheduled', value: 'scheduled' },
       { title: 'Walk-in', value: 'walk-in' }
@@ -358,6 +435,56 @@ export default {
       })
     })
 
+    // Load transaction types
+    const loadTransactionTypes = async () => {
+      try {
+        console.log('Loading transaction types...')
+        const response = await transactionTypeService.getTransactionTypes()
+        transactionTypes.value = response.data || response || []
+        console.log('Transaction types loaded:', transactionTypes.value)
+      } catch (error) {
+        console.error('Failed to load transaction types:', error)
+        // Fallback data for testing/demo
+        transactionTypes.value = [
+          { 
+            id: 1, 
+            name: 'General Checkup', 
+            office: 'testing', 
+            estimated_duration_minutes: 30,
+            description: 'General medical consultation'
+          },
+          { 
+            id: 2, 
+            name: 'Dental Cleaning', 
+            office: 'treatment', 
+            estimated_duration_minutes: 45,
+            description: 'Professional teeth cleaning'
+          },
+          { 
+            id: 3, 
+            name: 'X-Ray', 
+            office: 'testing', 
+            estimated_duration_minutes: 20,
+            description: 'Diagnostic imaging'
+          },
+          { 
+            id: 4, 
+            name: 'Surgery Consultation', 
+            office: 'treatment', 
+            estimated_duration_minutes: 60,
+            description: 'Pre-surgery consultation'
+          },
+          { 
+            id: 5, 
+            name: 'Laboratory Test', 
+            office: 'testing', 
+            estimated_duration_minutes: 15,
+            description: 'Blood work and lab tests'
+          }
+        ]
+      }
+    }
+
     // Watch patient search
     watch(patientSearch, async (search) => {
       if (!search || search.length < 2) {
@@ -381,6 +508,27 @@ export default {
       }
     })
 
+    // Handle transaction type change
+    const onTransactionTypeChange = async () => {
+      // Reset date and time slot when transaction type changes
+      formData.appointment_date = ''
+      formData.time_slot = ''
+      selectedDate.value = ''
+      bookedSlots.value = []
+      
+      if (formData.transaction_type_id) {
+        const selected = selectedTransactionType.value
+        if (selected) {
+          // Set the office based on the selected transaction type
+          formData.office = selected.office
+          console.log(`Transaction type selected: ${selected.name}, Office: ${selected.office}`)
+          
+          // Generate new queue number
+          formData.queue_number = generateQueueNumber()
+        }
+      }
+    }
+
     const loadAvailableSlots = async () => {
       if (!selectedDate.value || !formData.office) {
         bookedSlots.value = []
@@ -392,6 +540,7 @@ export default {
       const currentTimeSlot = formData.time_slot
       
       try {
+        console.log(`Loading available slots for ${selectedDate.value} in ${formData.office}`)
         const appointments = await appointmentService.getAppointmentsByDate(
           selectedDate.value,
           formData.office
@@ -458,6 +607,14 @@ export default {
       return `${prefix}-${date.replace(/-/g, '')}-${random}`
     }
 
+    // Allowed dates function for date picker
+    const allowedDates = (date) => {
+      const dateStr = date.toISOString().split('T')[0]
+      // You can add logic here to check if date is a working day/holiday
+      // For now, allow all dates from today onwards
+      return dateStr >= getTodayDate()
+    }
+
     const submit = async () => {
       if (!form.value.validate()) return
       
@@ -480,16 +637,25 @@ export default {
         return
       }
 
+      if (!formData.transaction_type_id) {
+        showSnackbar('Please select a transaction type', 'error')
+        return
+      }
+
       submitting.value = true
       try {
         const data = {
           patient_id: patientId,
+          transaction_type_id: formData.transaction_type_id,
+          // Office is derived from transaction type on the backend
           office: formData.office,
           appointment_date: selectedDate.value,
           time_slot: formData.time_slot,
           type: formData.type,
           notes: formData.notes
         }
+
+        console.log('Submitting appointment data:', data)
 
         let result
         if (isEdit.value) {
@@ -540,6 +706,9 @@ export default {
 
     // Initialize form
     const initializeForm = async () => {
+      // Load transaction types first
+      await loadTransactionTypes()
+      
       const today = getTodayDate()
       
       // Set default date
@@ -551,8 +720,17 @@ export default {
         try {
           console.log('Loading appointment data for edit:', props.appointment)
           
-          // Set basic form data
-          formData.office = props.appointment.office || formData.office
+          // Set transaction type from appointment
+          if (props.appointment.transaction_type_id) {
+            formData.transaction_type_id = props.appointment.transaction_type_id
+          }
+          
+          // Set office from appointment or transaction type
+          if (props.appointment.office) {
+            formData.office = props.appointment.office
+          } else if (selectedTransactionType.value) {
+            formData.office = selectedTransactionType.value.office
+          }
           
           // Set date if available
           if (props.appointment.appointment_date) {
@@ -627,7 +805,10 @@ export default {
           }
         }
         
-        // Load available slots
+        // Mark as initialized
+        isInitialized.value = true
+        
+        // Load available slots after a short delay
         await nextTick()
         setTimeout(() => {
           loadAvailableSlots()
@@ -635,7 +816,14 @@ export default {
       }
     }
 
-    // Watch for office changes
+    // Watch for transaction type changes after initialization
+    watch(() => formData.transaction_type_id, async (newVal, oldVal) => {
+      if (newVal && newVal !== oldVal && isInitialized.value) {
+        await onTransactionTypeChange()
+      }
+    })
+
+    // Watch for office changes (derived from transaction type)
     watch(() => formData.office, async (newVal, oldVal) => {
       if (newVal && newVal !== oldVal && isInitialized.value) {
         formData.queue_number = generateQueueNumber()
@@ -665,15 +853,19 @@ export default {
       isEdit,
       isStaff,
       minDate,
+      maxDate,
       formData,
       selectedDate,
       displayDate,
       patientSearch,
       patientOptions,
-      officeOptions,
+      transactionTypes,
+      selectedTransactionType,
       typeOptions,
       availableSlots,
       localSnackbar,
+      allowedDates,
+      onTransactionTypeChange,
       onDateSelected,
       formatTimeSlot,
       submit,

@@ -160,7 +160,20 @@ const routes = [
         name: 'BackupRestore',
         component: () => import('@/views/admin/BackupView.vue'),
         meta: { roles: ['admin'] }
-      },]
+      },
+      {
+        path: 'admin/transaction-types',
+        name: 'TransactionTypes',
+        component: () => import('@/views/admin/TransactionTypesView.vue'),
+        meta: { roles: ['admin'] }
+      },
+      {
+        path: 'admin/appointment-settings',
+        name: 'AppointmentSettings',
+        component: () => import('@/views/admin/AppointmentSettingsView.vue'),
+        meta: { roles: ['admin'] }
+      }
+    ]
   },
 
   // Patient Portal
@@ -193,24 +206,24 @@ const routes = [
   },
   // Kiosk routes (no auth required)
   {
-  path: '/kiosk',
-  component: () => import('@/layouts/KioskLayout.vue'),
-  meta: { requiresAuth: false },
-  children: [
-    {
-      path: '',
-      name: 'KioskCheckin',
-      component: () => import('@/views/kiosk/KioskCheckinView.vue'),
-      meta: { requiresAuth: false }
-    },
-    {
-      path: 'display',
-      name: 'KioskDisplay',
-      component: () => import('@/views/kiosk/KioskDisplayView.vue'),
-      meta: { requiresAuth: false }
-    }
-  ]
-},
+    path: '/kiosk',
+    component: () => import('@/layouts/KioskLayout.vue'),
+    meta: { requiresAuth: false },
+    children: [
+      {
+        path: '',
+        name: 'KioskCheckin',
+        component: () => import('@/views/kiosk/KioskCheckinView.vue'),
+        meta: { requiresAuth: false }
+      },
+      {
+        path: 'display',
+        name: 'KioskDisplay',
+        component: () => import('@/views/kiosk/KioskDisplayView.vue'),
+        meta: { requiresAuth: false }
+      }
+    ]
+  },
   // 404
   {
     path: '/:pathMatch(.*)*',

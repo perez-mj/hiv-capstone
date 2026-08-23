@@ -24,7 +24,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin/appointment-settings', require('./routes/appointmentSettings'));
+app.use('/api/transaction-types', require('./routes/transactionTypeRoutes'));
 app.use('/api/patients', require('./routes/patients'));
+app.use('/api/appointments', require('./routes/appointmentAvailability'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/queue', require('./routes/queue'));
 app.use('/api/testing', require('./routes/testing'));

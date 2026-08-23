@@ -26,15 +26,17 @@ db.sequelize = sequelize;
 
 // Import models
 db.User = require('./User')(sequelize);
+db.SystemSetting = require('./SystemSetting')(sequelize); // Keep for other settings
+db.AppointmentSetting = require('./AppointmentSetting')(sequelize); // NEW
+db.RefreshToken = require('./RefreshToken')(sequelize);
 db.AuditLog = require('./AuditLog')(sequelize);
-db.SystemSetting = require('./SystemSetting')(sequelize);
 db.Patient = require('./Patient')(sequelize);
+db.TransactionType = require('./TransactionType')(sequelize);
 db.Appointment = require('./Appointment')(sequelize);
 db.TestingEncounter = require('./TestingEncounter')(sequelize);
 db.TreatmentEncounter = require('./TreatmentEncounter')(sequelize);
 db.Queue = require('./Queue')(sequelize);
 db.QueueEntry = require('./QueueEntry')(sequelize);
-db.RefreshToken = require('./RefreshToken')(sequelize);
 
 // Define associations after all models are loaded
 Object.keys(db).forEach(modelName => {
@@ -42,6 +44,5 @@ Object.keys(db).forEach(modelName => {
     db[modelName].associate(db);
   }
 });
-
 
 module.exports = db;

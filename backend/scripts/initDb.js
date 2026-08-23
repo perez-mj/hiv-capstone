@@ -12,8 +12,10 @@ class DatabaseInitializer {
       users: [],
       patients: [],
       settings: [],
+      appointmentSettings: [], // New
       appointments: [],
-      refreshTokens: []
+      refreshTokens: [],
+      transactionTypes: []
     };
     this.passwordValidationResults = [];
     this.expectedCredentials = {
@@ -23,7 +25,7 @@ class DatabaseInitializer {
       'nurse': 'Nurse@123',
       // Treatment Staff
       'pharma': 'Pharma@123',
-      // Patients
+      // Patients (only for validation purposes)
       'juan.delacruz': 'Patient@123',
       'maria.santos': 'Patient@123',
       'jose.reyes': 'Patient@123',
@@ -93,67 +95,112 @@ class DatabaseInitializer {
     return { validCount, invalidCount, uncheckedCount };
   }
 
+  // NEW: Create appointment settings in the dedicated table
+  async createAppointmentSettings() {
+    console.log('\nCreating appointment settings...');
+
+    // Global default settings (office = null)
+    const defaultSettings = {
+      office: null,
+      start_time: '08:00:00',
+      end_time: '17:00:00',
+      slot_duration_minutes: 30,
+      max_capacity_per_slot: 5,
+      lunch_start: '12:00:00',
+      lunch_end: '13:00:00',
+      daily_capacity: 20,
+      working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+      holidays: ['2026-12-25', '2026-12-30', '2026-01-01'],
+      advance_booking_days: 30,
+      booking_lead_time_minutes: 60,
+      max_appointments_per_patient_per_day: 1,
+      allow_online_booking: true,
+      allow_online_cancellation: true,
+      cancellation_deadline_hours: 24,
+      is_active: true
+    };
+
+    // Check if global settings exist
+    let globalSettings = await db.AppointmentSetting.findOne({
+      where: { office: null }
+    });
+
+    if (!globalSettings) {
+      globalSettings = await db.AppointmentSetting.create(defaultSettings);
+      this.createdRecords.appointmentSettings.push(globalSettings);
+      console.log('  ✓ Created global appointment settings');
+    } else {
+      console.log('  ℹ️ Global appointment settings already exist');
+    }
+
+    // Create office-specific settings if needed (optional)
+    // For testing office
+    let testingSettings = await db.AppointmentSetting.findOne({
+      where: { office: 'testing' }
+    });
+
+    if (!testingSettings) {
+      testingSettings = await db.AppointmentSetting.create({
+        office: 'testing',
+        start_time: '08:00:00',
+        end_time: '16:00:00', // Testing closes earlier
+        slot_duration_minutes: 30,
+        max_capacity_per_slot: 3, // Less capacity for testing
+        lunch_start: '12:00:00',
+        lunch_end: '13:00:00',
+        daily_capacity: 16,
+        working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+        holidays: ['2026-12-25', '2026-12-30', '2026-01-01'],
+        advance_booking_days: 30,
+        booking_lead_time_minutes: 60,
+        max_appointments_per_patient_per_day: 1,
+        allow_online_booking: true,
+        allow_online_cancellation: true,
+        cancellation_deadline_hours: 24,
+        is_active: true
+      });
+      this.createdRecords.appointmentSettings.push(testingSettings);
+      console.log('  ✓ Created testing office appointment settings');
+    }
+
+    // For treatment office
+    let treatmentSettings = await db.AppointmentSetting.findOne({
+      where: { office: 'treatment' }
+    });
+
+    if (!treatmentSettings) {
+      treatmentSettings = await db.AppointmentSetting.create({
+        office: 'treatment',
+        start_time: '08:30:00', // Treatment starts later
+        end_time: '18:00:00', // Treatment stays open later
+        slot_duration_minutes: 45, // Longer slots for treatment
+        max_capacity_per_slot: 4,
+        lunch_start: '12:00:00',
+        lunch_end: '13:00:00',
+        daily_capacity: 16,
+        working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+        holidays: ['2026-12-25', '2026-12-30', '2026-01-01'],
+        advance_booking_days: 30,
+        booking_lead_time_minutes: 60,
+        max_appointments_per_patient_per_day: 1,
+        allow_online_booking: true,
+        allow_online_cancellation: true,
+        cancellation_deadline_hours: 24,
+        is_active: true
+      });
+      this.createdRecords.appointmentSettings.push(treatmentSettings);
+      console.log('  ✓ Created treatment office appointment settings');
+    }
+
+    console.log(`✓ Created ${this.createdRecords.appointmentSettings.length} appointment settings`);
+  }
+
+  // Keep SystemSettings for non-appointment related settings
   async createSystemSettings() {
-    // ============================================
-    // CLINIC OPERATIONS & QUEUE MANAGEMENT
-    // ============================================
-    const clinicSettings = [
-      {
-        key: 'clinic_start_time',
-        value: '08:00',
-        description: 'Daily clinic opening time',
-        data_type: 'string',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'clinic_end_time',
-        value: '17:00',
-        description: 'Daily clinic closing time',
-        data_type: 'string',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'slot_duration_minutes',
-        value: '30',
-        description: 'Duration of each appointment slot in minutes',
-        data_type: 'number',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'max_capacity_per_slot',
-        value: '5',
-        description: 'Maximum patients per time slot',
-        data_type: 'number',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'lunch_break_start',
-        value: '12:00',
-        description: 'Lunch break start time',
-        data_type: 'string',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'lunch_break_end',
-        value: '13:00',
-        description: 'Lunch break end time',
-        data_type: 'string',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'daily_capacity_testing',
-        value: '16',
-        description: 'Max patients per day in Testing office',
-        data_type: 'number',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'daily_capacity_treatment',
-        value: '16',
-        description: 'Max patients per day in Treatment office',
-        data_type: 'number',
-        category: 'clinic_operations'
-      },
+    console.log('\nCreating system settings...');
+
+    const allSettings = [
+      // Clinic Operations (non-appointment specific)
       {
         key: 'max_walk_in_per_day',
         value: '10',
@@ -162,80 +209,13 @@ class DatabaseInitializer {
         category: 'clinic_operations'
       },
       {
-        key: 'queue_prefix_testing',
-        value: 'T',
-        description: 'Prefix for queue numbers (T-001)',
-        data_type: 'string',
-        category: 'clinic_operations'
-      },
-      {
-        key: 'queue_prefix_treatment',
-        value: 'R',
-        description: 'Prefix for treatment queue numbers (R-001)',
-        data_type: 'string',
-        category: 'clinic_operations'
-      },
-      {
         key: 'no_show_grace_minutes',
         value: '15',
         description: 'Minutes after "called" before patient is marked as no-show',
         data_type: 'number',
         category: 'clinic_operations'
-      }
-    ];
-
-    // ============================================
-    // APPOINTMENT & SCHEDULING RULES
-    // ============================================
-    const appointmentSettings = [
-      {
-        key: 'booking_lead_time_minutes',
-        value: '60',
-        description: 'Minimum time before a slot a patient can book',
-        data_type: 'number',
-        category: 'appointment'
       },
-      {
-        key: 'advance_booking_days',
-        value: '30',
-        description: 'How far into the future patients can book',
-        data_type: 'number',
-        category: 'appointment'
-      },
-      {
-        key: 'max_appointments_per_patient_per_day',
-        value: '1',
-        description: 'Prevents patients from booking multiple service slots on same day',
-        data_type: 'number',
-        category: 'appointment'
-      },
-      {
-        key: 'working_days',
-        value: JSON.stringify(['mon', 'tue', 'wed', 'thu', 'fri']),
-        description: 'Days of week when clinic operates',
-        data_type: 'json',
-        category: 'appointment'
-      },
-      {
-        key: 'holidays',
-        value: JSON.stringify(['2026-12-25', '2026-12-30']),
-        description: 'Specific closed dates',
-        data_type: 'json',
-        category: 'appointment'
-      }
-    ];
-
-    // ============================================
-    // CLINICAL WORKFLOW (HIV-Specific Rules)
-    // ============================================
-    const clinicalSettings = [
-      {
-        key: 'auto_refer_on_positive',
-        value: 'true',
-        description: 'Automatically change patient status to "treatment" on positive result',
-        data_type: 'boolean',
-        category: 'clinical'
-      },
+      // Clinical Workflow
       {
         key: 'default_art_refill_days',
         value: '30',
@@ -250,67 +230,7 @@ class DatabaseInitializer {
         data_type: 'number',
         category: 'clinical'
       },
-      {
-        key: 'cd4_threshold_critical',
-        value: '200',
-        description: 'Low CD4 threshold triggering alerts',
-        data_type: 'number',
-        category: 'clinical'
-      },
-      {
-        key: 'viral_load_suppression_threshold',
-        value: '200',
-        description: 'Copies/mL threshold used in suppression rate reports',
-        data_type: 'number',
-        category: 'clinical'
-      },
-      {
-        key: 'require_pretest_counseling',
-        value: 'true',
-        description: 'Blocks saving test result without completed pre-test checklist',
-        data_type: 'boolean',
-        category: 'clinical'
-      },
-      {
-        key: 'require_posttest_counseling',
-        value: 'true',
-        description: 'Blocks saving test result without completed post-test counseling',
-        data_type: 'boolean',
-        category: 'clinical'
-      }
-    ];
-
-    // ============================================
-    // KIOSK & HARDWARE CONFIGURATION
-    // ============================================
-    const kioskSettings = [
-      {
-        key: 'kiosk_print_header',
-        value: 'CLINIC NAME HERE',
-        description: 'Header text printed on thermal receipts',
-        data_type: 'string',
-        category: 'kiosk'
-      },
-      {
-        key: 'kiosk_print_footer',
-        value: 'Please proceed to waiting area',
-        description: 'Footer text printed on the slip',
-        data_type: 'string',
-        category: 'kiosk'
-      },
-      {
-        key: 'kiosk_refresh_interval_seconds',
-        value: '5',
-        description: 'How often the Kiosk display polls Socket.IO for updates',
-        data_type: 'number',
-        category: 'kiosk'
-      }
-    ];
-
-    // ============================================
-    // SECURITY, AUDIT & DATA RETENTION
-    // ============================================
-    const securitySettings = [
+      // Security
       {
         key: 'blockchain_enabled',
         value: 'true',
@@ -325,54 +245,7 @@ class DatabaseInitializer {
         data_type: 'number',
         category: 'security'
       },
-      {
-        key: 'audit_log_retention_years',
-        value: '7',
-        description: 'Overrides the standard retention period',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'access_token_expiry_minutes',
-        value: '15',
-        description: 'Access token expiry time in minutes',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'refresh_token_expiry_days',
-        value: '7',
-        description: 'Refresh token expiry time in days',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'enable_refresh_token_rotation',
-        value: 'true',
-        description: 'Enable refresh token rotation for enhanced security',
-        data_type: 'boolean',
-        category: 'security'
-      },
-      {
-        key: 'session_timeout_minutes',
-        value: '30',
-        description: 'User session timeout in minutes',
-        data_type: 'number',
-        category: 'security'
-      },
-      {
-        key: 'lockout_duration_minutes',
-        value: '15',
-        description: 'Account lockout duration after max attempts',
-        data_type: 'number',
-        category: 'security'
-      }
-    ];
-
-    // ============================================
-    // APPEARANCE & LOCALIZATION
-    // ============================================
-    const appearanceSettings = [
+      // Appearance
       {
         key: 'clinic_name',
         value: 'Hope HIV Care Center',
@@ -407,124 +280,10 @@ class DatabaseInitializer {
         description: 'Ensures correct date/time logic offset',
         data_type: 'string',
         category: 'appearance'
-      }
+      },
     ];
 
-    // ============================================
-    // ADDITIONAL SETTINGS FROM ORIGINAL
-    // ============================================
-    const additionalSettings = [
-      {
-        key: 'appointment_reminder_days',
-        value: '1',
-        description: 'Days before appointment to send reminder',
-        data_type: 'number',
-        category: 'notifications'
-      },
-      {
-        key: 'appointment_reminder_hours',
-        value: '24',
-        description: 'Hours before appointment to send reminder',
-        data_type: 'number',
-        category: 'notifications'
-      },
-      {
-        key: 'walkin_priority',
-        value: 'after_scheduled',
-        description: 'Walk-in patient priority (after_scheduled or interleaved)',
-        data_type: 'string',
-        category: 'queue'
-      },
-      {
-        key: 'allow_online_booking',
-        value: 'true',
-        description: 'Allow patients to book appointments online',
-        data_type: 'boolean',
-        category: 'appointments'
-      },
-      {
-        key: 'allow_online_cancellation',
-        value: 'true',
-        description: 'Allow patients to cancel appointments online',
-        data_type: 'boolean',
-        category: 'appointments'
-      },
-      {
-        key: 'cancellation_deadline_hours',
-        value: '24',
-        description: 'Hours before appointment when cancellation is allowed',
-        data_type: 'number',
-        category: 'appointments'
-      },
-      {
-        key: 'require_guardian_for_minors',
-        value: 'true',
-        description: 'Require guardian information for patients under 18',
-        data_type: 'boolean',
-        category: 'registration'
-      },
-      {
-        key: 'minor_age_limit',
-        value: '18',
-        description: 'Age below which patient is considered a minor',
-        data_type: 'number',
-        category: 'registration'
-      },
-      {
-        key: 'blockchain_verify_on_read',
-        value: 'true',
-        description: 'Verify blockchain hash when reading records',
-        data_type: 'boolean',
-        category: 'security'
-      },
-      {
-        key: 'audit_log_retention_days',
-        value: '2555',
-        description: 'Number of days to retain audit logs (7 years)',
-        data_type: 'number',
-        category: 'compliance'
-      },
-      {
-        key: 'enable_sms_notifications',
-        value: 'true',
-        description: 'Send SMS notifications for appointments',
-        data_type: 'boolean',
-        category: 'notifications'
-      },
-      {
-        key: 'enable_email_notifications',
-        value: 'true',
-        description: 'Send email notifications for appointments',
-        data_type: 'boolean',
-        category: 'notifications'
-      },
-      {
-        key: 'default_art_regimen',
-        value: 'TDF/3TC/DTG',
-        description: 'Default first-line ART regimen',
-        data_type: 'string',
-        category: 'clinical'
-      },
-      {
-        key: 'cd4_threshold',
-        value: '500',
-        description: 'CD4 count threshold for treatment initiation',
-        data_type: 'number',
-        category: 'clinical'
-      }
-    ];
-
-    // Combine all settings
-    const allSettings = [
-      ...clinicSettings,
-      ...appointmentSettings,
-      ...clinicalSettings,
-      ...kioskSettings,
-      ...securitySettings,
-      ...appearanceSettings,
-      ...additionalSettings
-    ];
-
+    let createdCount = 0;
     for (const setting of allSettings) {
       const [record, created] = await db.SystemSetting.findOrCreate({
         where: { key: setting.key },
@@ -532,15 +291,17 @@ class DatabaseInitializer {
       });
       if (created) {
         this.createdRecords.settings.push(record);
+        createdCount++;
         console.log(`  ✓ Created setting: ${setting.key} (${setting.category})`);
       }
     }
-    console.log(`✓ Created ${allSettings.length} system settings`);
+    console.log(`✓ Created ${createdCount} system settings`);
   }
 
   async createUsers() {
+    console.log('\nCreating users...');
+
     const users = [
-      // Admin
       {
         username: 'admin',
         email: 'admin@hivclinic.com',
@@ -549,7 +310,6 @@ class DatabaseInitializer {
         office: null,
         is_active: true
       },
-      // Testing Staff
       {
         username: 'nurse',
         email: 'nurse.reyes@hivclinic.com',
@@ -558,7 +318,6 @@ class DatabaseInitializer {
         office: 'testing',
         is_active: true
       },
-      // Treatment Staff
       {
         username: 'pharma',
         email: 'pharmacist.lim@hivclinic.com',
@@ -569,6 +328,7 @@ class DatabaseInitializer {
       }
     ];
 
+    let createdCount = 0;
     for (const userData of users) {
       const existingUser = await db.User.findOne({
         where: { username: userData.username }
@@ -584,12 +344,13 @@ class DatabaseInitializer {
           is_active: userData.is_active
         });
         this.createdRecords.users.push(user);
+        createdCount++;
         console.log(`  ✓ Created user: ${userData.username} (${userData.role})`);
       }
     }
+    console.log(`✓ Created ${createdCount} users`);
   }
 
-  // Helper method to generate refresh token
   generateRefreshToken() {
     return crypto.randomBytes(40).toString('hex');
   }
@@ -601,20 +362,20 @@ class DatabaseInitializer {
       where: { is_active: true }
     });
 
+    let createdCount = 0;
     for (const user of users) {
-      // Create 1-2 refresh tokens per user
       const numTokens = Math.floor(Math.random() * 2) + 1;
       
       for (let i = 0; i < numTokens; i++) {
         const token = this.generateRefreshToken();
         const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+        expiresAt.setDate(expiresAt.getDate() + 7);
         
         const refreshToken = await db.RefreshToken.create({
           token: token,
           user_id: user.id,
           expires_at: expiresAt,
-          revoked: i === 1 ? true : false, // Randomly revoke some tokens for testing
+          revoked: i === 1 ? true : false,
           ip_address: `192.168.1.${Math.floor(Math.random() * 255)}`,
           user_agent: i === 0 
             ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -622,15 +383,17 @@ class DatabaseInitializer {
         });
 
         this.createdRecords.refreshTokens.push(refreshToken);
+        createdCount++;
         console.log(`  ✓ Created refresh token for ${user.username} (${refreshToken.revoked ? 'revoked' : 'active'})`);
       }
     }
 
-    console.log(`✓ Created ${this.createdRecords.refreshTokens.length} refresh tokens`);
+    console.log(`✓ Created ${createdCount} refresh tokens`);
   }
 
   async createPatients() {
-    // Get current date for enrollment dates
+    console.log('\nCreating patients...');
+    
     const today = new Date();
     const currentYear = today.getFullYear();
     
@@ -646,8 +409,6 @@ class DatabaseInitializer {
         status: 'treatment',
         emergency_contact: 'Maria Dela Cruz',
         emergency_phone: '09171234568',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear - 2}-01-15`,
         treatment_transition_date: `${currentYear - 2}-02-01`,
         user: {
@@ -668,8 +429,6 @@ class DatabaseInitializer {
         status: 'testing',
         emergency_contact: 'Jose Santos',
         emergency_phone: '09179876544',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear}-01-10`,
         treatment_transition_date: null,
         user: {
@@ -690,8 +449,6 @@ class DatabaseInitializer {
         status: 'treatment',
         emergency_contact: 'Ana Reyes',
         emergency_phone: '09175678902',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear - 3}-06-20`,
         treatment_transition_date: `${currentYear - 3}-07-15`,
         user: {
@@ -712,8 +469,6 @@ class DatabaseInitializer {
         status: 'testing',
         emergency_contact: 'Roberto Gonzales',
         emergency_phone: '09172345679',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear}-03-05`,
         treatment_transition_date: null,
         user: {
@@ -734,8 +489,6 @@ class DatabaseInitializer {
         status: 'treatment',
         emergency_contact: 'Susan Fernandez',
         emergency_phone: '09173456790',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear - 1}-08-10`,
         treatment_transition_date: `${currentYear - 1}-09-01`,
         user: {
@@ -778,8 +531,6 @@ class DatabaseInitializer {
         status: 'treatment',
         emergency_contact: 'Linda Aquino',
         emergency_phone: '09175678902',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear - 4}-04-10`,
         treatment_transition_date: `${currentYear - 4}-05-01`,
         user: {
@@ -800,8 +551,6 @@ class DatabaseInitializer {
         status: 'treatment',
         emergency_contact: 'Pedro Ramirez',
         emergency_phone: '09176789013',
-        guardian_name: null,
-        guardian_contact: null,
         enrollment_date: `${currentYear - 1}-11-20`,
         treatment_transition_date: `${currentYear - 1}-12-01`,
         user: {
@@ -813,6 +562,7 @@ class DatabaseInitializer {
       }
     ];
 
+    let createdCount = 0;
     for (const patientData of patients) {
       const existingPatient = await db.Patient.findOne({
         where: { contact_number: patientData.contact_number }
@@ -827,7 +577,6 @@ class DatabaseInitializer {
           is_active: true
         });
 
-        // Generate facility code with enrollment and transition dates
         const patientCode = await patientCodeService.generateFacilityCode({
           first_name: patientData.first_name,
           middle_name: patientData.middle_name || '',
@@ -837,7 +586,6 @@ class DatabaseInitializer {
           treatment_transition_date: patientData.treatment_transition_date
         });
 
-        // Create patient with all fields including new date fields
         const patient = await db.Patient.create({
           user_id: user.id,
           first_name: patientData.first_name,
@@ -858,23 +606,18 @@ class DatabaseInitializer {
         });
 
         this.createdRecords.patients.push(patient);
+        createdCount++;
         
-        // Log the facility code generation details
-        const codeYear = patientData.status === 'treatment' ? 
-          patientData.treatment_transition_date?.slice(0,4) : 
-          patientData.enrollment_date.slice(0,4);
-        
-        console.log(`  ✓ Created patient: ${patientData.first_name} ${patientData.middle_name || ''} ${patientData.last_name}`);
-        console.log(`    → Facility Code: ${patient.patient_facility_code} (${patientData.status}, ${codeYear})`);
-        console.log(`    → Enrolled: ${patientData.enrollment_date}`);
-        if (patientData.treatment_transition_date) {
-          console.log(`    → Transitioned to treatment: ${patientData.treatment_transition_date}`);
-        }
+        console.log(`  ✓ Created patient: ${patientData.first_name} ${patientData.last_name}`);
+        console.log(`    → Facility Code: ${patient.patient_facility_code} (${patientData.status})`);
       }
     }
+    console.log(`✓ Created ${createdCount} patients`);
   }
 
   async createTestingEncounters() {
+    console.log('\nCreating testing encounters...');
+    
     const patients = await db.Patient.findAll({
       where: { status: 'testing' },
       include: [{ model: db.User, as: 'User' }]
@@ -913,11 +656,9 @@ class DatabaseInitializer {
       }
     ];
 
+    let createdCount = 0;
     for (const enc of encounters) {
-      if (!enc.patient) {
-        console.log(`  ⚠️ Skipping testing encounter - patient not found`);
-        continue;
-      }
+      if (!enc.patient) continue;
 
       const encounter = await db.TestingEncounter.create({
         patient_id: enc.patient.id,
@@ -960,18 +701,20 @@ class DatabaseInitializer {
         }
       });
 
+      createdCount++;
       if (enc.result === 'positive') {
-        // Update patient status to treatment
         await enc.patient.update({ status: 'treatment' });
         console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result}) - Referred to treatment`);
-        console.log(`    → Patient transitioned to treatment on ${new Date().toISOString().split('T')[0]}`);
       } else {
         console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result})`);
       }
     }
+    console.log(`✓ Created ${createdCount} testing encounters`);
   }
 
   async createTreatmentEncounters() {
+    console.log('\nCreating treatment encounters...');
+    
     const patients = await db.Patient.findAll({
       where: { status: 'treatment' },
       include: [{ model: db.User, as: 'User' }]
@@ -1032,11 +775,9 @@ class DatabaseInitializer {
       }
     ];
 
+    let createdCount = 0;
     for (const enc of encounters) {
-      if (!enc.patient) {
-        console.log(`  ⚠️ Skipping treatment encounter - patient not found`);
-        continue;
-      }
+      if (!enc.patient) continue;
 
       const encounter = await db.TreatmentEncounter.create({
         patient_id: enc.patient.id,
@@ -1079,16 +820,115 @@ class DatabaseInitializer {
         next_appointment_date: new Date(Date.now() + enc.next_appointment_days * 24 * 60 * 60 * 1000)
       });
 
+      createdCount++;
       console.log(`  ✓ Created treatment encounter for ${enc.patient.first_name} ${enc.patient.last_name}`);
       console.log(`    → ART Regimen: ${enc.art_regimen}, CD4: ${enc.cd4}, VL: ${enc.viral_load}`);
+    }
+    console.log(`✓ Created ${createdCount} treatment encounters`);
+  }
+
+  async createTransactionTypes() {
+    console.log('\nCreating transaction types...');
+    
+    // Initialize the array if it doesn't exist
+    if (!this.createdRecords.transactionTypes) {
+      this.createdRecords.transactionTypes = [];
+    }
+    
+    const transactionTypes = [
+      {
+        name: 'Testing',
+        office: 'testing',
+        estimated_duration_minutes: 30,
+        description: 'Initial HIV screening and testing',
+        color_code: '#4CAF50',
+        is_active: true
+      },
+      {
+        name: 'Consultation',
+        office: 'treatment',
+        estimated_duration_minutes: 45,
+        description: 'Standard ART consultation',
+        color_code: '#FF9800',
+        is_active: true
+      },
+      {
+        name: 'Refill',
+        office: 'treatment',
+        estimated_duration_minutes: 15,
+        description: 'Quick prescription refill',
+        color_code: '#2196F3',
+        is_active: true
+      },
+      {
+        name: 'Other',
+        office: 'treatment',
+        estimated_duration_minutes: 20,
+        description: 'Other treatment-related appointments',
+        color_code: '#9C27B0',
+        is_active: true
+      },
+    ];
+
+    let createdCount = 0;
+    for (const typeData of transactionTypes) {
+      try {
+        const [type, created] = await db.TransactionType.findOrCreate({
+          where: { name: typeData.name },
+          defaults: typeData
+        });
+        
+        if (created) {
+          this.createdRecords.transactionTypes.push(type);
+          createdCount++;
+          console.log(`  ✓ Created transaction type: ${typeData.name} (${typeData.office})`);
+        } else {
+          console.log(`  ℹ️ Transaction type already exists: ${typeData.name}`);
+        }
+      } catch (error) {
+        console.log(`  ✗ Failed to create transaction type: ${typeData.name}`, error.message);
+      }
+    }
+    
+    console.log(`✓ Created ${createdCount} transaction types`);
+    
+    // Verify they were saved
+    try {
+      const count = await db.TransactionType.count();
+      console.log(`✓ Verification: ${count} transaction types exist in database`);
+    } catch (error) {
+      console.log(`⚠️ Could not verify transaction types:`, error.message);
     }
   }
 
   async createAppointments() {
+    console.log('\nCreating appointments...');
+    
+    // Initialize the array if it doesn't exist
+    if (!this.createdRecords.appointments) {
+      this.createdRecords.appointments = [];
+    }
+    
+    // Get all patients
     const patients = await db.Patient.findAll();
+    if (patients.length === 0) {
+      console.log('  ⚠️ No patients found. Please seed patients first.');
+      return;
+    }
+    
+    // Get all transaction types
+    const transactionTypes = await db.TransactionType.findAll();
+    if (transactionTypes.length === 0) {
+      console.log('  ⚠️ No transaction types found. Please seed transaction types first.');
+      return;
+    }
+    
+    console.log(`  Found ${patients.length} patients and ${transactionTypes.length} transaction types`);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Create dates for appointments (today, tomorrow, 3 days, 7 days)
     const dates = [
       today,
       new Date(today.getTime() + 1 * 24 * 60 * 60 * 1000),
@@ -1096,17 +936,80 @@ class DatabaseInitializer {
       new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
     ];
 
-    const timeSlots = ['09:00:00', '10:30:00', '13:00:00', '14:30:00', '16:00:00'];
+    // Available time slots
+    const timeSlots = [
+      '09:00:00', 
+      '09:30:00', 
+      '10:00:00', 
+      '10:30:00', 
+      '11:00:00',
+      '11:30:00', 
+      '13:00:00', 
+      '13:30:00', 
+      '14:00:00', 
+      '14:30:00', 
+      '15:00:00', 
+      '15:30:00', 
+      '16:00:00'
+    ];
 
-    for (let i = 0; i < patients.length; i++) {
-      const patient = patients[i];
+    let createdCount = 0;
+    let skippedCount = 0;
+
+    for (const patient of patients) {
+      // Determine office based on patient status
+      const office = patient.status === 'treatment' ? 'treatment' : 'testing';
+      
+      // Get appropriate transaction types for this office
+      const typesForOffice = transactionTypes.filter(t => t.office === office);
+      
+      if (typesForOffice.length === 0) {
+        console.log(`  ⚠️ No transaction types for office: ${office} (Patient: ${patient.first_name} ${patient.last_name})`);
+        skippedCount++;
+        continue;
+      }
+
+      // Each patient gets 1-3 appointments
       const numAppointments = Math.floor(Math.random() * 3) + 1;
+      
+      // Track used time slots to avoid duplicates for the same patient on the same day
+      const usedSlots = new Set();
 
       for (let j = 0; j < numAppointments; j++) {
+        // Pick random date from the available dates
         const date = dates[Math.floor(Math.random() * dates.length)];
-        const timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
-        const office = patient.status === 'treatment' ? 'treatment' : 'testing';
+        
+        // Pick a random time slot that hasn't been used for this patient on this date
+        let timeSlot;
+        let attempts = 0;
+        let foundSlot = false;
+        
+        while (!foundSlot && attempts < 20) {
+          timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
+          const slotKey = `${date.toISOString().split('T')[0]}_${timeSlot}`;
+          
+          if (!usedSlots.has(slotKey)) {
+            usedSlots.add(slotKey);
+            foundSlot = true;
+          }
+          attempts++;
+        }
+        
+        if (!foundSlot) {
+          console.log(`  ⚠️ Could not find unique time slot for ${patient.first_name} ${patient.last_name}`);
+          continue;
+        }
 
+        // Pick a random transaction type
+        const transactionType = typesForOffice[Math.floor(Math.random() * typesForOffice.length)];
+        
+        if (!transactionType || !transactionType.id) {
+          console.log(`  ⚠️ Invalid transaction type for patient ${patient.first_name} ${patient.last_name}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Check if appointment already exists for this patient at this time
         const existingAppointment = await db.Appointment.findOne({
           where: {
             patient_id: patient.id,
@@ -1116,29 +1019,63 @@ class DatabaseInitializer {
         });
 
         if (!existingAppointment) {
-          const appointment = await db.Appointment.create({
-            patient_id: patient.id,
-            office: office,
-            appointment_date: date,
-            time_slot: timeSlot,
-            type: Math.random() > 0.7 ? 'walk-in' : 'scheduled',
-            status: date < today ? 'completed' : (date.getTime() === today.getTime() ? 'pending' : 'scheduled'),
-            queue_number: null
-          });
+          try {
+            // Determine status based on date
+            let status = 'pending';
+            if (date < today) {
+              status = Math.random() > 0.3 ? 'completed' : 'cancelled';
+            } else if (date.getTime() === today.getTime()) {
+              status = Math.random() > 0.5 ? 'pending' : 'checked-in';
+            }
+            
+            // Create the appointment
+            const appointment = await db.Appointment.create({
+              patient_id: patient.id,
+              transaction_type_id: transactionType.id,
+              office: office,
+              appointment_date: date,
+              time_slot: timeSlot,
+              status: status,
+              notes: `Seeded appointment for ${patient.first_name} ${patient.last_name}`,
+              checked_in_at: status === 'checked-in' ? new Date() : null,
+              completed_at: status === 'completed' ? new Date(date.getTime() + 3600000) : null
+            });
 
-          this.createdRecords.appointments.push(appointment);
+            this.createdRecords.appointments.push(appointment);
+            createdCount++;
+            
+            console.log(`  ✓ Created appointment: ${patient.first_name} ${patient.last_name} - ${office} - ${date.toISOString().split('T')[0]} ${timeSlot}`);
+            
+          } catch (error) {
+            console.log(`  ✗ Failed to create appointment for ${patient.first_name} ${patient.last_name}:`, error.message);
+            skippedCount++;
+          }
+        } else {
+          console.log(`  ℹ️ Appointment already exists for ${patient.first_name} ${patient.last_name} on ${date.toISOString().split('T')[0]} at ${timeSlot}`);
+          skippedCount++;
         }
       }
     }
 
-    console.log(`  ✓ Created ${this.createdRecords.appointments.length} appointments`);
+    console.log(`✓ Created ${createdCount} appointments (${skippedCount} skipped)`);
+    
+    // Verification
+    try {
+      const count = await db.Appointment.count();
+      console.log(`✓ Verification: ${count} appointments exist in database`);
+    } catch (error) {
+      console.log(`⚠️ Could not verify appointments:`, error.message);
+    }
   }
 
   async createQueues() {
+    console.log('\nCreating queues...');
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const offices = ['testing', 'treatment'];
+    let createdCount = 0;
 
     for (const office of offices) {
       const [queue, created] = await db.Queue.findOrCreate({
@@ -1157,17 +1094,22 @@ class DatabaseInitializer {
       });
 
       if (created) {
+        createdCount++;
         console.log(`  ✓ Created queue for ${office} office (${today.toDateString()})`);
       }
     }
+    console.log(`✓ Created ${createdCount} queues`);
   }
 
   async createAuditLogs() {
+    console.log('\nCreating audit logs...');
+    
     const users = await db.User.findAll();
 
     const actions = ['CREATE', 'UPDATE', 'VIEW', 'LOGIN', 'LOGOUT', 'TOKEN_REFRESH', 'PASSWORD_CHANGE'];
     const entities = ['Patient', 'Appointment', 'User', 'SystemSetting', 'RefreshToken'];
 
+    let createdCount = 0;
     for (let i = 0; i < 50; i++) {
       const user = users[Math.floor(Math.random() * users.length)];
       const action = actions[Math.floor(Math.random() * actions.length)];
@@ -1184,57 +1126,48 @@ class DatabaseInitializer {
         user_agent: 'Mozilla/5.0 (System Init)',
         created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000)
       });
+      createdCount++;
     }
 
-    console.log('  ✓ Created 50 sample audit logs');
+    console.log(`✓ Created ${createdCount} sample audit logs`);
   }
 
   displayCredentials() {
-    console.log('\n🔐 LOGIN CREDENTIALS (All passwords validated):');
+    console.log('\n🔐 LOGIN CREDENTIALS:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    const credentials = {
-      'Administrator': [
-        { username: 'admin', password: 'Admin@123' }
-      ],
-      'Testing Staff': [
-        { username: 'nurse', password: 'Nurse@123' }
-      ],
-      'Treatment Staff': [
-        { username: 'pharma', password: 'Pharma@123' }
-      ],
-      'Patients': [
-        { username: 'juan.delacruz', password: 'Patient@123' },
-        { username: 'maria.santos', password: 'Patient@123' },
-        { username: 'jose.reyes', password: 'Patient@123' },
-        { username: 'ana.gonzales', password: 'Patient@123' },
-        { username: 'michael.fernandez', password: 'Patient@123' },
-        { username: 'kristine.villanueva', password: 'Patient@123' },
-        { username: 'roberto.aquino', password: 'Patient@123' },
-        { username: 'carmen.ramirez', password: 'Patient@123' }
-      ]
-    };
+    console.log('\n📌 Administrator:');
+    console.log(`  ✅ Username: admin`);
+    console.log(`     Password: Admin@123`);
 
-    for (const [role, users] of Object.entries(credentials)) {
-      console.log(`\n📌 ${role}:`);
-      for (const cred of users) {
-        const validation = this.passwordValidationResults.find(
-          v => v.username === cred.username
-        );
-        const status = validation?.isValid ? '✅' : (validation ? '❌' : '⚠️');
-        console.log(`  ${status} Username: ${cred.username}`);
-        console.log(`     Password: ${cred.password}`);
-        if (validation && !validation.isValid) {
-          console.log(`     ⚠️  Warning: Password validation failed - ${validation.error || 'Invalid password'}`);
-        }
-        if (!validation) {
-          console.log(`     ⚠️  Warning: Password not validated (user not found or not checked)`);
-        }
-      }
-    }
+    console.log('\n📌 Testing Staff:');
+    console.log(`  ✅ Username: nurse`);
+    console.log(`     Password: Nurse@123`);
+
+    console.log('\n📌 Treatment Staff:');
+    console.log(`  ✅ Username: pharma`);
+    console.log(`     Password: Pharma@123`);
+
+    console.log('\n📌 Patients (8 patients):');
+    console.log(`  ✅ Username: juan.delacruz`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: maria.santos`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: jose.reyes`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: ana.gonzales`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: michael.fernandez`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: kristine.villanueva`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: roberto.aquino`);
+    console.log(`     Password: Patient@123`);
+    console.log(`  ✅ Username: carmen.ramirez`);
+    console.log(`     Password: Patient@123`);
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
+    
     const validCount = this.passwordValidationResults.filter(r => r.isValid).length;
     const totalCount = this.passwordValidationResults.length;
     const uncheckedCount = Object.keys(this.expectedCredentials).length - totalCount;
@@ -1242,13 +1175,7 @@ class DatabaseInitializer {
     if (validCount === totalCount && totalCount > 0 && uncheckedCount === 0) {
       console.log('✅ ALL PASSWORDS VALIDATED SUCCESSFULLY');
     } else {
-      if (validCount < totalCount) {
-        console.log(`⚠️  WARNING: ${totalCount - validCount} password(s) failed validation`);
-        console.log('   Please check the validation errors above and recreate if necessary.');
-      }
-      if (uncheckedCount > 0) {
-        console.log(`⚠️  NOTE: ${uncheckedCount} expected user(s) were not found in the database`);
-      }
+      console.log('⚠️  Some passwords failed validation - check the logs above');
     }
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
   }
@@ -1263,8 +1190,14 @@ class DatabaseInitializer {
       await db.sequelize.sync({ force: true });
       console.log('✓ Database schema synced\n');
 
-      console.log('Creating system settings...');
+      // Create appointment settings FIRST (needed for scheduling)
+      await this.createAppointmentSettings();
+
+      // Create system settings (non-appointment settings)
       await this.createSystemSettings();
+
+      console.log('\nCreating transaction types...');
+      await this.createTransactionTypes();
 
       console.log('\nCreating users...');
       await this.createUsers();
@@ -1298,7 +1231,8 @@ class DatabaseInitializer {
       console.log('\n📊 Summary:');
       console.log(`  • Users: ${this.createdRecords.users.length + 8} (plus system users)`);
       console.log(`  • Patients: ${this.createdRecords.patients.length}`);
-      console.log(`  • Settings: ${this.createdRecords.settings.length}`);
+      console.log(`  • System Settings: ${this.createdRecords.settings.length}`);
+      console.log(`  • Appointment Settings: ${this.createdRecords.appointmentSettings.length}`);
       console.log(`  • Appointments: ${this.createdRecords.appointments.length}`);
       console.log(`  • Refresh Tokens: ${this.createdRecords.refreshTokens.length}`);
 

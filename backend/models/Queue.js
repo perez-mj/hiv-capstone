@@ -31,14 +31,23 @@ module.exports = (sequelize) => {
     noshow_count: {
       type: DataTypes.INTEGER,
       defaultValue: 0
+    },
+    total_wait_time_minutes: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      comment: 'Cumulative wait time for all patients today'
+    },
+    average_wait_time_minutes: {
+      type: DataTypes.FLOAT,
+      defaultValue: 0,
+      comment: 'Average wait time for today'
     }
   }, {
     tableName: 'queues',
     timestamps: true,
     underscored: true,
-    // FIXED: Remove duplicate indexes - only define composite index
     indexes: [
-      { fields: ['office', 'date'] } // Composite index for common queries
+      { fields: ['office', 'date'] }
     ]
   });
 
@@ -47,6 +56,22 @@ module.exports = (sequelize) => {
       foreignKey: 'queue_id',
       as: 'QueueEntries' 
     });
+  };
+
+  // Instance method to calculate wait time
+  Queue.prototype.calculateWaitTime = function(queueEntries) {
+    if (!queueEntries || queueEntries.length === 0) return 0;
+    
+    let totalWait = 0;
+    let waitTime = 0;
+    
+    for (const entry of queueEntries) {
+      if (entry.status === 'waiting' || entry.status === 'in-progress') {
+        waitTime += entry.estimated_duration_minutes || 15;
+      }
+    }
+    
+    return waitTime;
   };
 
   return Queue;

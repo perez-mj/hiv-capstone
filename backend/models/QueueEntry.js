@@ -32,6 +32,14 @@ module.exports = (sequelize) => {
         key: 'id'
       }
     },
+    transaction_type_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'transaction_types',
+        key: 'id'
+      }
+    },
     queue_number: {
       type: DataTypes.STRING(20),
       allowNull: false
@@ -41,10 +49,19 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     status: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.ENUM('waiting', 'in-progress', 'completed', 'skipped', 'no-show'),
       defaultValue: 'waiting'
     },
+    estimated_duration_minutes: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      comment: 'Copied from transaction_type for historical accuracy'
+    },
     called_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    started_at: {
       type: DataTypes.DATE,
       allowNull: true
     },
@@ -60,9 +77,9 @@ module.exports = (sequelize) => {
     tableName: 'queue_entries',
     timestamps: true,
     underscored: true,
-    // FIXED: Only define composite and non-foreign-key indexes
     indexes: [
-      { fields: ['queue_id', 'status'] }, // Composite index for common queries
+      { fields: ['queue_id', 'status'] },
+      { fields: ['queue_id', 'position'] },
       { fields: ['status'] }
     ]
   });
@@ -79,6 +96,10 @@ module.exports = (sequelize) => {
     QueueEntry.belongsTo(models.Appointment, { 
       foreignKey: 'appointment_id',
       as: 'Appointment' 
+    });
+    QueueEntry.belongsTo(models.TransactionType, { 
+      foreignKey: 'transaction_type_id',
+      as: 'TransactionType' 
     });
   };
 

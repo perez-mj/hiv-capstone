@@ -3,34 +3,45 @@
   <v-container fluid class="pa-4">
     <v-row>
       <v-col cols="12" md="8" offset-md="2">
-        <v-card>
-          <v-card-title class="text-h5">
-            <v-icon left>mdi-pencil</v-icon>
-            Edit Appointment
+        <v-card class="rounded-lg">
+          <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-icon class="mr-2 text-primary">mdi-pencil</v-icon>
+            <span class="text-h5 font-weight-medium">Edit Appointment</span>
             <v-spacer></v-spacer>
-            <v-chip color="primary" small>
+            <v-chip 
+              color="primary" 
+              size="small"
+              variant="tonal"
+              class="font-weight-medium"
+            >
               #{{ appointmentId }}
             </v-chip>
           </v-card-title>
+          
           <v-divider></v-divider>
-          <v-card-text>
+          
+          <v-card-text class="pa-4">
             <!-- Loading state -->
-            <div v-if="loading" class="text-center pa-4">
-              <v-progress-circular indeterminate color="primary"></v-progress-circular>
-              <p class="mt-2">Loading appointment...</p>
+            <div v-if="loading" class="text-center pa-8">
+              <v-progress-circular indeterminate color="primary" size="48"></v-progress-circular>
+              <p class="mt-4 text-medium-emphasis">Loading appointment...</p>
             </div>
             
             <!-- Error state -->
-            <div v-else-if="error" class="text-center pa-4">
+            <div v-else-if="error" class="text-center pa-8">
               <v-icon color="error" size="64">mdi-alert-circle</v-icon>
-              <p class="mt-2 text-h6">{{ error }}</p>
-              <v-btn color="primary" @click="goBack">Go Back</v-btn>
+              <p class="mt-2 text-h6 text-medium-emphasis">{{ error }}</p>
+              <v-btn color="primary" @click="goBack" rounded variant="flat" class="mt-2 text-capitalize">
+                <v-icon left size="18">mdi-arrow-left</v-icon>
+                Go Back
+              </v-btn>
             </div>
             
             <!-- Form -->
             <AppointmentForm
               v-else
               :appointment="appointmentData"
+              :settings="appointmentSettings"
               mode="edit"
               @success="onSuccess"
               @cancel="goBack"
@@ -40,7 +51,8 @@
       </v-col>
     </v-row>
 
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" rounded>
+      <v-icon left size="20" class="mr-2">{{ snackbar.icon }}</v-icon>
       {{ snackbar.message }}
     </v-snackbar>
   </v-container>
@@ -50,7 +62,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppointmentForm from '@/components/staff/AppointmentForm.vue'
-import appointmentService from '@/services/appointmentService'
+import { useAppointmentStore } from '@/stores/appointmentStore'
 
 export default {
   name: 'AppointmentEdit',
@@ -58,14 +70,17 @@ export default {
   setup() {
     const router = useRouter()
     const route = useRoute()
+    const appointmentStore = useAppointmentStore()
     
     const appointmentData = ref(null)
+    const appointmentSettings = ref(null)
     const loading = ref(false)
     const error = ref(null)
     const snackbar = ref({
       show: false,
       message: '',
-      color: 'success'
+      color: 'success',
+      icon: 'mdi-check-circle'
     })
 
     const appointmentId = computed(() => {
@@ -83,7 +98,7 @@ export default {
       
       try {
         console.log(`Loading appointment with ID: ${appointmentId.value}`)
-        const appointment = await appointmentService.getAppointment(appointmentId.value)
+        const appointment = await appointmentStore.getAppointment(appointmentId.value)
         
         if (appointment) {
           console.log('Appointment loaded successfully:', appointment)
@@ -103,7 +118,7 @@ export default {
     const onSuccess = (appointment) => {
       showSnackbar('Appointment updated successfully!', 'success')
       setTimeout(() => {
-        router.push('/appointments')
+        router.push(`/appointments/${appointment.id}`)
       }, 1500)
     }
 
@@ -112,18 +127,33 @@ export default {
     }
 
     const showSnackbar = (message, color = 'success') => {
-      snackbar.value = { show: true, message, color }
+      const icons = {
+        success: 'mdi-check-circle',
+        error: 'mdi-alert-circle',
+        warning: 'mdi-alert',
+        info: 'mdi-information'
+      }
+      snackbar.value = { 
+        show: true, 
+        message, 
+        color,
+        icon: icons[color] || 'mdi-information'
+      }
     }
 
-    onMounted(() => {
+    onMounted(async () => {
       console.log('EditView mounted.')
       console.log('Route params:', route.params)
       console.log('Appointment ID:', appointmentId.value)
-      loadAppointment()
+      
+      // Load settings first
+      appointmentSettings.value = await appointmentStore.loadAppointmentSettings()
+      await loadAppointment()
     })
 
     return {
       appointmentData,
+      appointmentSettings,
       appointmentId,
       loading,
       error,
@@ -134,3 +164,25 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.v-card {
+  transition: none !important;
+}
+
+.bg-surface {
+  background: transparent;
+}
+
+.text-capitalize {
+  text-transform: capitalize;
+}
+
+:deep(.v-field) {
+  border-radius: 12px !important;
+}
+
+:deep(.v-btn) {
+  border-radius: 8px !important;
+}
+</style>
