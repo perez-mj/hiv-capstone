@@ -22,6 +22,9 @@
         >
           <template #item="{ props, item }">
             <v-list-item v-bind="props">
+              <template #title>
+                <span>{{ item.raw.label }}</span>
+              </template>
             </v-list-item>
           </template>
           <template #selection="{ item }">
@@ -35,7 +38,7 @@
         </v-autocomplete>
       </v-col>
 
-      <!-- Transaction Type Selection (Replaces Office Selection) -->
+      <!-- Transaction Type Selection -->
       <v-col cols="12" md="6">
         <v-select
           v-model="formData.transaction_type_id"
@@ -47,7 +50,7 @@
           variant="outlined"
           density="comfortable"
           :disabled="isEdit"
-          item-title="display_name"
+          item-title="name"
           item-value="id"
           @update:model-value="onTransactionTypeChange"
         >
@@ -116,7 +119,7 @@
         >
           <template #activator="{ props }">
             <v-text-field
-              v-model="displayDate"
+              :model-value="displayDate"
               label="Appointment Date"
               prepend-inner-icon="mdi-calendar"
               readonly
@@ -130,7 +133,7 @@
             ></v-text-field>
           </template>
           <v-date-picker
-            v-model="selectedDate"
+            :model-value="selectedDate"
             @update:model-value="onDateSelected"
             :min="minDate"
             :max="maxDate"
@@ -138,6 +141,23 @@
             :allowed-dates="allowedDates"
           ></v-date-picker>
         </v-menu>
+        
+        <!-- Date availability info -->
+        <div v-if="dateAvailabilityInfo" class="mt-1">
+          <v-chip
+            :color="dateAvailabilityInfo.available ? 'success' : 'error'"
+            size="x-small"
+            variant="tonal"
+          >
+            {{ dateAvailabilityInfo.available ? 'Available' : 'Not Available' }}
+            <span v-if="dateAvailabilityInfo.available && dateAvailabilityInfo.slotsCount !== undefined">
+              - {{ dateAvailabilityInfo.slotsCount }} slots available
+            </span>
+          </v-chip>
+          <span v-if="!dateAvailabilityInfo.available && dateAvailabilityInfo.reason" class="text-caption text-error ml-1">
+            {{ dateAvailabilityInfo.reason }}
+          </span>
+        </div>
       </v-col>
 
       <v-col cols="12" md="6">
@@ -151,16 +171,16 @@
           density="comfortable"
           :loading="slotsLoading"
           :disabled="!formData.appointment_date || slotsLoading || availableSlots.length === 0"
-          item-title="title"
-          item-value="value"
+          item-title="display_title"
+          item-value="time"
           item-disabled="disabled"
         >
           <template #item="{ props, item }">
             <v-list-item v-bind="props" :disabled="item.raw.disabled">
               <template #title>
-                <span>{{ item.raw.title }}</span>
+                <span>{{ formatTimeSlot(item.raw.time) }}</span>
                 <v-chip
-                  v-if="item.raw.booked"
+                  v-if="item.raw.isBooked"
                   color="error"
                   size="x-small"
                   class="ml-2"
@@ -168,15 +188,15 @@
                   Booked
                 </v-chip>
                 <v-chip
-                  v-else-if="item.raw.expired"
+                  v-else-if="item.raw.isPast"
                   color="grey"
                   size="x-small"
                   class="ml-2"
                 >
-                  Expired
+                  Past
                 </v-chip>
                 <v-chip
-                  v-else
+                  v-else-if="item.raw.available"
                   color="success"
                   size="x-small"
                   class="ml-2"
@@ -187,9 +207,9 @@
             </v-list-item>
           </template>
           <template #selection="{ item }">
-            <span>{{ item.title }}</span>
+            <span>{{ formatTimeSlot(item.raw.time) }}</span>
             <v-chip
-              v-if="item.booked"
+              v-if="item.raw.isBooked"
               color="error"
               size="x-small"
               class="ml-2"
@@ -197,15 +217,17 @@
               Booked
             </v-chip>
             <v-chip
-              v-else-if="item.expired"
+              v-else-if="item.raw.isPast"
               color="grey"
               size="x-small"
               class="ml-2"
             >
-              Expired
+              Past
             </v-chip>
           </template>
         </v-select>
+        
+        <!-- Slot loading and status info -->
         <div v-if="slotsLoading" class="text-caption text-grey mt-1">
           <v-progress-circular indeterminate size="16" class="mr-1"></v-progress-circular>
           Loading available slots...
@@ -213,31 +235,12 @@
         <div v-else-if="availableSlots.length === 0 && formData.appointment_date" class="text-caption text-error mt-1">
           No time slots available for this date
         </div>
+        <div v-else-if="availableSlots.filter(s => s.available).length === 0 && availableSlots.length > 0" class="text-caption text-warning mt-1">
+          All slots are booked for this date
+        </div>
         <div v-else-if="formData.time_slot && !slotsLoading" class="text-caption text-success mt-1">
           Selected: {{ formatTimeSlot(formData.time_slot) }}
         </div>
-      </v-col>
-
-      <v-col cols="12" md="6">
-        <v-select
-          v-model="formData.type"
-          :items="typeOptions"
-          label="Appointment Type"
-          variant="outlined"
-          density="comfortable"
-          item-title="title"
-          item-value="value"
-        ></v-select>
-      </v-col>
-
-      <v-col cols="12" md="6">
-        <v-text-field
-          v-model="formData.queue_number"
-          label="Queue Number (Auto-generated)"
-          variant="outlined"
-          density="comfortable"
-          disabled
-        ></v-text-field>
       </v-col>
 
       <v-col cols="12">
@@ -312,14 +315,14 @@ export default {
     const searchLoading = ref(false)
     const dateMenu = ref(false)
     const slotsLoading = ref(false)
-    const bookedSlots = ref([])
     const patientOptions = ref([])
     const patientSearch = ref('')
     const selectedDate = ref('')
     const isInitialized = ref(false)
     const transactionTypes = ref([])
+    const dateAvailabilityInfo = ref(null)
+    const slotsData = ref([])
 
-    // Local snackbar for form-level notifications
     const localSnackbar = ref({
       show: false,
       message: '',
@@ -329,7 +332,27 @@ export default {
     const isEdit = computed(() => props.mode === 'edit' && !!props.appointment?.id)
     const isStaff = computed(() => authStore.userRole === 'staff')
 
-    // Helper function for local date handling
+    // FIXED: Format date to YYYY-MM-DD
+    const formatDateToYYYYMMDD = (date) => {
+      if (!date) return null
+      
+      // If it's already a string in YYYY-MM-DD format
+      if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date
+      }
+      
+      // If it's a Date object or parsable string
+      const d = new Date(date)
+      if (isNaN(d.getTime())) {
+        return null
+      }
+      
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
     const getTodayDate = () => {
       const today = new Date()
       const year = today.getFullYear()
@@ -342,14 +365,13 @@ export default {
     
     const maxDate = computed(() => {
       const now = new Date()
-      now.setDate(now.getDate() + 30) // 30 days advance booking
+      now.setDate(now.getDate() + 30)
       const year = now.getFullYear()
       const month = String(now.getMonth() + 1).padStart(2, '0')
       const day = String(now.getDate()).padStart(2, '0')
       return `${year}-${month}-${day}`
     })
 
-    // Selected transaction type for display
     const selectedTransactionType = computed(() => {
       return transactionTypes.value.find(t => t.id === formData.transaction_type_id)
     })
@@ -357,7 +379,6 @@ export default {
     const formData = reactive({
       patient_id: null,
       transaction_type_id: null,
-      // office is now derived from transaction type, not directly selected
       office: props.office || authStore.userOffice || 'testing',
       appointment_date: '',
       time_slot: '',
@@ -366,85 +387,65 @@ export default {
       notes: ''
     })
 
-    // Display date
-    const displayDate = computed({
-      get: () => {
-        if (!selectedDate.value) return ''
-        try {
-          const date = new Date(selectedDate.value + 'T00:00:00')
-          if (!isNaN(date.getTime())) {
-            return date.toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })
-          }
-        } catch (e) {
-          console.error('Date formatting error:', e)
+    const displayDate = computed(() => {
+      if (!selectedDate.value) return ''
+      try {
+        const date = new Date(selectedDate.value + 'T00:00:00')
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
         }
-        return selectedDate.value
-      },
-      set: (value) => {
-        // Just for display, we don't need to set it
+      } catch (e) {
+        console.error('Date formatting error:', e)
       }
+      return selectedDate.value
     })
 
-    const typeOptions = [
-      { title: 'Scheduled', value: 'scheduled' },
-      { title: 'Walk-in', value: 'walk-in' }
-    ]
-
-    const timeSlots = [
-      '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
-      '11:00', '11:30', '13:00', '13:30', '14:00', '14:30',
-      '15:00', '15:30', '16:00'
-    ]
-
-    // Check if a time slot is expired (past for today)
-    const isTimeSlotExpired = (timeSlot, date) => {
-      if (!date) return false
-      
-      const today = getTodayDate()
-      if (date !== today) return false
-      
-      const now = new Date()
-      const [hours, minutes] = timeSlot.split(':').map(Number)
-      const slotTime = new Date()
-      slotTime.setHours(hours, minutes, 0, 0)
-      
-      const bufferMinutes = 30
-      slotTime.setMinutes(slotTime.getMinutes() + bufferMinutes)
-      
-      return now > slotTime
+    const formatTimeSlot = (time) => {
+      if (!time) return 'N/A'
+      try {
+        const parts = time.split(':')
+        const hour = parseInt(parts[0])
+        const minute = parts[1]
+        const ampm = hour >= 12 ? 'PM' : 'AM'
+        const hour12 = hour % 12 || 12
+        return `${hour12}:${minute} ${ampm}`
+      } catch {
+        return time
+      }
     }
 
     const availableSlots = computed(() => {
-      if (!selectedDate.value) return []
+      if (!slotsData.value || !slotsData.value.length) return []
       
-      return timeSlots.map(slot => {
-        const expired = isTimeSlotExpired(slot, selectedDate.value)
-        const booked = bookedSlots.value.includes(slot)
-        return {
-          title: formatTimeSlot(slot),
-          value: slot,
-          booked: booked,
-          expired: expired,
-          disabled: booked || expired
-        }
-      })
+      return slotsData.value.map(slot => ({
+        time: slot.time,
+        display_title: formatTimeSlot(slot.time),
+        available: slot.available || false,
+        isBooked: slot.isBooked || false,
+        isPast: slot.isPast || false,
+        disabled: !slot.available
+      }))
     })
 
-    // Load transaction types
     const loadTransactionTypes = async () => {
       try {
         console.log('Loading transaction types...')
         const response = await transactionTypeService.getTransactionTypes()
-        transactionTypes.value = response.data || response || []
+        if (response && response.data) {
+          transactionTypes.value = response.data
+        } else if (Array.isArray(response)) {
+          transactionTypes.value = response
+        } else {
+          transactionTypes.value = []
+        }
         console.log('Transaction types loaded:', transactionTypes.value)
       } catch (error) {
         console.error('Failed to load transaction types:', error)
-        // Fallback data for testing/demo
         transactionTypes.value = [
           { 
             id: 1, 
@@ -485,7 +486,6 @@ export default {
       }
     }
 
-    // Watch patient search
     watch(patientSearch, async (search) => {
       if (!search || search.length < 2) {
         patientOptions.value = []
@@ -495,11 +495,19 @@ export default {
       searchLoading.value = true
       try {
         const response = await patientService.searchPatients(search)
-        patientOptions.value = response.map(p => ({
-          id: p.id,
-          label: `${p.first_name} ${p.last_name} - ${p.contact_number} (${p.status})`,
-          patient: p
-        }))
+        if (Array.isArray(response)) {
+          patientOptions.value = response.map(p => ({
+            id: p.id,
+            label: `${p.first_name} ${p.last_name} - ${p.contact_number} (${p.status})`,
+            patient: p
+          }))
+        } else if (response && response.data && Array.isArray(response.data)) {
+          patientOptions.value = response.data.map(p => ({
+            id: p.id,
+            label: `${p.first_name} ${p.last_name} - ${p.contact_number} (${p.status})`,
+            patient: p
+          }))
+        }
       } catch (error) {
         console.error('Search failed:', error)
         showSnackbar('Failed to search patients', 'error')
@@ -508,123 +516,142 @@ export default {
       }
     })
 
-    // Handle transaction type change
     const onTransactionTypeChange = async () => {
-      // Reset date and time slot when transaction type changes
       formData.appointment_date = ''
       formData.time_slot = ''
       selectedDate.value = ''
-      bookedSlots.value = []
+      slotsData.value = []
+      dateAvailabilityInfo.value = null
       
       if (formData.transaction_type_id) {
         const selected = selectedTransactionType.value
         if (selected) {
-          // Set the office based on the selected transaction type
           formData.office = selected.office
           console.log(`Transaction type selected: ${selected.name}, Office: ${selected.office}`)
-          
-          // Generate new queue number
-          formData.queue_number = generateQueueNumber()
         }
       }
     }
 
+    // FIXED: loadAvailableSlots with proper date format
     const loadAvailableSlots = async () => {
       if (!selectedDate.value || !formData.office) {
-        bookedSlots.value = []
+        slotsData.value = []
         formData.time_slot = ''
+        dateAvailabilityInfo.value = null
         return
       }
 
       slotsLoading.value = true
-      const currentTimeSlot = formData.time_slot
       
       try {
-        console.log(`Loading available slots for ${selectedDate.value} in ${formData.office}`)
-        const appointments = await appointmentService.getAppointmentsByDate(
-          selectedDate.value,
-          formData.office
-        )
-        
-        bookedSlots.value = appointments
-          .filter(a => a.status !== 'cancelled' && a.status !== 'no-show')
-          .map(a => a.time_slot)
-        
-        // If editing, remove current appointment from booked slots
-        if (isEdit.value && props.appointment) {
-          const index = bookedSlots.value.indexOf(props.appointment.time_slot)
-          if (index > -1) {
-            bookedSlots.value.splice(index, 1)
+        // Ensure date is in YYYY-MM-DD format
+        const dateStr = formatDateToYYYYMMDD(selectedDate.value)
+        if (!dateStr) {
+          console.error('Invalid date format:', selectedDate.value)
+          slotsData.value = []
+          dateAvailabilityInfo.value = {
+            available: false,
+            slotsCount: 0,
+            totalSlots: 0,
+            reason: 'Invalid date format'
           }
+          slotsLoading.value = false
+          return
         }
         
-        // Try to restore the current time slot if it's still available
-        if (currentTimeSlot && !bookedSlots.value.includes(currentTimeSlot) && !isTimeSlotExpired(currentTimeSlot, selectedDate.value)) {
-          formData.time_slot = currentTimeSlot
-        } else if (isEdit.value && props.appointment?.time_slot) {
-          const originalSlot = props.appointment.time_slot
-          if (!bookedSlots.value.includes(originalSlot) && !isTimeSlotExpired(originalSlot, selectedDate.value)) {
-            formData.time_slot = originalSlot
+        console.log(`Loading available slots for ${dateStr} in ${formData.office}`)
+        const result = await appointmentService.getAvailableSlots(
+          dateStr,
+          formData.office,
+          null
+        )
+        
+        console.log('Available slots result:', result)
+        
+        if (result && result.slots) {
+          slotsData.value = result.slots
+          
+          dateAvailabilityInfo.value = {
+            available: result.available || false,
+            slotsCount: result.count || 0,
+            totalSlots: result.allSlots ? result.allSlots.length : result.slots.length,
+            reason: result.message || null
           }
+          
+          if (isEdit.value && props.appointment?.time_slot) {
+            const slotExists = slotsData.value.some(s => s.time === props.appointment.time_slot && s.available)
+            if (slotExists) {
+              formData.time_slot = props.appointment.time_slot
+            } else {
+              formData.time_slot = ''
+              const availableSlot = slotsData.value.find(s => s.available)
+              if (availableSlot) {
+                formData.time_slot = availableSlot.time
+              }
+            }
+          } else {
+            const availableSlot = slotsData.value.find(s => s.available)
+            formData.time_slot = availableSlot ? availableSlot.time : ''
+          }
+        } else {
+          slotsData.value = []
+          dateAvailabilityInfo.value = {
+            available: false,
+            slotsCount: 0,
+            totalSlots: 0,
+            reason: result?.message || 'No slots available'
+          }
+          formData.time_slot = ''
         }
       } catch (error) {
         console.error('Failed to load slots:', error)
-        bookedSlots.value = []
+        slotsData.value = []
+        dateAvailabilityInfo.value = {
+          available: false,
+          slotsCount: 0,
+          totalSlots: 0,
+          reason: 'Failed to load available slots'
+        }
         showSnackbar('Failed to load available time slots', 'error')
       } finally {
         slotsLoading.value = false
       }
     }
 
+    // FIXED: onDateSelected with proper date formatting
     const onDateSelected = async (value) => {
+      console.log('Date selected (raw):', value)
       dateMenu.value = false
       if (value) {
-        selectedDate.value = value
-        formData.appointment_date = value
-        await nextTick()
-        await loadAvailableSlots()
+        // Ensure date is in YYYY-MM-DD format
+        const formattedDate = formatDateToYYYYMMDD(value)
+        if (formattedDate) {
+          selectedDate.value = formattedDate
+          formData.appointment_date = formattedDate
+          console.log('Date formatted to:', formattedDate)
+          await nextTick()
+          await loadAvailableSlots()
+        } else {
+          console.error('Invalid date selected:', value)
+          showSnackbar('Invalid date selected', 'error')
+        }
       }
     }
 
-    const formatTimeSlot = (time) => {
-      if (!time) return 'N/A'
-      try {
-        const parts = time.split(':')
-        const hour = parseInt(parts[0])
-        const minute = parts[1]
-        const ampm = hour >= 12 ? 'PM' : 'AM'
-        const hour12 = hour % 12 || 12
-        return `${hour12}:${minute} ${ampm}`
-      } catch {
-        return time
-      }
-    }
-
-    const generateQueueNumber = () => {
-      const prefix = formData.office === 'testing' ? 'T' : 'R'
-      const date = getTodayDate()
-      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
-      return `${prefix}-${date.replace(/-/g, '')}-${random}`
-    }
-
-    // Allowed dates function for date picker
     const allowedDates = (date) => {
       const dateStr = date.toISOString().split('T')[0]
-      // You can add logic here to check if date is a working day/holiday
-      // For now, allow all dates from today onwards
       return dateStr >= getTodayDate()
     }
 
     const submit = async () => {
       if (!form.value.validate()) return
       
-      const selectedSlot = availableSlots.value.find(s => s.value === formData.time_slot)
-      if (selectedSlot && (selectedSlot.booked || selectedSlot.expired)) {
+      const selectedSlot = slotsData.value.find(s => s.time === formData.time_slot)
+      if (selectedSlot && !selectedSlot.available) {
         showSnackbar('Selected time slot is not available', 'error')
         return
       }
 
-      // Get patient ID - since we're using return-object, we need to handle it properly
       let patientId
       if (formData.patient_id && typeof formData.patient_id === 'object') {
         patientId = formData.patient_id.id
@@ -642,16 +669,21 @@ export default {
         return
       }
 
+      // Ensure date is in correct format
+      const appointmentDate = formatDateToYYYYMMDD(selectedDate.value)
+      if (!appointmentDate) {
+        showSnackbar('Invalid appointment date', 'error')
+        return
+      }
+
       submitting.value = true
       try {
         const data = {
           patient_id: patientId,
           transaction_type_id: formData.transaction_type_id,
-          // Office is derived from transaction type on the backend
           office: formData.office,
-          appointment_date: selectedDate.value,
+          appointment_date: appointmentDate,
           time_slot: formData.time_slot,
-          type: formData.type,
           notes: formData.notes
         }
 
@@ -659,13 +691,13 @@ export default {
 
         let result
         if (isEdit.value) {
-          const hasDateChanged = props.appointment?.appointment_date !== selectedDate.value
+          const hasDateChanged = props.appointment?.appointment_date !== appointmentDate
           const hasTimeChanged = props.appointment?.time_slot !== formData.time_slot
           
           if (hasDateChanged || hasTimeChanged) {
             result = await appointmentService.rescheduleAppointment(
               props.appointment.id,
-              selectedDate.value,
+              appointmentDate,
               formData.time_slot
             )
           } else {
@@ -704,89 +736,15 @@ export default {
       localSnackbar.value = { show: true, message, color }
     }
 
-    // Initialize form
+    // FIXED: Initialize form
     const initializeForm = async () => {
-      // Load transaction types first
       await loadTransactionTypes()
       
       const today = getTodayDate()
       
-      // Set default date
-      selectedDate.value = today
-      formData.appointment_date = today
-      
-      // Handle edit mode
-      if (isEdit.value && props.appointment) {
-        try {
-          console.log('Loading appointment data for edit:', props.appointment)
-          
-          // Set transaction type from appointment
-          if (props.appointment.transaction_type_id) {
-            formData.transaction_type_id = props.appointment.transaction_type_id
-          }
-          
-          // Set office from appointment or transaction type
-          if (props.appointment.office) {
-            formData.office = props.appointment.office
-          } else if (selectedTransactionType.value) {
-            formData.office = selectedTransactionType.value.office
-          }
-          
-          // Set date if available
-          if (props.appointment.appointment_date) {
-            selectedDate.value = props.appointment.appointment_date
-            formData.appointment_date = props.appointment.appointment_date
-          }
-          
-          formData.time_slot = props.appointment.time_slot || ''
-          formData.type = props.appointment.type || 'scheduled'
-          formData.notes = props.appointment.notes || ''
-          formData.queue_number = props.appointment.queue_number || generateQueueNumber()
-
-          // Load patient data
-          let patientData = props.appointment.Patient
-          
-          // If Patient is not included in the appointment object, fetch it
-          if (!patientData && props.appointment.patient_id) {
-            try {
-              console.log('Fetching patient data for ID:', props.appointment.patient_id)
-              patientData = await patientService.getPatient(props.appointment.patient_id)
-            } catch (error) {
-              console.error('Failed to load patient:', error)
-            }
-          }
-          
-          if (patientData) {
-            console.log('Patient data loaded:', patientData)
-            const patientOption = {
-              id: patientData.id,
-              label: `${patientData.first_name} ${patientData.last_name} - ${patientData.contact_number} (${patientData.status})`,
-              patient: patientData
-            }
-            // Set the patient option in the list
-            patientOptions.value = [patientOption]
-            // Set the patient_id to the full object so it displays correctly
-            formData.patient_id = patientOption
-          } else {
-            console.warn('No patient data available for appointment')
-          }
-          
-          // Mark as initialized
-          isInitialized.value = true
-          
-          // Load available slots after a short delay
-          await nextTick()
-          setTimeout(() => {
-            loadAvailableSlots()
-          }, 500)
-          
-        } catch (error) {
-          console.error('Failed to load appointment data:', error)
-          showSnackbar('Failed to load appointment data', 'error')
-        }
-      } else {
-        // New appointment
-        formData.queue_number = generateQueueNumber()
+      if (!isEdit.value) {
+        selectedDate.value = today
+        formData.appointment_date = today
         
         if (props.patientId) {
           try {
@@ -805,40 +763,96 @@ export default {
           }
         }
         
-        // Mark as initialized
         isInitialized.value = true
-        
-        // Load available slots after a short delay
         await nextTick()
-        setTimeout(() => {
-          loadAvailableSlots()
+        setTimeout(async () => {
+          await loadAvailableSlots()
         }, 300)
+        return
+      }
+
+      // Edit mode
+      if (isEdit.value && props.appointment) {
+        try {
+          console.log('Loading appointment data for edit:', props.appointment)
+          
+          if (props.appointment.transaction_type_id) {
+            formData.transaction_type_id = props.appointment.transaction_type_id
+          }
+          
+          if (props.appointment.office) {
+            formData.office = props.appointment.office
+          } else if (selectedTransactionType.value) {
+            formData.office = selectedTransactionType.value.office
+          }
+          
+          // FIXED: Format date properly
+          if (props.appointment.appointment_date) {
+            const formattedDate = formatDateToYYYYMMDD(props.appointment.appointment_date)
+            if (formattedDate) {
+              selectedDate.value = formattedDate
+              formData.appointment_date = formattedDate
+              console.log('Date set to:', formattedDate)
+            } else {
+              console.warn('Could not format date:', props.appointment.appointment_date)
+              selectedDate.value = today
+              formData.appointment_date = today
+            }
+          }
+          
+          formData.time_slot = props.appointment.time_slot || ''
+          formData.notes = props.appointment.notes || ''
+
+          let patientData = props.appointment.Patient
+          
+          if (!patientData && props.appointment.patient_id) {
+            try {
+              console.log('Fetching patient data for ID:', props.appointment.patient_id)
+              patientData = await patientService.getPatient(props.appointment.patient_id)
+            } catch (error) {
+              console.error('Failed to load patient:', error)
+            }
+          }
+          
+          if (patientData) {
+            console.log('Patient data loaded:', patientData)
+            const patientOption = {
+              id: patientData.id,
+              label: `${patientData.first_name} ${patientData.last_name} - ${patientData.contact_number} (${patientData.status})`,
+              patient: patientData
+            }
+            patientOptions.value = [patientOption]
+            formData.patient_id = patientOption
+          }
+          
+          isInitialized.value = true
+          
+          await nextTick()
+          setTimeout(async () => {
+            await loadAvailableSlots()
+          }, 500)
+          
+        } catch (error) {
+          console.error('Failed to load appointment data:', error)
+          showSnackbar('Failed to load appointment data', 'error')
+        }
       }
     }
 
-    // Watch for transaction type changes after initialization
     watch(() => formData.transaction_type_id, async (newVal, oldVal) => {
       if (newVal && newVal !== oldVal && isInitialized.value) {
         await onTransactionTypeChange()
       }
     })
 
-    // Watch for office changes (derived from transaction type)
     watch(() => formData.office, async (newVal, oldVal) => {
       if (newVal && newVal !== oldVal && isInitialized.value) {
-        formData.queue_number = generateQueueNumber()
         if (selectedDate.value) {
           await loadAvailableSlots()
         }
       }
     })
 
-    // Watch for patient selection changes
-    watch(() => formData.patient_id, (newVal) => {
-      console.log('Patient selected:', newVal)
-    })
-
-    // Initialize on mount
     onMounted(() => {
       initializeForm()
     })
@@ -861,16 +875,18 @@ export default {
       patientOptions,
       transactionTypes,
       selectedTransactionType,
-      typeOptions,
       availableSlots,
+      slotsData,
+      dateAvailabilityInfo,
       localSnackbar,
       allowedDates,
+      formatTimeSlot,
       onTransactionTypeChange,
       onDateSelected,
-      formatTimeSlot,
       submit,
       cancel,
-      showSnackbar
+      showSnackbar,
+      formatDateToYYYYMMDD
     }
   }
 }

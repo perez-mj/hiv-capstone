@@ -16,10 +16,20 @@ router.get('/available-slots/:date', auth, async (req, res) => {
     const { date } = req.params;
     const { office, patientId } = req.query;
 
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use YYYY-MM-DD'
+      });
+    }
+
     // If user is patient, use their patient ID
     let patientIdToCheck = patientId;
     if (req.user.role === 'patient') {
-      const patient = await db.Patient.findOne({ where: { user_id: req.user.id } });
+      const patient = await db.Patient.findOne({ 
+        where: { user_id: req.user.id } 
+      });
       if (patient) {
         patientIdToCheck = patient.id;
       }
@@ -28,7 +38,7 @@ router.get('/available-slots/:date', auth, async (req, res) => {
     const result = await schedulingService.getAvailableAppointmentSlots(
       date,
       office,
-      patientIdToCheck
+      patientIdToCheck ? parseInt(patientIdToCheck) : null
     );
 
     res.json({
@@ -57,6 +67,14 @@ router.get('/date-availability', auth, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'startDate and endDate are required'
+      });
+    }
+
+    // Validate date formats
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use YYYY-MM-DD'
       });
     }
 
@@ -90,7 +108,7 @@ router.get('/next-available', auth, async (req, res) => {
 
     const nextDate = await schedulingService.getNextAvailableDate(
       office,
-      parseInt(daysToCheck)
+      parseInt(daysToCheck, 10)
     );
 
     res.json({
@@ -110,17 +128,18 @@ router.get('/next-available', auth, async (req, res) => {
 
 /**
  * GET /api/appointments/settings
- * Get appointment settings (for staff only)
+ * Get appointment settings
  */
-router.get('/settings', auth, roleCheck('staff', 'admin'), async (req, res) => {
+router.get('/settings', auth, async (req, res) => {
   try {
-    // Get office from query params, or use user's office if staff
     let office = req.query.office;
+    
+    // If user is staff, use their office
     if (req.user.role === 'staff' && !office) {
       office = req.user.office;
     }
 
-    // Get settings from the new AppointmentSetting model
+    // Get settings from the AppointmentSetting model
     const settings = await db.AppointmentSetting.getSettingsObject(office);
     
     // Format the response for the frontend
@@ -133,16 +152,15 @@ router.get('/settings', auth, roleCheck('staff', 'admin'), async (req, res) => {
       lunch_break_end: settings.lunch_end,
       daily_capacity: settings.daily_capacity,
       working_days: settings.working_days,
-      holidays: settings.holidays,
+      holidays: settings.holidays || [],
       advance_booking_days: settings.advance_booking_days,
       booking_lead_time_minutes: settings.booking_lead_time_minutes,
       allow_online_booking: settings.allow_online_booking,
       allow_online_cancellation: settings.allow_online_cancellation,
       cancellation_deadline_hours: settings.cancellation_deadline_hours,
       max_appointments_per_patient_per_day: settings.max_appointments_per_patient_per_day,
-      // Additional fields that might be useful for frontend
       office: office || 'global',
-      timezone: 'Asia/Manila' // You can add this to the model if needed
+      timezone: 'Asia/Manila'
     };
 
     res.json({
@@ -151,99 +169,6 @@ router.get('/settings', auth, roleCheck('staff', 'admin'), async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting appointment settings:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-/**
- * PUT /api/appointments/settings
- * Update appointment settings (admin only)
- */
-router.put('/settings', auth, roleCheck('admin'), async (req, res) => {
-  try {
-    const { office, ...updates } = req.body;
-    
-    // Get existing settings or create new ones
-    let settings;
-    if (office) {
-      settings = await db.AppointmentSetting.findOne({
-        where: { office, is_active: true }
-      });
-    }
-    
-    if (!settings) {
-      settings = await db.AppointmentSetting.findOne({
-        where: { office: null, is_active: true }
-      });
-    }
-    
-    if (!settings) {
-      // Create default settings if none exist
-      settings = await db.AppointmentSetting.create({
-        office: office || null
-      });
-    }
-    
-    // Update only allowed fields
-    const allowedFields = [
-      'start_time', 'end_time', 'slot_duration_minutes', 
-      'max_capacity_per_slot', 'lunch_start', 'lunch_end',
-      'daily_capacity', 'working_days', 'holidays',
-      'advance_booking_days', 'booking_lead_time_minutes',
-      'max_appointments_per_patient_per_day', 'allow_online_booking',
-      'allow_online_cancellation', 'cancellation_deadline_hours',
-      'is_active'
-    ];
-    
-    for (const field of allowedFields) {
-      if (updates[field] !== undefined) {
-        settings[field] = updates[field];
-      }
-    }
-    
-    await settings.save();
-    
-    res.json({
-      success: true,
-      message: 'Settings updated successfully',
-      data: settings
-    });
-  } catch (error) {
-    console.error('Error updating appointment settings:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-});
-
-/**
- * POST /api/appointments/settings/reset
- * Reset settings to defaults (admin only)
- */
-router.post('/settings/reset', auth, roleCheck('admin'), async (req, res) => {
-  try {
-    const { office } = req.body;
-    
-    // Delete existing settings
-    const where = office ? { office } : { office: null };
-    await db.AppointmentSetting.destroy({ where });
-    
-    // Create new default settings
-    const settings = await db.AppointmentSetting.create({
-      office: office || null
-    });
-    
-    res.json({
-      success: true,
-      message: 'Settings reset to defaults',
-      data: settings
-    });
-  } catch (error) {
-    console.error('Error resetting settings:', error);
     res.status(500).json({
       success: false,
       message: error.message

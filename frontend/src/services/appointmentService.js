@@ -1,8 +1,28 @@
 // frontend/src/services/appointmentService.js
 import api from '@/plugins/axios'
 
-// Constants that should come from backend settings
 let cachedSettings = null
+
+// FIXED: Helper function to format date to YYYY-MM-DD
+const formatDateToYYYYMMDD = (date) => {
+  if (!date) return null
+  
+  // If it's already a string in YYYY-MM-DD format
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date
+  }
+  
+  // If it's a Date object or parsable string
+  const d = new Date(date)
+  if (isNaN(d.getTime())) {
+    return null
+  }
+  
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 export default {
   async createAppointment(data) {
@@ -86,14 +106,15 @@ export default {
 
   async getAppointmentsByDate(date, office = null) {
     try {
-      if (!date) {
-        console.warn('No date provided, using today')
-        const today = new Date()
-        date = today.toISOString().split('T')[0]
+      // FIXED: Ensure date is in YYYY-MM-DD format
+      const formattedDate = formatDateToYYYYMMDD(date)
+      if (!formattedDate) {
+        console.error('Invalid date format:', date)
+        return []
       }
       
-      const url = office ? `/appointments/date/${date}?office=${office}` : `/appointments/date/${date}`
-      console.log(`[appointmentService] Fetching appointments for date: ${date}`)
+      const url = office ? `/appointments/date/${formattedDate}?office=${office}` : `/appointments/date/${formattedDate}`
+      console.log(`[appointmentService] Fetching appointments for date: ${formattedDate}`)
       const response = await api.get(url)
       console.log('[appointmentService] Appointments response:', response.data)
       
@@ -114,10 +135,17 @@ export default {
     }
   },
 
-  // Get available time slots for a specific date
+  // FIXED: getAvailableSlots with proper date format
   async getAvailableSlots(date, office = null, patientId = null) {
     try {
-      let url = `/appointments/available-slots/${date}`
+      // Ensure date is in YYYY-MM-DD format
+      const formattedDate = formatDateToYYYYMMDD(date)
+      if (!formattedDate) {
+        console.error('Invalid date format for available slots:', date)
+        return { available: false, slots: [], message: 'Invalid date format' }
+      }
+      
+      let url = `/appointments/available-slots/${formattedDate}`
       const params = new URLSearchParams()
       if (office) params.append('office', office)
       if (patientId) params.append('patientId', patientId)
@@ -126,12 +154,20 @@ export default {
         url += `?${params.toString()}`
       }
       
-      console.log(`[appointmentService] Fetching available slots for date: ${date}`)
+      console.log(`[appointmentService] Fetching available slots for date: ${formattedDate}`)
       const response = await api.get(url)
       console.log('[appointmentService] Available slots response:', response.data)
       
+      if (response.data && response.data.success && response.data.data) {
+        return response.data.data
+      }
+      
       if (response.data && response.data.data) {
         return response.data.data
+      }
+      
+      if (response.data && response.data.slots) {
+        return response.data
       }
       
       return { available: false, slots: [], message: 'No response data' }
@@ -141,13 +177,21 @@ export default {
     }
   },
 
-  // Get date availability for a range
   async getDateAvailability(startDate, endDate, office = null) {
     try {
-      let url = `/appointments/date-availability?startDate=${startDate}&endDate=${endDate}`
+      // FIXED: Ensure dates are in YYYY-MM-DD format
+      const formattedStart = formatDateToYYYYMMDD(startDate)
+      const formattedEnd = formatDateToYYYYMMDD(endDate)
+      
+      if (!formattedStart || !formattedEnd) {
+        console.error('Invalid date format:', { startDate, endDate })
+        return []
+      }
+      
+      let url = `/appointments/date-availability?startDate=${formattedStart}&endDate=${formattedEnd}`
       if (office) url += `&office=${office}`
       
-      console.log(`[appointmentService] Fetching date availability from ${startDate} to ${endDate}`)
+      console.log(`[appointmentService] Fetching date availability from ${formattedStart} to ${formattedEnd}`)
       const response = await api.get(url)
       console.log('[appointmentService] Date availability response:', response.data)
       
@@ -162,7 +206,6 @@ export default {
     }
   },
 
-  // Get next available date
   async getNextAvailableDate(office = null, daysToCheck = 30) {
     try {
       let url = `/appointments/next-available?daysToCheck=${daysToCheck}`
@@ -183,13 +226,19 @@ export default {
     }
   },
 
-  // Check specific slot availability
   async checkSlotAvailability(date, timeSlot, office = null) {
     try {
-      let url = `/appointments/check-availability?date=${date}&timeSlot=${timeSlot}`
+      // FIXED: Ensure date is in YYYY-MM-DD format
+      const formattedDate = formatDateToYYYYMMDD(date)
+      if (!formattedDate) {
+        console.error('Invalid date format:', date)
+        return { available: false }
+      }
+      
+      let url = `/appointments/check-availability?date=${formattedDate}&timeSlot=${timeSlot}`
       if (office) url += `&office=${office}`
       
-      console.log(`[appointmentService] Checking availability for ${date} at ${timeSlot}`)
+      console.log(`[appointmentService] Checking availability for ${formattedDate} at ${timeSlot}`)
       const response = await api.get(url)
       console.log('[appointmentService] Slot availability response:', response.data)
       
@@ -204,7 +253,6 @@ export default {
     }
   },
 
-  // Get appointment settings with caching
   async getAppointmentSettings(forceRefresh = false) {
     try {
       if (cachedSettings && !forceRefresh) {
@@ -224,103 +272,12 @@ export default {
       return {}
     } catch (error) {
       console.error('Get appointment settings error:', error)
-      // Return cached settings if available, otherwise empty object
       return cachedSettings || {}
     }
   },
 
-  // Helper to clear cached settings
   clearSettingsCache() {
     cachedSettings = null
-  },
-
-  // Helper to format date based on settings
-  async formatDateForDisplay(dateStr) {
-    try {
-      const settings = await this.getAppointmentSettings()
-      const timezone = settings.timezone || 'Asia/Manila'
-      const date = new Date(dateStr)
-      return date.toLocaleDateString('en-PH', { 
-        timeZone: timezone,
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      })
-    } catch (error) {
-      console.error('Error formatting date:', error)
-      return dateStr
-    }
-  },
-
-  // Helper to get working days from settings
-  async getWorkingDays() {
-    try {
-      const settings = await this.getAppointmentSettings()
-      return settings.working_days || ['mon', 'tue', 'wed', 'thu', 'fri']
-    } catch (error) {
-      console.error('Error getting working days:', error)
-      return ['mon', 'tue', 'wed', 'thu', 'fri']
-    }
-  },
-
-  // Helper to check if a date is a working day
-  async isWorkingDay(dateStr) {
-    try {
-      const workingDays = await this.getWorkingDays()
-      const date = new Date(dateStr)
-      const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
-      const dayOfWeek = dayNames[date.getDay()]
-      return workingDays.includes(dayOfWeek)
-    } catch (error) {
-      console.error('Error checking working day:', error)
-      // Default to Monday-Friday
-      const date = new Date(dateStr)
-      return date.getDay() >= 1 && date.getDay() <= 5
-    }
-  },
-
-  // Helper to get slot duration from settings
-  async getSlotDuration() {
-    try {
-      const settings = await this.getAppointmentSettings()
-      return settings.slot_duration_minutes || 30
-    } catch (error) {
-      console.error('Error getting slot duration:', error)
-      return 30
-    }
-  },
-
-  // Helper to get clinic hours from settings
-  async getClinicHours() {
-    try {
-      const settings = await this.getAppointmentSettings()
-      return {
-        start: settings.clinic_start_time || '08:00',
-        end: settings.clinic_end_time || '17:00',
-        lunchStart: settings.lunch_break_start || '12:00',
-        lunchEnd: settings.lunch_break_end || '13:00'
-      }
-    } catch (error) {
-      console.error('Error getting clinic hours:', error)
-      return {
-        start: '08:00',
-        end: '17:00',
-        lunchStart: '12:00',
-        lunchEnd: '13:00'
-      }
-    }
-  },
-
-  // Helper to generate time slots based on settings
-  async generateTimeSlots(date, office = null) {
-    try {
-      // Use the backend to generate slots
-      const result = await this.getAvailableSlots(date, office)
-      return result.slots || []
-    } catch (error) {
-      console.error('Error generating time slots:', error)
-      return []
-    }
   },
 
   async cancelAppointment(id, reason) {
@@ -337,8 +294,14 @@ export default {
 
   async rescheduleAppointment(id, date, timeSlot) {
     try {
+      // FIXED: Ensure date is in YYYY-MM-DD format
+      const formattedDate = formatDateToYYYYMMDD(date)
+      if (!formattedDate) {
+        throw new Error('Invalid date format')
+      }
+      
       const response = await api.put(`/appointments/${id}/reschedule`, {
-        appointment_date: date,
+        appointment_date: formattedDate,
         time_slot: timeSlot
       })
       return response.data

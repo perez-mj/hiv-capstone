@@ -1,20 +1,17 @@
 // backend/services/queueService.js
 const db = require('../models');
 const { Op } = require('sequelize');
-const socketService = require('./socketService');
 
 class QueueService {
-  
   /**
-   * Get or create queue for a specific office and date
-   * Uses transaction with row lock to prevent race conditions
+   * Get or create a queue for a specific office and date
    */
-  async getOrCreateQueue(office, date, transaction = null) {
-    // Use SELECT ... FOR UPDATE to lock the row
+  async getOrCreateQueue(office, date) {
     let queue = await db.Queue.findOne({
-      where: { office, date },
-      transaction,
-      lock: transaction ? transaction.LOCK.UPDATE : undefined
+      where: {
+        office,
+        date
+      }
     });
 
     if (!queue) {
@@ -24,484 +21,460 @@ class QueueService {
         current_number: 0,
         completed_count: 0,
         skipped_count: 0,
-        noshow_count: 0
-      }, { transaction });
+        noshow_count: 0,
+        total_wait_time_minutes: 0,
+        average_wait_time_minutes: 0
+      });
     }
 
     return queue;
   }
 
   /**
-   * Get next position in queue for a specific queue
+   * Add a patient to the queue
    */
-  async getNextPosition(queueId, transaction = null) {
-    const lastEntry = await db.QueueEntry.findOne({
-      where: { queue_id: queueId },
-      order: [['position', 'DESC']],
-      transaction,
-      lock: transaction ? transaction.LOCK.UPDATE : undefined
-    });
-
-    return lastEntry ? lastEntry.position + 1 : 1;
-  }
-
-  /**
-   * Generate next queue number with office prefix
-   * Increments the queue's current_number counter
-   */
-  async getNextQueueNumber(queue, transaction = null) {
-    // Increment the counter
-    queue.current_number += 1;
-    await queue.save({ transaction });
-
-    const prefix = queue.office === 'testing' ? 'T' : 'R';
-    return `${prefix}-${String(queue.current_number).padStart(3, '0')}`;
-  }
-
-  /**
-   * Add patient to queue - TRANSACTION SAFE
-   * Prevents duplicate queue entries and ensures atomic operations
-   */
-  async addToQueue(office, date, patientId, appointmentId = null, transaction = null) {
-    // Use provided transaction or create new one
-    const useTransaction = transaction || await db.sequelize.transaction();
-    
+  async addToQueue(office, date, patientId, appointmentId = null) {
     try {
-      // If we created the transaction, we need to manage it
-      const shouldCommit = !transaction;
-      
-      // Get or create queue with lock
-      const queue = await this.getOrCreateQueue(office, date, useTransaction);
-      
-      // Check if patient already in queue (waiting or in-progress)
+      // Get or create the queue for this date and office
+      const queue = await this.getOrCreateQueue(office, date);
+
+      // Check if patient is already in queue for this date and office
       const existing = await db.QueueEntry.findOne({
         where: {
           queue_id: queue.id,
           patient_id: patientId,
-          status: {
-            [Op.in]: ['waiting', 'in-progress']
-          }
-        },
-        transaction: useTransaction,
-        lock: useTransaction.LOCK.UPDATE
+          status: { [Op.in]: ['waiting', 'in-progress'] }
+        }
       });
 
       if (existing) {
-        throw new Error('Patient is already in the queue.');
+        return {
+          success: false,
+          message: 'Patient already in queue',
+          existing
+        };
       }
 
-      // Generate queue number and position
-      const queueNumber = await this.getNextQueueNumber(queue, useTransaction);
-      const position = await this.getNextPosition(queue.id, useTransaction);
+      // Get transaction type info
+      let transactionTypeId = null;
+      let estimatedDurationMinutes = 30; // Default
 
-      // Create queue entry
+      if (appointmentId) {
+        const appointment = await db.Appointment.findByPk(appointmentId, {
+          include: [
+            {
+              model: db.TransactionType,
+              as: 'TransactionType',
+              attributes: ['id', 'estimated_duration_minutes']
+            }
+          ]
+        });
+
+        if (appointment && appointment.TransactionType) {
+          transactionTypeId = appointment.TransactionType.id;
+          estimatedDurationMinutes = appointment.TransactionType.estimated_duration_minutes || 30;
+        }
+      }
+
+      // If no transaction type from appointment, get default for the office
+      if (!transactionTypeId) {
+        const defaultType = await db.TransactionType.findOne({
+          where: {
+            office: office,
+            is_active: true
+          },
+          order: [['id', 'ASC']]
+        });
+
+        if (defaultType) {
+          transactionTypeId = defaultType.id;
+          estimatedDurationMinutes = defaultType.estimated_duration_minutes || 30;
+        } else {
+          throw new Error(`No transaction type configured for ${office} office`);
+        }
+      }
+
+      // Calculate next position
+      const maxPosition = await db.QueueEntry.max('position', {
+        where: { queue_id: queue.id }
+      });
+
+      const position = (maxPosition || 0) + 1;
+
+      // Generate queue number (e.g., "001", "002", etc.)
+      const queueNumber = String(position).padStart(3, '0');
+
+      // Create queue entry with all required fields
       const entry = await db.QueueEntry.create({
         queue_id: queue.id,
         patient_id: patientId,
         appointment_id: appointmentId,
+        transaction_type_id: transactionTypeId,
         queue_number: queueNumber,
-        position,
-        status: 'waiting'
-      }, { transaction: useTransaction });
-
-      // If appointment provided, update its status
-      if (appointmentId) {
-        await db.Appointment.update(
-          { status: 'checked-in' },
-          { 
-            where: { id: appointmentId },
-            transaction: useTransaction
-          }
-        );
-      }
-
-      // Commit if we created the transaction
-      if (shouldCommit) {
-        await useTransaction.commit();
-      }
-
-      // Emit socket event (outside transaction)
-      socketService.emitQueueUpdated(office, {
-        queue_number: queueNumber,
-        patient_id: patientId,
-        waiting_count: await this.getWaitingCount(office, date)
+        position: position,
+        status: 'waiting',
+        estimated_duration_minutes: estimatedDurationMinutes
       });
 
-      return entry;
-      
+      // Get patient info for response
+      const patient = await db.Patient.findByPk(patientId, {
+        attributes: ['id', 'first_name', 'last_name', 'contact_number']
+      });
+
+      // Fetch the full queue entry with associations
+      const fullEntry = await db.QueueEntry.findByPk(entry.id, {
+        include: [
+          {
+            model: db.Patient,
+            as: 'Patient',
+            attributes: ['id', 'first_name', 'last_name', 'contact_number']
+          },
+          {
+            model: db.TransactionType,
+            as: 'TransactionType',
+            attributes: ['id', 'name', 'estimated_duration_minutes', 'color_code']
+          },
+          {
+            model: db.Queue,
+            as: 'Queue',
+            attributes: ['id', 'office', 'date', 'current_number']
+          }
+        ]
+      });
+
+      return {
+        success: true,
+        queueEntry: fullEntry.toJSON()
+      };
     } catch (error) {
-      // Rollback if we created the transaction
-      if (!transaction) {
-        await useTransaction.rollback();
-      }
+      console.error('Error adding to queue:', error);
       throw error;
     }
   }
 
   /**
-   * Get current queue state with optimized queries
-   * FIXED: Eliminated N+1 query problem
+   * Get queue state for an office and date
    */
   async getQueueState(office, date) {
-    // Get queue with all entries and associated patients in one query
-    const queue = await db.Queue.findOne({
-      where: { office, date },
-      include: [
-        {
-          model: db.QueueEntry,
-          as: 'QueueEntries',
-          where: { 
-            status: { [Op.in]: ['waiting', 'in-progress'] } 
-          },
-          required: false,
-          order: [['position', 'ASC']],
-          include: [
-            {
-              model: db.Patient,
-              as: 'Patient',
-              attributes: ['id', 'first_name', 'last_name']
-            }
-          ]
-        }
-      ]
-    });
-
-    if (!queue) {
-      // Return empty state if no queue exists
-      return {
-        current_serving: null,
-        waiting_count: 0,
-        waiting_list: [],
-        stats: {
-          completed: 0,
-          skipped: 0,
-          noshow: 0
-        }
-      };
-    }
-
-    // Process queue entries
-    const entries = queue.QueueEntries || [];
-    
-    // Find current serving (in-progress)
-    const servingEntry = entries.find(e => e.status === 'in-progress');
-    let currentServing = null;
-    if (servingEntry && servingEntry.Patient) {
-      currentServing = {
-        id: servingEntry.id,
-        queue_number: servingEntry.queue_number,
-        patient_name: `${servingEntry.Patient.first_name} ${servingEntry.Patient.last_name}`,
-        patient_id: servingEntry.patient_id
-      };
-    }
-
-    // Build waiting list
-    const waitingList = entries
-      .filter(entry => entry.status === 'waiting' && entry.Patient)
-      .map(entry => ({
-        id: entry.id,
-        queue_number: entry.queue_number,
-        position: entry.position,
-        patient_name: `${entry.Patient.first_name} ${entry.Patient.last_name}`,
-        patient_id: entry.patient_id,
-        appointment_type: entry.appointment_id ? 'scheduled' : 'walk-in',
-        created_at: entry.created_at
-      }));
-
-    return {
-      current_serving: currentServing,
-      waiting_count: waitingList.length,
-      waiting_list: waitingList,
-      stats: {
-        completed: queue.completed_count || 0,
-        skipped: queue.skipped_count || 0,
-        noshow: queue.noshow_count || 0
-      }
-    };
-  }
-
-  /**
-   * Call next patient - TRANSACTION SAFE
-   */
-  async callNext(office, date) {
-    return await db.sequelize.transaction(async (transaction) => {
+    try {
       const queue = await db.Queue.findOne({
-        where: { office, date },
-        transaction,
-        lock: transaction.LOCK.UPDATE
+        where: {
+          office,
+          date
+        },
+        include: [
+          {
+            model: db.QueueEntry,
+            as: 'QueueEntries',
+            where: {
+              status: { [Op.in]: ['waiting', 'in-progress'] }
+            },
+            required: false,
+            include: [
+              {
+                model: db.Patient,
+                as: 'Patient',
+                attributes: ['id', 'first_name', 'last_name', 'contact_number']
+              },
+              {
+                model: db.TransactionType,
+                as: 'TransactionType',
+                attributes: ['id', 'name', 'estimated_duration_minutes', 'color_code']
+              }
+            ],
+            order: [['position', 'ASC']]
+          }
+        ]
       });
 
       if (!queue) {
-        throw new Error('Queue not found for today');
+        return {
+          current_serving: null,
+          waiting_list: [],
+          waiting_count: 0,
+          stats: {
+            completed: 0,
+            skipped: 0,
+            noShow: 0
+          }
+        };
       }
 
-      // Find and complete current serving
-      const currentServing = await db.QueueEntry.findOne({
+      // Get stats from queue model
+      const stats = {
+        completed: queue.completed_count || 0,
+        skipped: queue.skipped_count || 0,
+        noShow: queue.noshow_count || 0
+      };
+
+      const waitingEntries = queue.QueueEntries || [];
+      const waitingList = waitingEntries.filter(e => e.status === 'waiting');
+      const currentServing = waitingEntries.find(e => e.status === 'in-progress');
+
+      return {
+        current_serving: currentServing || null,
+        waiting_list: waitingList,
+        waiting_count: waitingList.length,
+        stats: stats
+      };
+    } catch (error) {
+      console.error('Error getting queue state:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Call next patient in queue
+   */
+  async callNext(office, date) {
+    try {
+      const queue = await db.Queue.findOne({
         where: {
-          queue_id: queue.id,
-          status: 'in-progress'
-        },
-        transaction,
-        lock: transaction.LOCK.UPDATE
+          office,
+          date
+        }
       });
 
-      if (currentServing) {
-        currentServing.status = 'completed';
-        currentServing.completed_at = new Date();
-        await currentServing.save({ transaction });
-        queue.completed_count += 1;
-        await queue.save({ transaction });
+      if (!queue) {
+        throw new Error('No queue found for this date');
       }
 
-      // Find next waiting patient
+      // Find the next waiting patient
       const nextEntry = await db.QueueEntry.findOne({
         where: {
           queue_id: queue.id,
           status: 'waiting'
         },
         order: [['position', 'ASC']],
-        transaction,
-        lock: transaction.LOCK.UPDATE
+        include: [
+          {
+            model: db.Patient,
+            as: 'Patient',
+            attributes: ['id', 'first_name', 'last_name']
+          }
+        ]
       });
 
       if (!nextEntry) {
-        return { 
-          success: false, 
-          message: 'No patients waiting',
-          queue_number: null 
+        return {
+          success: false,
+          message: 'No patients waiting in queue'
         };
       }
 
-      // Update to in-progress
-      nextEntry.status = 'in-progress';
-      nextEntry.called_at = new Date();
-      await nextEntry.save({ transaction });
-
-      // Get patient details
-      const patient = await db.Patient.findByPk(nextEntry.patient_id, {
-        transaction
+      // Update entry status to in-progress
+      await nextEntry.update({
+        status: 'in-progress',
+        called_at: new Date()
       });
 
-      const result = {
+      // Update queue current number
+      await queue.update({
+        current_number: nextEntry.position
+      });
+
+      return {
         success: true,
-        queue_number: nextEntry.queue_number,
-        patient_name: patient ? `${patient.first_name} ${patient.last_name}` : 'Unknown',
-        patient_id: nextEntry.patient_id
+        queueEntry: nextEntry.toJSON()
       };
-
-      // Emit socket event
-      socketService.emitNextCalled(office, {
-        office,
-        queue_number: nextEntry.queue_number,
-        patient_id: nextEntry.patient_id
-      });
-
-      // Also emit queue updated to refresh the display
-      socketService.emitQueueUpdated(office, {
-        queue_number: nextEntry.queue_number,
-        waiting_count: await this.getWaitingCount(office, date)
-      });
-
-      return result;
-    });
+    } catch (error) {
+      console.error('Error calling next:', error);
+      throw error;
+    }
   }
 
   /**
-   * Skip current patient - TRANSACTION SAFE
+   * Skip current patient
    */
   async skipCurrent(office, date, reason = 'Skipped by staff') {
-    return await db.sequelize.transaction(async (transaction) => {
+    try {
       const queue = await db.Queue.findOne({
-        where: { office, date },
-        transaction,
-        lock: transaction.LOCK.UPDATE
+        where: {
+          office,
+          date
+        }
       });
 
       if (!queue) {
-        throw new Error('Queue not found for today');
+        throw new Error('No queue found for this date');
       }
 
-      const currentServing = await db.QueueEntry.findOne({
+      const currentEntry = await db.QueueEntry.findOne({
         where: {
           queue_id: queue.id,
           status: 'in-progress'
         },
-        transaction,
-        lock: transaction.LOCK.UPDATE
+        include: [
+          {
+            model: db.Patient,
+            as: 'Patient',
+            attributes: ['id', 'first_name', 'last_name']
+          }
+        ]
       });
 
-      if (!currentServing) {
-        throw new Error('No patient currently being served');
+      if (!currentEntry) {
+        return {
+          success: false,
+          message: 'No patient currently being served'
+        };
       }
 
-      currentServing.status = 'skipped';
-      currentServing.skip_reason = reason;
-      await currentServing.save({ transaction });
-
-      queue.skipped_count += 1;
-      await queue.save({ transaction });
-
-      // Emit socket event
-      socketService.emitQueueUpdated(office, {
-        skipped: currentServing.queue_number,
-        waiting_count: await this.getWaitingCount(office, date)
+      await currentEntry.update({
+        status: 'skipped',
+        skip_reason: reason
       });
 
-      return { 
-        success: true, 
-        message: 'Patient skipped successfully',
-        queue_number: currentServing.queue_number
+      // Update queue stats
+      await queue.increment('skipped_count');
+
+      return {
+        success: true,
+        queueEntry: currentEntry.toJSON()
       };
-    });
+    } catch (error) {
+      console.error('Error skipping current:', error);
+      throw error;
+    }
   }
 
   /**
-   * Reset queue - TRANSACTION SAFE
+   * Reset queue (end of day)
    */
   async resetQueue(office, date) {
-    return await db.sequelize.transaction(async (transaction) => {
+    try {
       const queue = await db.Queue.findOne({
-        where: { office, date },
-        transaction,
-        lock: transaction.LOCK.UPDATE
+        where: {
+          office,
+          date
+        }
       });
 
       if (!queue) {
-        throw new Error('Queue not found for today');
+        return {
+          success: false,
+          message: 'No queue found for this date'
+        };
       }
 
-      // Mark all waiting and in-progress as no-show
-      const [updatedCount] = await db.QueueEntry.update(
-        { 
-          status: 'no-show',
-          completed_at: new Date()
-        },
+      // Mark all waiting and in-progress as completed
+      await db.QueueEntry.update(
+        { status: 'completed', completed_at: new Date() },
         {
           where: {
             queue_id: queue.id,
             status: { [Op.in]: ['waiting', 'in-progress'] }
-          },
-          transaction
+          }
         }
       );
 
-      // Update noshow count
-      queue.noshow_count += updatedCount;
-      queue.current_number = 0;
-      await queue.save({ transaction });
-
-      // Emit socket event
-      socketService.emitQueueReset(office, {
-        office,
-        date,
-        reset_count: updatedCount
+      // Reset queue counters
+      await queue.update({
+        current_number: 0,
+        completed_count: queue.completed_count || 0 // Keep completed count
       });
 
-      return { 
-        success: true, 
-        message: 'Queue reset successfully',
-        reset_count: updatedCount
+      return {
+        success: true,
+        message: 'Queue reset successfully'
       };
-    });
-  }
-
-  /**
-   * Get waiting count - optimized query
-   */
-  async getWaitingCount(office, date) {
-    const queue = await db.Queue.findOne({
-      where: { office, date }
-    });
-
-    if (!queue) {
-      return 0;
+    } catch (error) {
+      console.error('Error resetting queue:', error);
+      throw error;
     }
-
-    return await db.QueueEntry.count({
-      where: {
-        queue_id: queue.id,
-        status: 'waiting'
-      }
-    });
   }
 
   /**
-   * Remove patient from queue (for manual intervention)
+   * Complete current patient
    */
-  async removeFromQueue(queueEntryId, reason = 'Removed by staff') {
-    return await db.sequelize.transaction(async (transaction) => {
-      const entry = await db.QueueEntry.findByPk(queueEntryId, {
-        transaction,
-        lock: transaction.LOCK.UPDATE
+  async completeCurrent(office, date) {
+    try {
+      const queue = await db.Queue.findOne({
+        where: {
+          office,
+          date
+        }
       });
+
+      if (!queue) {
+        throw new Error('No queue found for this date');
+      }
+
+      const currentEntry = await db.QueueEntry.findOne({
+        where: {
+          queue_id: queue.id,
+          status: 'in-progress'
+        }
+      });
+
+      if (!currentEntry) {
+        return {
+          success: false,
+          message: 'No patient currently being served'
+        };
+      }
+
+      await currentEntry.update({
+        status: 'completed',
+        completed_at: new Date()
+      });
+
+      // Update queue stats
+      await queue.increment('completed_count');
+
+      // Update average wait time
+      if (currentEntry.called_at) {
+        const waitTime = Math.floor((new Date() - new Date(currentEntry.called_at)) / 60000);
+        const totalWait = queue.total_wait_time_minutes || 0;
+        const totalCompleted = (queue.completed_count || 0) + 1;
+        const newTotalWait = totalWait + waitTime;
+        const avgWait = Math.round(newTotalWait / totalCompleted);
+        
+        await queue.update({
+          total_wait_time_minutes: newTotalWait,
+          average_wait_time_minutes: avgWait
+        });
+      }
+
+      return {
+        success: true,
+        queueEntry: currentEntry.toJSON()
+      };
+    } catch (error) {
+      console.error('Error completing current:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark patient as no-show
+   */
+  async markNoShow(office, date, queueEntryId) {
+    try {
+      const entry = await db.QueueEntry.findByPk(queueEntryId);
 
       if (!entry) {
         throw new Error('Queue entry not found');
       }
 
-      // Only remove if in waiting status
-      if (entry.status !== 'waiting') {
-        throw new Error('Can only remove waiting patients from queue');
-      }
-
-      entry.status = 'cancelled';
-      entry.skip_reason = reason;
-      await entry.save({ transaction });
-
-      // Update queue stats
-      const queue = await db.Queue.findByPk(entry.queue_id, {
-        transaction,
-        lock: transaction.LOCK.UPDATE
+      await entry.update({
+        status: 'no-show'
       });
 
+      // Update queue stats
+      const queue = await db.Queue.findByPk(entry.queue_id);
       if (queue) {
-        // Decrement count for this office date
-        // We track this in a separate field or just let it be
-        await queue.save({ transaction });
+        await queue.increment('noshow_count');
       }
 
-      return { success: true, message: 'Patient removed from queue' };
-    });
-  }
-
-  /**
-   * Get next patient in queue without changing status
-   * Useful for preview/display
-   */
-  async getNextPatient(office, date) {
-    const queue = await db.Queue.findOne({
-      where: { office, date }
-    });
-
-    if (!queue) {
-      return null;
+      return {
+        success: true,
+        queueEntry: entry.toJSON()
+      };
+    } catch (error) {
+      console.error('Error marking no-show:', error);
+      throw error;
     }
-
-    const nextEntry = await db.QueueEntry.findOne({
-      where: {
-        queue_id: queue.id,
-        status: 'waiting'
-      },
-      order: [['position', 'ASC']],
-      include: [
-        {
-          model: db.Patient,
-          as: 'Patient',
-          attributes: ['id', 'first_name', 'last_name']
-        }
-      ]
-    });
-
-    if (!nextEntry || !nextEntry.Patient) {
-      return null;
-    }
-
-    return {
-      queue_number: nextEntry.queue_number,
-      patient_name: `${nextEntry.Patient.first_name} ${nextEntry.Patient.last_name}`,
-      patient_id: nextEntry.patient_id,
-      position: nextEntry.position
-    };
   }
 }
 

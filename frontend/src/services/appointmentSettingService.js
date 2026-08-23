@@ -1,7 +1,7 @@
 // frontend/src/services/appointmentSettingService.js
 import api from '@/plugins/axios';
 
-const BASE_URL = '/admin/appointment-settings';
+const BASE_URL = '/appointment-settings';
 
 export default {
   // Get all appointment settings

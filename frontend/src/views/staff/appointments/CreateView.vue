@@ -74,7 +74,8 @@ export default {
     })
 
     const patientId = computed(() => {
-      return route.query.patientId ? parseInt(route.query.patientId) : null
+      const id = route.query.patientId
+      return id ? parseInt(id) : null
     })
 
     const onSuccess = (appointment) => {
@@ -106,7 +107,6 @@ export default {
     onMounted(async () => {
       loading.value = true
       try {
-        // Load appointment settings
         appointmentSettings.value = await appointmentStore.loadAppointmentSettings()
         console.log('Settings loaded:', appointmentSettings.value)
       } catch (err) {

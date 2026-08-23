@@ -70,11 +70,31 @@
                 <v-col cols="12" md="6">
                   <div class="text-subtitle-2 font-weight-bold text-medium-emphasis mb-1">Date</div>
                   <div class="text-body-1">{{ formatDate(appointment.appointment_date) }}</div>
+                  <!-- Date availability indicator -->
+                  <v-chip 
+                    v-if="appointment.status !== 'cancelled' && appointment.status !== 'completed'"
+                    :color="isDateAvailable ? 'success' : 'error'"
+                    size="x-small"
+                    variant="tonal"
+                    class="mt-1"
+                  >
+                    {{ isDateAvailable ? 'Date Available' : 'Date Unavailable' }}
+                  </v-chip>
                 </v-col>
                 
                 <v-col cols="12" md="6">
-                  <div class="text-subtitle-2 font-weight-bold text-medium-emphasis mb-1">Time</div>
+                  <div class="text-subtitle-2 font-weight-bold text-medium-emphasis mb-1">Time Slot</div>
                   <div class="text-body-1">{{ formatTimeSlot(appointment.time_slot) }}</div>
+                  <!-- Slot status -->
+                  <v-chip 
+                    v-if="appointment.status !== 'cancelled' && appointment.status !== 'completed'"
+                    :color="getSlotStatusColor(slotStatus)"
+                    size="x-small"
+                    variant="tonal"
+                    class="mt-1"
+                  >
+                    {{ getSlotStatusText(slotStatus) }}
+                  </v-chip>
                 </v-col>
                 
                 <v-col cols="12" md="6">
@@ -246,7 +266,7 @@
                 >
                   <template v-slot:activator="{ props }">
                     <v-text-field
-                      v-model="rescheduleData.date"
+                      v-model="rescheduleDisplayDate"
                       label="New Date"
                       prepend-inner-icon="mdi-calendar"
                       readonly
@@ -259,10 +279,11 @@
                   </template>
                   <v-date-picker
                     v-model="rescheduleData.date"
-                    @update:model-value="rescheduleDateMenu = false; loadRescheduleSlots()"
+                    @update:model-value="onRescheduleDateSelected"
                     :min="minDate"
                     :max="maxDate"
                     color="primary"
+                    :allowed-dates="allowedDates"
                   ></v-date-picker>
                 </v-menu>
               </v-col>
@@ -278,13 +299,16 @@
                   variant="outlined"
                   density="compact"
                   class="rounded-lg"
+                  item-title="display_title"
+                  item-value="time"
+                  item-disabled="disabled"
                 >
-                  <template v-slot:item="{ props, item }">
-                    <v-list-item v-bind="props">
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props" :disabled="item.raw.disabled">
                       <v-list-item-title>
                         {{ formatTimeSlot(item.raw.time) }}
                         <v-chip 
-                          v-if="!item.raw.available" 
+                          v-if="item.raw.isBooked" 
                           color="error" 
                           size="x-small" 
                           class="ml-2"
@@ -293,7 +317,16 @@
                           Booked
                         </v-chip>
                         <v-chip 
-                          v-else 
+                          v-else-if="item.raw.isPast" 
+                          color="grey" 
+                          size="x-small" 
+                          class="ml-2"
+                          variant="tonal"
+                        >
+                          Past
+                        </v-chip>
+                        <v-chip 
+                          v-else-if="item.raw.available" 
                           color="success" 
                           size="x-small" 
                           class="ml-2"
@@ -341,9 +374,10 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAppointmentStore } from '@/stores/appointmentStore'
+import appointmentService from '@/services/appointmentService'
 
 export default {
   name: 'AppointmentDetail',
@@ -356,6 +390,8 @@ export default {
     const loading = ref(false)
     const checkingIn = ref(false)
     const error = ref(null)
+    const slotStatus = ref('unknown')
+    const isDateAvailable = ref(true)
     
     // Reschedule
     const rescheduleDialog = ref(false)
@@ -369,6 +405,7 @@ export default {
       time_slot: null
     })
     const rescheduleSlots = ref([])
+    const rescheduleSlotsData = ref([])
 
     const snackbar = ref({
       show: false,
@@ -377,19 +414,36 @@ export default {
       icon: 'mdi-check-circle'
     })
 
-    // Computed values from settings
     const minDate = computed(() => {
       const today = new Date()
-      const leadTimeMinutes = appointmentStore.settings?.booking_lead_time_minutes || 60
-      const minDateTime = new Date(Date.now() + leadTimeMinutes * 60000)
-      return minDateTime.toISOString().split('T')[0]
+      return today.toISOString().split('T')[0]
     })
 
     const maxDate = computed(() => {
       const max = new Date()
-      const advanceDays = appointmentStore.settings?.advance_booking_days || 30
-      max.setDate(max.getDate() + advanceDays)
+      max.setDate(max.getDate() + 30)
       return max.toISOString().split('T')[0]
+    })
+
+    const rescheduleDisplayDate = computed({
+      get: () => {
+        if (!rescheduleData.value.date) return ''
+        try {
+          const date = new Date(rescheduleData.value.date + 'T00:00:00')
+          if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })
+          }
+        } catch (e) {
+          console.error('Date formatting error:', e)
+        }
+        return rescheduleData.value.date
+      },
+      set: () => {}
     })
 
     const loadAppointment = async () => {
@@ -409,6 +463,7 @@ export default {
         if (data) {
           console.log('Appointment loaded successfully:', data)
           appointment.value = data
+          await checkAppointmentStatus(data)
         } else {
           error.value = 'Appointment not found'
         }
@@ -419,6 +474,76 @@ export default {
       } finally {
         loading.value = false
       }
+    }
+
+    const checkAppointmentStatus = async (appt) => {
+      if (!appt || appt.status === 'cancelled' || appt.status === 'completed') {
+        slotStatus.value = 'na'
+        return
+      }
+
+      try {
+        // Check if slot is still available (not booked by someone else)
+        const result = await appointmentService.getAvailableSlots(
+          appt.appointment_date,
+          appt.office,
+          appt.patient_id
+        )
+
+        if (result && result.slots) {
+          const slot = result.slots.find(s => s.time === appt.time_slot)
+          if (slot) {
+            if (slot.isBooked) {
+              slotStatus.value = 'booked_by_others'
+            } else if (slot.isPast) {
+              slotStatus.value = 'past'
+            } else if (slot.available) {
+              slotStatus.value = 'available'
+            } else {
+              slotStatus.value = 'unknown'
+            }
+          } else {
+            slotStatus.value = 'not_found'
+          }
+        }
+
+        // Check date availability
+        const dateResult = await appointmentService.getDateAvailability(
+          appt.appointment_date,
+          appt.appointment_date,
+          appt.office
+        )
+        if (dateResult && dateResult.length > 0) {
+          isDateAvailable.value = dateResult[0].available
+        }
+
+      } catch (error) {
+        console.error('Error checking appointment status:', error)
+      }
+    }
+
+    const getSlotStatusColor = (status) => {
+      const colors = {
+        available: 'success',
+        past: 'grey',
+        booked_by_others: 'error',
+        not_found: 'warning',
+        na: 'grey',
+        unknown: 'grey'
+      }
+      return colors[status] || 'grey'
+    }
+
+    const getSlotStatusText = (status) => {
+      const texts = {
+        available: 'Slot Available',
+        past: 'Past Time Slot',
+        booked_by_others: 'Booked by Another Patient',
+        not_found: 'Slot Not Found',
+        na: 'N/A',
+        unknown: 'Unknown'
+      }
+      return texts[status] || 'Unknown'
     }
 
     const checkIn = async () => {
@@ -468,21 +593,38 @@ export default {
       }
     }
 
+    const onRescheduleDateSelected = async (value) => {
+      rescheduleDateMenu.value = false
+      if (value) {
+        rescheduleData.value.date = value
+        rescheduleData.value.time_slot = null
+        await loadRescheduleSlots()
+      }
+    }
+
     const loadRescheduleSlots = async () => {
       if (!rescheduleData.value.date || !appointment.value) return
 
       loadingRescheduleSlots.value = true
       try {
-        const result = await appointmentStore.loadAvailableSlots(
+        const result = await appointmentService.getAvailableSlots(
           rescheduleData.value.date,
           appointment.value.office,
           appointment.value.patient_id
         )
         
-        rescheduleSlots.value = result.slots || []
+        rescheduleSlotsData.value = result.slots || []
+        rescheduleSlots.value = rescheduleSlotsData.value.map(slot => ({
+          time: slot.time,
+          display_title: formatTimeSlot(slot.time),
+          available: slot.available || false,
+          isBooked: slot.isBooked || false,
+          isPast: slot.isPast || false,
+          disabled: !slot.available
+        }))
         
         // Auto-select if only one available slot
-        const available = rescheduleSlots.value.filter(s => s.available)
+        const available = rescheduleSlotsData.value.filter(s => s.available)
         if (available.length === 1) {
           rescheduleData.value.time_slot = available[0].time
         }
@@ -522,9 +664,7 @@ export default {
     const formatDate = (date) => {
       if (!date) return 'N/A'
       try {
-        const timezone = appointmentStore.settings?.timezone || 'Asia/Manila'
         return new Date(date).toLocaleDateString('en-US', {
-          timeZone: timezone,
           weekday: 'short',
           month: 'short',
           day: 'numeric',
@@ -538,9 +678,7 @@ export default {
     const formatDateTime = (date) => {
       if (!date) return 'N/A'
       try {
-        const timezone = appointmentStore.settings?.timezone || 'Asia/Manila'
         return new Date(date).toLocaleString('en-US', {
-          timeZone: timezone,
           weekday: 'short',
           month: 'short',
           day: 'numeric',
@@ -583,6 +721,13 @@ export default {
       return colors[status] || 'primary'
     }
 
+    const allowedDates = (date) => {
+      const dateStr = date.toISOString().split('T')[0]
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      return dateStr >= today.toISOString().split('T')[0]
+    }
+
     const showSnackbar = (message, color = 'success') => {
       const icons = {
         success: 'mdi-check-circle',
@@ -599,7 +744,6 @@ export default {
     }
 
     onMounted(async () => {
-      // Load settings first
       await appointmentStore.loadAppointmentSettings()
       await loadAppointment()
     })
@@ -610,6 +754,8 @@ export default {
       checkingIn,
       error,
       snackbar,
+      slotStatus,
+      isDateAvailable,
       rescheduleDialog,
       rescheduleForm,
       rescheduleValid,
@@ -618,12 +764,15 @@ export default {
       loadingRescheduleSlots,
       rescheduleData,
       rescheduleSlots,
+      rescheduleSlotsData,
+      rescheduleDisplayDate,
       minDate,
       maxDate,
       checkIn,
       cancelAppointment,
       editAppointment,
       openRescheduleDialog,
+      onRescheduleDateSelected,
       loadRescheduleSlots,
       submitReschedule,
       goBack,
@@ -631,7 +780,10 @@ export default {
       formatDateTime,
       formatTimeSlot,
       formatStatus,
-      getStatusColor
+      getStatusColor,
+      getSlotStatusColor,
+      getSlotStatusText,
+      allowedDates
     }
   }
 }

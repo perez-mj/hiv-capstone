@@ -91,17 +91,6 @@ router.post('/', auth, async (req, res) => {
       transaction_type_id: finalTransactionTypeId
     });
     
-    // Generate queue number (don't fail if this doesn't work)
-    try {
-      const queueNumber = await queueService.generateQueueNumber(office, appointment_date);
-      appointment.queue_number = queueNumber;
-      await appointment.save();
-      console.log(`Generated queue number: ${queueNumber} for appointment ${appointment.id}`);
-    } catch (queueError) {
-      console.error('Error generating queue number:', queueError);
-      // Continue without queue number
-    }
-    
     // Create audit log
     await db.AuditLog.create({
       user_id: req.user.id,
@@ -419,7 +408,16 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
   try {
     const { id } = req.params;
     
-    const appointment = await db.Appointment.findByPk(id);
+    const appointment = await db.Appointment.findByPk(id, {
+      include: [
+        {
+          model: db.Patient,
+          as: 'Patient',
+          attributes: ['id', 'first_name', 'last_name']
+        }
+      ]
+    });
+    
     if (!appointment) {
       return res.status(404).json({ error: 'Appointment not found' });
     }
@@ -429,17 +427,24 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
     appointment.checked_in_at = new Date();
     await appointment.save();
     
-    // Add to queue
+    // Add to queue - FIXED: Use the office from appointment with proper date
     try {
+      const date = appointment.appointment_date;
+      // Use the appointment's office for the queue
+      const office = appointment.office;
+      
+      // Call the queue service with correct parameters
       await queueService.addToQueue(
-        appointment.office,
-        appointment.appointment_date,
-        appointment.patient_id,
-        appointment.id
+        office,           // office
+        date,             // date
+        appointment.patient_id,  // patient_id
+        appointment.id    // appointment_id (optional)
       );
+      
+      console.log(`Patient ${appointment.patient_id} added to ${office} queue for ${date}`);
     } catch (queueError) {
       console.error('Error adding to queue:', queueError);
-      // Continue even if queue fails
+      // Continue even if queue fails - but log the error
     }
     
     await db.AuditLog.create({
@@ -453,7 +458,23 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
       user_agent: req.get('User-Agent')
     });
     
-    res.json(appointment);
+    // Return the updated appointment with patient info
+    const updatedAppointment = await db.Appointment.findByPk(id, {
+      include: [
+        {
+          model: db.Patient,
+          as: 'Patient',
+          attributes: ['id', 'first_name', 'last_name', 'contact_number']
+        },
+        {
+          model: db.TransactionType,
+          as: 'TransactionType',
+          attributes: ['id', 'name', 'office', 'estimated_duration_minutes', 'color_code']
+        }
+      ]
+    });
+    
+    res.json(updatedAppointment);
   } catch (error) {
     console.error('Check-in error:', error);
     res.status(500).json({ error: error.message });
