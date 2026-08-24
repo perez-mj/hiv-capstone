@@ -382,10 +382,10 @@ export default {
     })
 
     const testingHeaders = [
-      { title: 'Date', key: 'created_at' },
-      { title: 'Pre-test', key: 'pretest_counseling', align: 'center' },
+      { title: 'Date', key: 'createdAt' },
+      { title: 'Pre-test', key: 'pretest_counseling.conducted', align: 'center' },
       { title: 'Result', key: 'hiv_test', align: 'center' },
-      { title: 'Post-test', key: 'posttest_counseling', align: 'center' },
+      { title: 'Post-test', key: 'posttest_counseling.conducted', align: 'center' },
       { title: 'Actions', key: 'actions', align: 'center', sortable: false }
     ]
 
@@ -400,7 +400,7 @@ export default {
       { title: 'Date', key: 'appointment_date' },
       { title: 'Time', key: 'time_slot', align: 'center' },
       { title: 'Office', key: 'office', align: 'center' },
-      { title: 'Type', key: 'type', align: 'center' },
+      { title: 'Transaction Type', key: 'TransactionType.name', align: 'center' },
       { title: 'Status', key: 'status', align: 'center' }
     ]
 
@@ -440,24 +440,26 @@ export default {
     }
 
     const loadHistory = async () => {
-      const patientId = route.params.id
-      if (!patientId) return
+  const patientId = route.params.id
+  if (!patientId) return
 
-      loadingHistory.value = true
-      try {
-        const history = await patientService.getPatientHistory(patientId)
-        testingHistory.value = history.testing || []
-        treatmentHistory.value = history.treatment || []
-        
-        // Load appointments - you may want to use a different endpoint
-        // This is a placeholder - you'd need an endpoint to get patient appointments
-        appointments.value = []
-      } catch (error) {
-        console.error('Failed to load history:', error)
-      } finally {
-        loadingHistory.value = false
-      }
-    }
+  loadingHistory.value = true
+  try {
+    const history = await patientService.getPatientHistory(patientId)
+    testingHistory.value = history.testing || []
+    treatmentHistory.value = history.treatment || []
+    
+    // FIXED: Fetch actual appointments using the new method
+    const appointmentData = await appointmentService.getAppointmentsByPatient(patientId)
+    appointments.value = appointmentData || []
+    
+  } catch (error) {
+    console.error('Failed to load history:', error)
+    showSnackbar('Failed to load patient history: ' + error.message, 'error')
+  } finally {
+    loadingHistory.value = false
+  }
+}
 
     const editPatient = () => {
       router.push(`/patients/${patient.value.id}/edit`)

@@ -134,8 +134,35 @@ export default {
       return []
     }
   },
+async getAppointmentsByPatient(patientId) {
+  try {
+    console.log(`[appointmentService] Fetching appointments for patient: ${patientId}`)
+    
+    // Use the /my endpoint with patient_id query parameter
+    // This works for staff/admin users
+    const response = await api.get(`/appointments/my?patient_id=${patientId}`)
+    console.log('[appointmentService] Patient appointments response:', response.data)
+    
+    // Handle different response formats
+    if (Array.isArray(response.data)) {
+      return response.data
+    }
+    
+    if (response.data && response.data.data && Array.isArray(response.data.data)) {
+      return response.data.data
+    }
+    
+    if (response.data && response.data.appointments && Array.isArray(response.data.appointments)) {
+      return response.data.appointments
+    }
+    
+    return []
+  } catch (error) {
+    console.error('[appointmentService] Get appointments by patient error:', error)
+    return []
+  }
+},
 
-  // FIXED: getAvailableSlots with proper date format
   async getAvailableSlots(date, office = null, patientId = null) {
     try {
       // Ensure date is in YYYY-MM-DD format

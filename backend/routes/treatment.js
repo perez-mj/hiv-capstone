@@ -10,7 +10,16 @@ const socketService = require('../services/socketService');
 // Save treatment encounter
 router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['treatment']), async (req, res) => {
   try {
-    const { patient_id, consultation_notes, art_prescription, lab_results, adherence, next_appointment_date } = req.body;
+    const { 
+      patient_id, 
+      consultation_notes, 
+      art_prescription, 
+      lab_results, 
+      adherence, 
+      next_appointment_date,
+      next_appointment_transaction_type_id, // Add this field
+      next_appointment_time_slot // Optional time slot
+    } = req.body;
     
     const patient = await db.Patient.findByPk(patient_id);
     if (!patient) {
@@ -47,15 +56,31 @@ router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['treat
     encounter.blockchain_hash = hash;
     await encounter.save();
     
-    if (next_appointment_date) {
+    // Create appointment ONLY if next_appointment_date is provided AND transaction type is provided
+    if (next_appointment_date && next_appointment_transaction_type_id) {
+      // Validate that the transaction type exists and belongs to treatment office
+      const transactionType = await db.TransactionType.findByPk(next_appointment_transaction_type_id);
+      if (!transactionType) {
+        return res.status(400).json({ 
+          error: 'Invalid transaction type selected' 
+        });
+      }
+      
+      if (transactionType.office !== 'treatment') {
+        return res.status(400).json({ 
+          error: 'Selected transaction type must be for treatment office' 
+        });
+      }
+
       await db.Appointment.create({
         patient_id,
         office: 'treatment',
         appointment_date: next_appointment_date,
-        time_slot: '09:00:00',
+        time_slot: next_appointment_time_slot || '09:00:00',
         type: 'scheduled',
         status: 'pending',
-        notes: 'Follow-up appointment from treatment encounter'
+        notes: 'Follow-up appointment from treatment encounter',
+        transaction_type_id: next_appointment_transaction_type_id // Include this
       });
     }
     
@@ -128,6 +153,7 @@ router.post('/encounter', auth, roleCheck('staff', 'admin'), officeCheck(['treat
     res.status(500).json({ error: error.message });
   }
 });
+
 // Get all treatment encounters for patient
 router.get('/encounters/:patientId', auth, async (req, res) => {
   try {

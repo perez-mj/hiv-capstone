@@ -184,45 +184,43 @@ class PatientService {
     }
   }
 
-  /**
-   * Get patient history (all encounters)
-   */
-  async getPatientHistory(id, userId = null, userRole = null) {
-    // Check permissions
-    if (userRole === 'patient') {
-      const userPatient = await this.getPatientByUserId(userId);
-      if (!userPatient || userPatient.id !== parseInt(id)) {
-        throw new Error('Access denied');
-      }
+/**
+ * Get patient history (all encounters)
+ */
+async getPatientHistory(id, userId = null, userRole = null) {
+  // Check permissions
+  if (userRole === 'patient') {
+    const userPatient = await this.getPatientByUserId(userId);
+    if (!userPatient || userPatient.id !== parseInt(id)) {
+      throw new Error('Access denied');
     }
-    
-    // Get testing encounters
-    const testingEncounters = await db.TestingEncounter.findAll({
-      where: { patient_id: id },
-      include: [{
-        model: db.User,
-        as: 'Staff',
-        attributes: ['id', 'username']
-      }],
-      order: [['created_at', 'DESC']]
-    });
-    
-    // Get treatment encounters
-    const treatmentEncounters = await db.TreatmentEncounter.findAll({
-      where: { patient_id: id },
-      include: [{
-        model: db.User,
-        as: 'Staff',
-        attributes: ['id', 'username']
-      }],
-      order: [['created_at', 'DESC']]
-    });
-    
-    return {
-      testing: testingEncounters,
-      treatment: treatmentEncounters
-    };
   }
+  
+  // Get testing encounters - Use 'User' as the alias, not 'Staff'
+  const testingEncounters = await db.TestingEncounter.findAll({
+    where: { patient_id: id },
+    include: [{
+      model: db.User,
+      attributes: ['id', 'username']
+    }],
+    order: [['created_at', 'DESC']]
+  });
+  
+  // Get treatment encounters - Use 'User' as the alias, not 'Staff'
+  const treatmentEncounters = await db.TreatmentEncounter.findAll({
+    where: { patient_id: id },
+    include: [{
+      model: db.User,
+      attributes: ['id', 'username']
+    }],
+    order: [['created_at', 'DESC']]
+  });
+  
+  return {
+    testing: testingEncounters,
+    treatment: treatmentEncounters
+  };
+}
 
   /**
    * Regenerate facility code for a patient

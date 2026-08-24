@@ -321,25 +321,118 @@
                 </v-card-text>
               </v-card>
 
-              <!-- Next Appointment -->
+              <!-- Next Appointment (Optional) -->
               <v-card variant="outlined" class="mb-4">
                 <v-card-title class="text-subtitle-1 font-weight-medium bg-primary-lighten-4">
                   <v-icon start>mdi-calendar-plus</v-icon>
-                  Next Appointment
+                  Next Appointment 
+                  <v-chip size="small" color="grey" variant="tonal" class="ml-2">Optional</v-chip>
                 </v-card-title>
                 <v-divider></v-divider>
                 <v-card-text class="pt-4">
                   <v-row>
                     <v-col cols="12" sm="6">
                       <v-text-field
-                        v-model="encounter.next_appointment_date"
+                        v-model="nextAppointment.date"
                         label="Next Appointment Date"
                         type="date"
                         variant="outlined"
                         density="comfortable"
+                        :min="minDate"
+                        @update:model-value="onDateChange"
                       ></v-text-field>
                     </v-col>
+                    <v-col cols="12" sm="6">
+                      <v-select
+                        v-model="nextAppointment.time_slot"
+                        :items="availableTimeSlots"
+                        item-title="label"
+                        item-value="value"
+                        label="Time Slot"
+                        placeholder="Select a time slot"
+                        variant="outlined"
+                        density="comfortable"
+                        :disabled="!nextAppointment.date || loadingSlots || availableTimeSlots.length === 0"
+                        :loading="loadingSlots"
+                        :rules="[(v) => !nextAppointment.date || !!v || 'Time slot is required']"
+                      >
+                        <template v-slot:prepend-item>
+                          <v-list-item disabled>
+                            <v-list-item-subtitle class="text-caption">
+                              {{ availableSlotsMessage }}
+                            </v-list-item-subtitle>
+                          </v-list-item>
+                        </template>
+                        <template v-slot:item="{ props, item }">
+                          <v-list-item v-bind="props">
+                            <template v-slot:prepend>
+                              <v-icon 
+                                :color="item.raw.available ? 'success' : 'grey'"
+                                size="small"
+                              >
+                                {{ item.raw.available ? 'mdi-check-circle' : 'mdi-close-circle' }}
+                              </v-icon>
+                            </template>
+                            <v-list-item-subtitle v-if="!item.raw.available">
+                              {{ item.raw.isBooked ? 'Booked' : 'Not available' }}
+                            </v-list-item-subtitle>
+                          </v-list-item>
+                        </template>
+                      </v-select>
+                    </v-col>
+                    <v-col cols="12">
+                      <v-select
+                        v-model="nextAppointment.transaction_type_id"
+                        :items="transactionTypes"
+                        item-title="name"
+                        item-value="id"
+                        label="Transaction Type"
+                        placeholder="Select transaction type for appointment"
+                        variant="outlined"
+                        density="comfortable"
+                        :disabled="!nextAppointment.date"
+                        :rules="[(v) => !nextAppointment.date || !!v || 'Transaction type is required when scheduling an appointment']"
+                        @update:model-value="validateAppointmentFields"
+                      >
+                        <template v-slot:prepend-item>
+                          <v-list-item disabled>
+                            <v-list-item-subtitle class="text-caption">
+                              Required if appointment date is set
+                            </v-list-item-subtitle>
+                          </v-list-item>
+                        </template>
+                      </v-select>
+                    </v-col>
+                    <v-col cols="12">
+                      <v-textarea
+                        v-model="nextAppointment.notes"
+                        label="Appointment Notes (Optional)"
+                        placeholder="Additional notes for the appointment..."
+                        variant="outlined"
+                        rows="2"
+                      ></v-textarea>
+                    </v-col>
                   </v-row>
+                  
+                  <!-- Validation messages -->
+                  <v-alert 
+                    v-if="nextAppointment.date && !nextAppointment.transaction_type_id"
+                    type="warning"
+                    variant="tonal"
+                    dense
+                    class="mt-2"
+                  >
+                    Please select a transaction type for the appointment.
+                  </v-alert>
+                  <v-alert 
+                    v-if="nextAppointment.date && availableTimeSlots.filter(s => s.available).length === 0 && !loadingSlots"
+                    type="warning"
+                    variant="tonal"
+                    dense
+                    class="mt-2"
+                  >
+                    No available time slots for the selected date. Please choose another date.
+                  </v-alert>
                 </v-card-text>
               </v-card>
 
@@ -391,6 +484,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import treatmentService from '@/services/treatmentService'
 import patientService from '@/services/patientService'
+import transactionTypeService from '@/services/transactionTypeService'
+import appointmentService from '@/services/appointmentService'
 
 export default {
   name: 'TreatmentEncounterView',
@@ -406,6 +501,10 @@ export default {
     const patient = ref(null)
     const isEditMode = ref(false)
     const encounterId = ref(null)
+    const transactionTypes = ref([])
+    const loadingTransactionTypes = ref(false)
+    const loadingSlots = ref(false)
+    const availableTimeSlots = ref([])
 
     const snackbar = ref({
       show: false,
@@ -434,8 +533,15 @@ export default {
         missed_doses_last_30_days: 'no',
         missed_dose_count: 0,
         notes: ''
-      },
-      next_appointment_date: ''
+      }
+    })
+
+    // Next appointment data (separate from encounter)
+    const nextAppointment = ref({
+      date: '',
+      time_slot: null,
+      transaction_type_id: null,
+      notes: ''
     })
 
     // Lab results helper
@@ -472,7 +578,115 @@ export default {
       return age
     })
 
+    const minDate = computed(() => {
+      const today = new Date()
+      today.setDate(today.getDate() + 1) // Allow booking from tomorrow
+      return today.toISOString().split('T')[0]
+    })
+
+    const availableSlotsMessage = computed(() => {
+      if (loadingSlots.value) return 'Loading available slots...'
+      if (!nextAppointment.value.date) return 'Please select a date first'
+      const available = availableTimeSlots.value.filter(s => s.available)
+      if (available.length === 0) return 'No slots available for this date'
+      return `${available.length} slot(s) available`
+    })
+
     // Methods
+    const validateAppointmentFields = () => {
+      if (form.value) {
+        form.value.validate()
+      }
+    }
+
+    const loadTransactionTypes = async () => {
+      loadingTransactionTypes.value = true
+      try {
+        const response = await transactionTypeService.getTransactionTypes('treatment')
+        if (response.success) {
+          // Only show active transaction types
+          transactionTypes.value = response.data.filter(t => t.is_active !== false)
+        }
+      } catch (error) {
+        console.error('Failed to load transaction types:', error)
+        showSnackbar('Failed to load transaction types', 'error')
+      } finally {
+        loadingTransactionTypes.value = false
+      }
+    }
+
+    const loadAvailableSlots = async (date) => {
+      if (!date) {
+        availableTimeSlots.value = []
+        return
+      }
+
+      loadingSlots.value = true
+      try {
+        const result = await appointmentService.getAvailableSlots(date, 'treatment')
+        console.log('Available slots result:', result)
+        
+        if (result && result.slots && Array.isArray(result.slots)) {
+          // Map the slots to the format needed for the dropdown
+          // The API returns objects with time, available, isPast, isBooked
+          availableTimeSlots.value = result.slots.map(slot => {
+            // Format time from "08:30" to "08:30 AM"
+            const timeStr = slot.time || slot
+            const formattedTime = formatTimeDisplay(timeStr)
+            
+            return {
+              label: formattedTime,
+              value: timeStr,
+              available: slot.available !== false,
+              isPast: slot.isPast || false,
+              isBooked: slot.isBooked || false,
+              // Store the original slot data for reference
+              slot: slot
+            }
+          })
+          
+          // Auto-select the first available slot
+          const firstAvailable = availableTimeSlots.value.find(s => s.available)
+          if (firstAvailable) {
+            nextAppointment.value.time_slot = firstAvailable.value
+          } else {
+            nextAppointment.value.time_slot = null
+          }
+        } else {
+          availableTimeSlots.value = []
+          nextAppointment.value.time_slot = null
+        }
+      } catch (error) {
+        console.error('Failed to load available slots:', error)
+        availableTimeSlots.value = []
+        nextAppointment.value.time_slot = null
+        showSnackbar('Failed to load available time slots', 'error')
+      } finally {
+        loadingSlots.value = false
+      }
+    }
+
+    // Helper function to format time for display
+    const formatTimeDisplay = (timeStr) => {
+      if (!timeStr) return ''
+      const parts = timeStr.split(':')
+      const hours = parseInt(parts[0])
+      const minutes = parts[1] || '00'
+      const ampm = hours >= 12 ? 'PM' : 'AM'
+      const hour12 = hours % 12 || 12
+      return `${hour12}:${minutes} ${ampm}`
+    }
+
+    const onDateChange = () => {
+      // Reset time slot when date changes
+      nextAppointment.value.time_slot = null
+      if (nextAppointment.value.date) {
+        loadAvailableSlots(nextAppointment.value.date)
+      } else {
+        availableTimeSlots.value = []
+      }
+    }
+
     const loadPatient = async (id) => {
       try {
         const data = await patientService.getPatient(id)
@@ -571,6 +785,18 @@ export default {
         return
       }
 
+      // Validate appointment fields
+      if (nextAppointment.value.date) {
+        if (!nextAppointment.value.transaction_type_id) {
+          showSnackbar('Please select a transaction type for the appointment', 'warning')
+          return
+        }
+        if (!nextAppointment.value.time_slot) {
+          showSnackbar('Please select a time slot for the appointment', 'warning')
+          return
+        }
+      }
+
       submitting.value = true
       try {
         const data = {
@@ -579,7 +805,12 @@ export default {
           art_prescription: encounter.value.art_prescription,
           lab_results: prepareLabResults(),
           adherence: encounter.value.adherence,
-          next_appointment_date: encounter.value.next_appointment_date
+          // Only include appointment fields if date is provided
+          ...(nextAppointment.value.date && {
+            next_appointment_date: nextAppointment.value.date,
+            next_appointment_transaction_type_id: nextAppointment.value.transaction_type_id,
+            next_appointment_time_slot: nextAppointment.value.time_slot
+          })
         }
 
         const result = await treatmentService.createEncounter(data)
@@ -611,6 +842,9 @@ export default {
     }
 
     onMounted(async () => {
+      // Load transaction types first
+      await loadTransactionTypes()
+      
       const patientId = route.params.patientId
       const id = route.params.id
 
@@ -632,18 +866,47 @@ export default {
       isEditMode,
       encounterId,
       encounter,
+      nextAppointment,
       labResults,
       snackbar,
+      transactionTypes,
+      loadingTransactionTypes,
+      loadingSlots,
+      availableTimeSlots,
       patientAge,
+      minDate,
       adherenceOptions,
+      availableSlotsMessage,
       searchPatients,
       selectPatient,
       saveDraft,
       submitEncounter,
       cancel,
       navigateToPatientCreate,
-      prepareLabResults
+      prepareLabResults,
+      validateAppointmentFields,
+      onDateChange,
+      loadAvailableSlots,
+      formatTimeDisplay
     }
   }
 }
 </script>
+
+<style scoped>
+.bg-info-lighten-4 {
+  background-color: #e3f2fd !important;
+}
+.bg-success-lighten-4 {
+  background-color: #e8f5e9 !important;
+}
+.bg-warning-lighten-4 {
+  background-color: #fff3e0 !important;
+}
+.bg-error-lighten-4 {
+  background-color: #fce4ec !important;
+}
+.bg-primary-lighten-4 {
+  background-color: #e3f2fd !important;
+}
+</style>
