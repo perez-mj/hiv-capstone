@@ -4,7 +4,6 @@
     v-model="dialogVisible"
     max-width="800"
     fullscreen
-    hide-overlay
     :persistent="true"
   >
     <v-card class="keyboard-container" color="surface" elevation="24">
@@ -20,7 +19,7 @@
           </div>
         </div>
 
-        <!-- Keyboard layout - SIMPLIFIED -->
+        <!-- Keyboard layout -->
         <div class="keyboard-grid">
           <!-- Row 1: Numbers -->
           <div class="keyboard-row">
@@ -30,7 +29,6 @@
               class="key-btn"
               type="button"
               @click="addCharacter(key)"
-              @touchstart="preventZoom"
             >
               {{ key }}
             </button>
@@ -38,7 +36,6 @@
               class="key-btn key-backspace"
               type="button"
               @click="backspace"
-              @touchstart="preventZoom"
             >
               ⌫
             </button>
@@ -52,7 +49,6 @@
               class="key-btn"
               type="button"
               @click="addCharacter(key)"
-              @touchstart="preventZoom"
             >
               {{ key }}
             </button>
@@ -66,7 +62,6 @@
               class="key-btn"
               type="button"
               @click="addCharacter(key)"
-              @touchstart="preventZoom"
             >
               {{ key }}
             </button>
@@ -80,7 +75,6 @@
               class="key-btn"
               type="button"
               @click="addCharacter(key)"
-              @touchstart="preventZoom"
             >
               {{ key }}
             </button>
@@ -94,7 +88,6 @@
               class="key-btn key-special"
               type="button"
               @click="addCharacter(key)"
-              @touchstart="preventZoom"
             >
               {{ key }}
             </button>
@@ -102,7 +95,6 @@
               class="key-btn key-space"
               type="button"
               @click="addCharacter(' ')"
-              @touchstart="preventZoom"
             >
               Space
             </button>
@@ -114,7 +106,6 @@
               class="key-btn key-clear"
               type="button"
               @click="clearInput"
-              @touchstart="preventZoom"
             >
               ✕ Clear
             </button>
@@ -122,7 +113,6 @@
               class="key-btn key-done"
               type="button"
               @click="done"
-              @touchstart="preventZoom"
             >
               ✓ Done
             </button>
@@ -134,7 +124,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
 // Props
 const props = defineProps({
@@ -184,6 +174,13 @@ watch(() => props.modelValue, (newVal) => {
   dialogVisible.value = newVal
   if (newVal) {
     inputValue.value = props.value || ''
+    // Auto-focus the first button for immediate keyboard interaction
+    nextTick(() => {
+      const firstButton = document.querySelector('.key-btn:not(.key-backspace):not(.key-clear):not(.key-done)')
+      if (firstButton) {
+        firstButton.focus()
+      }
+    })
   }
 })
 
@@ -191,7 +188,7 @@ watch(dialogVisible, (newVal) => {
   emit('update:modelValue', newVal)
 })
 
-// Methods - SIMPLIFIED
+// Methods
 const addCharacter = (char) => {
   if (inputValue.value.length >= props.maxLength) return
   inputValue.value += char
@@ -213,13 +210,7 @@ const done = () => {
   dialogVisible.value = false
 }
 
-// Prevent zoom on double-tap
-const preventZoom = (event) => {
-  // Prevent default behavior that causes double-tap issues
-  event.preventDefault()
-}
-
-// Keyboard shortcuts
+// Keyboard shortcuts for physical keyboard support
 const handleKeyPress = (event) => {
   if (!dialogVisible.value) return
   
@@ -279,7 +270,7 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* SIMPLIFIED button styles - native feel */
+/* Key button styles with touch-action: manipulation */
 .key-btn {
   min-width: 44px;
   height: 48px;
@@ -292,20 +283,25 @@ onUnmounted(() => {
   background: rgba(var(--v-theme-surface-variant), 0.4);
   color: rgb(var(--v-theme-on-surface));
   cursor: pointer;
-  touch-action: manipulation;
+  touch-action: manipulation; /* Prevents double-tap zoom without breaking click events */
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   padding: 0 4px;
-  transition: background 0.08s ease;
+  transition: background 0.08s ease, transform 0.08s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-touch-callout: none;
 }
 
 .key-btn:active {
-  background: rgba(var(--v-theme-primary), 0.15);
-  transform: scale(0.95);
+  background: rgba(var(--v-theme-primary), 0.2);
+  transform: scale(0.92);
+}
+
+.key-btn::selection {
+  background: transparent;
 }
 
 /* Backspace button */
@@ -389,6 +385,7 @@ onUnmounted(() => {
   align-items: center;
   border: 2px solid rgba(var(--v-theme-surface-variant), 0.2);
   border-radius: 12px !important;
+  background: rgba(var(--v-theme-surface), 0.8);
 }
 
 .cursor-blink {
@@ -500,15 +497,5 @@ onUnmounted(() => {
     min-height: 76px;
     padding: 16px !important;
   }
-}
-
-/* Prevent text selection and improve touch */
-.key-btn::selection {
-  background: transparent;
-}
-
-.key-btn {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
 }
 </style>

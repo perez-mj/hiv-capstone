@@ -30,7 +30,7 @@
                         {{ currentServing ? currentServing.queue_number : '---' }}
                       </div>
                       <div class="text-subtitle-1">
-                        {{ currentServing ? currentServing.patient_name : 'No one' }}
+                        {{ currentServing ? currentServing.Patient.patient_facility_code + ' • ' + currentServing.Patient.contact_number : 'No one' }}
                       </div>
                     </v-col>
                     <v-col cols="auto">
@@ -92,11 +92,11 @@
                     </template>
                     
                     <v-list-item-title>
-                      <strong>{{ item.queue_number }}</strong> - {{ item.patient_name }}
+                      <strong>{{ item.queue_number }}</strong> - {{ item.Patient.patient_facility_code  }}
                     </v-list-item-title>
                     
                     <v-list-item-subtitle>
-                      {{ item.type || 'Walk-in' }} • {{ formatTime(item.created_at) }}
+                      {{ item.appointment_id ? "Scheduled" : "Walk-in" }} • {{ formatTime(item.createdAt) }}
                     </v-list-item-subtitle>
                     
                     <template v-slot:append>

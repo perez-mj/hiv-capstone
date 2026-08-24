@@ -1,6 +1,5 @@
 // backend/controllers/kioskController.js
 const kioskService = require('../services/kioskService');
-const printerService = require('../services/printerService');
 
 class KioskController {
 
@@ -44,6 +43,9 @@ class KioskController {
         statusCode = 404;
       } else if (err.message.includes('already checked in')) {
         statusCode = 409;
+      } else if (err.message.includes('transaction')) {
+        statusCode = 500;
+        message = 'System configuration error. Please contact administrator.';
       }
 
       return res.status(statusCode).json({
@@ -52,88 +54,88 @@ class KioskController {
       });
     }
   }
+  
+/**
+ * Register walk-in patient
+ * POST /api/kiosk/walkin
+ */
+async walkIn(req, res) {
+  try {
+    const { 
+      first_name, 
+      last_name, 
+      gender, 
+      contact_number,
+      address,
+      guardian_name,
+      guardian_contact,
+      office,
+      transaction_type_id,
+      is_returning
+    } = req.body;
 
-  /**
-   * Register walk-in patient
-   * POST /api/kiosk/walkin
-   */
-  async walkIn(req, res) {
-    try {
-      const { 
-        first_name, 
-        last_name, 
-        birth_date, 
-        gender, 
-        contact_number,
-        address,
-        guardian_name,
-        guardian_contact,
-        office 
-      } = req.body;
+    const requiredFields = ['first_name', 'last_name', 'gender', 'contact_number'];
+    const missingFields = requiredFields.filter(field => !req.body[field]);
 
-      const requiredFields = ['first_name', 'last_name', 'birth_date', 'gender', 'contact_number'];
-      const missingFields = requiredFields.filter(field => !req.body[field]);
-
-      if (missingFields.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Missing required fields: ${missingFields.join(', ')}`
-        });
-      }
-
-      if (isNaN(Date.parse(birth_date))) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid birth date format.'
-        });
-      }
-
-      if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid gender. Must be male, female, or other.'
-        });
-      }
-
-      if (!/^[0-9+\-\s()]{7,20}$/.test(contact_number)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid phone number format.'
-        });
-      }
-
-      const result = await kioskService.registerWalkIn({
-        first_name,
-        last_name,
-        birth_date,
-        gender,
-        contact_number,
-        address: address || null,
-        guardian_name: guardian_name || null,
-        guardian_contact: guardian_contact || null
-      }, office || 'testing');
-
-      return res.status(201).json({
-        success: true,
-        data: result
-      });
-
-    } catch (err) {
-      console.error('Kiosk walk-in error:', err.message);
-      
-      if (err.message.includes('already registered')) {
-        return res.status(409).json({
-          success: false,
-          message: err.message
-        });
-      }
-
+    if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
-        message: err.message
+        message: `Missing required fields: ${missingFields.join(', ')}`
       });
     }
+
+    if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid gender. Must be male, female, or other.'
+      });
+    }
+
+    if (!/^[0-9+\-\s()]{7,20}$/.test(contact_number)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format.'
+      });
+    }
+
+    const result = await kioskService.registerWalkIn({
+      first_name,
+      last_name,
+      gender,
+      contact_number,
+      address: address || null,
+      guardian_name: guardian_name || null,
+      guardian_contact: guardian_contact || null,
+      transaction_type_id: transaction_type_id || null,
+      is_returning: is_returning || false
+    }, office || 'testing');
+
+    return res.status(201).json({
+      success: true,
+      data: result
+    });
+
+  } catch (err) {
+    console.error('Kiosk walk-in error:', err.message);
+    
+    let statusCode = 400;
+    let message = err.message;
+
+    if (err.message.includes('already registered')) {
+      statusCode = 409;
+    } else if (err.message.includes('transaction')) {
+      statusCode = 500;
+      message = 'System configuration error. Please contact administrator.';
+    } else if (err.message.includes('required')) {
+      statusCode = 400;
+    }
+
+    return res.status(statusCode).json({
+      success: false,
+      message: message
+    });
   }
+}
 
   /**
    * Get display state for public screen
@@ -167,22 +169,6 @@ class KioskController {
   }
 
   /**
-   * Get kiosk status
-   * GET /api/kiosk/status
-   */
-  async status(req, res) {
-    try {
-      const status = await kioskService.getStatus();
-      return res.json(status);
-    } catch (err) {
-      return res.status(500).json({
-        status: 'error',
-        message: err.message
-      });
-    }
-  }
-
-  /**
    * Check if patient exists by phone number
    * GET /api/kiosk/patient-exists/:phone
    */
@@ -190,7 +176,14 @@ class KioskController {
     try {
       const { phone } = req.params;
       
-      // Delegate to service layer
+      if (!phone) {
+        return res.status(400).json({
+          exists: false,
+          patient: null,
+          error: 'Phone number is required'
+        });
+      }
+
       const result = await kioskService.patientExists(phone);
       
       return res.json(result);

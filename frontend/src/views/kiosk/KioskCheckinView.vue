@@ -7,6 +7,9 @@
         <div class="text-h3 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
           Welcome
         </div>
+        <div class="text-subtitle-1 text-medium-emphasis mt-2">
+          Please select your check-in option
+        </div>
       </v-card-text>
     </v-card>
 
@@ -33,6 +36,9 @@
             <div class="text-h5 font-weight-bold" style="color: rgb(var(--v-theme-primary));">
               I Have an Appointment
             </div>
+            <div class="text-subtitle-1 text-medium-emphasis mt-2">
+              Check in with your scheduled appointment
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -58,7 +64,7 @@
             <div class="text-h5 font-weight-bold" style="color: rgb(var(--v-theme-warning));">
               Walk-in
             </div>
-            <div class="text-subtitle-1 text-medium-emphasis">
+            <div class="text-subtitle-1 text-medium-emphasis mt-2">
               No appointment? We'll help you
             </div>
           </v-card-text>
@@ -71,7 +77,7 @@
       <v-card>
         <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-primary)); color: white;">
           <v-icon color="white" class="mr-2">mdi-calendar-check</v-icon>
-          Appointment
+          Appointment Check-in
         </v-card-title>
         
         <v-card-text class="pa-6">
@@ -148,7 +154,7 @@
       <v-card>
         <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-warning)); color: white;">
           <v-icon color="white" class="mr-2">mdi-walk</v-icon>
-          Walk-in
+          Walk-in Registration
         </v-card-title>
         
         <v-card-text class="pa-6">
@@ -187,12 +193,88 @@
               ></v-btn>
             </div>
 
-            <!-- Minimal patient info - only for new patients -->
+            <!-- Loading indicator for patient check -->
+            <div v-if="checkingReturning" class="d-flex justify-center my-4">
+              <v-progress-circular indeterminate color="primary" size="32"></v-progress-circular>
+              <span class="ml-2 text-caption">Checking for existing patient...</span>
+            </div>
+
+            <!-- Returning patient info -->
+            <v-alert
+              v-if="isReturningPatient && !checkingReturning"
+              type="info"
+              variant="tonal"
+              class="mt-2"
+            >
+              <div class="font-weight-bold">Welcome back!</div>
+              <div class="text-caption">
+                Patient Code: <strong>{{ storedFacilityCode }}</strong>
+              </div>
+            </v-alert>
+
+            <!-- Show transaction type selection ONLY for returning patients -->
             <v-expand-transition>
-              <div v-if="!isReturningPatient && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
+              <div v-if="isReturningPatient && !checkingReturning && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
                 <v-divider class="my-4">
                   <v-chip color="surface-variant" variant="text" size="small">
-                    New Patient (minimal info)
+                    Service Selection
+                  </v-chip>
+                </v-divider>
+
+                <div class="text-caption text-medium-emphasis mb-2">
+                  Please select the type of service you need.
+                </div>
+
+                <v-row>
+                  <v-col cols="12">
+                    <v-select
+                      v-model="walkinData.transactionType"
+                      :items="transactionTypes"
+                      item-title="name"
+                      item-value="id"
+                      label="Service Type"
+                      variant="outlined"
+                      density="comfortable"
+                      prepend-inner-icon="mdi-clipboard-text"
+                      :rules="[v => !!v || 'Service type is required']"
+                      color="primary"
+                      hint="Select the type of service you need"
+                      persistent-hint
+                      :loading="loadingTransactionTypes"
+                      :disabled="loadingTransactionTypes"
+                    >
+                      <template #item="{ item, props }">
+                        <v-list-item v-bind="props">
+                          <template #prepend>
+                            <v-icon :color="item.raw.color_code || 'primary'" class="mr-2">
+                              mdi-circle
+                            </v-icon>
+                          </template>
+                          <v-list-item-subtitle v-if="item.raw.estimated_duration_minutes">
+                            (~{{ item.raw.estimated_duration_minutes }} mins)
+                          </v-list-item-subtitle>
+                        </v-list-item>
+                      </template>
+                      <template #selection="{ item }">
+                        <div class="d-flex align-center">
+                          <v-icon :color="item.raw.color_code || 'primary'" size="16" class="mr-2">
+                            mdi-circle
+                          </v-icon>
+                          <span>{{ item.raw.name }}</span>
+                        </div>
+                      </template>
+                    </v-select>
+                  </v-col>
+                </v-row>
+              </div>
+            </v-expand-transition>
+
+            <!-- Minimal patient info - only for new patients -->
+            <v-expand-transition>
+              <div v-if="!isReturningPatient && !checkingReturning && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
+                <v-divider class="my-4">
+                  <v-chip color="surface-variant" variant="text" size="small">
+                    New Patient Information
                   </v-chip>
                 </v-divider>
 
@@ -283,20 +365,17 @@
                     </div>
                   </v-col>
                   <v-col cols="6">
-                    <div class="d-flex align-center">
-                      <v-select
-                        v-model="walkinData.gender"
-                        :items="['male', 'female', 'other']"
-                        label="Gender"
-                        variant="outlined"
-                        density="comfortable"
-                        prepend-inner-icon="mdi-gender-male-female"
-                        :rules="[v => !!v || 'Gender is required']"
-                        color="primary"
-                        hide-details="auto"
-                        class="flex-grow-1"
-                      ></v-select>
-                    </div>
+                    <v-select
+                      v-model="walkinData.gender"
+                      :items="['male', 'female']"
+                      label="Gender"
+                      variant="outlined"
+                      density="comfortable"
+                      prepend-inner-icon="mdi-gender-male-female"
+                      :rules="[v => !!v || 'Gender is required']"
+                      color="primary"
+                      hide-details="auto"
+                    ></v-select>
                   </v-col>
                 </v-row>
               </div>
@@ -329,7 +408,7 @@
                 size="large"
                 :loading="kioskStore.isWalkingIn"
                 prepend-icon="mdi-check"
-                :disabled="!walkinData.phoneNumber || walkinData.phoneNumber.length < 10 || (!isReturningPatient && (!walkinData.firstName || !walkinData.lastName || !walkinData.gender))"
+                :disabled="!walkinData.phoneNumber || walkinData.phoneNumber.length < 10 || checkingReturning || (!isReturningPatient && (!walkinData.firstName || !walkinData.lastName || !walkinData.gender)) || (isReturningPatient && !walkinData.transactionType)"
               >
                 Get Queue No.
               </v-btn>
@@ -339,7 +418,7 @@
       </v-card>
     </v-dialog>
 
-    <!-- Success Dialog -->
+    <!-- Success Dialog - Using kioskStore data directly -->
     <v-dialog v-model="showSuccess" max-width="500" persistent>
       <v-card style="background: linear-gradient(135deg, rgb(var(--v-theme-success)), rgb(var(--v-theme-primary)));">
         <v-card-text class="text-center pa-8">
@@ -347,18 +426,26 @@
             mdi-printer-check
           </v-icon>
           <div class="text-h4 text-white font-weight-bold">Successfully added to queue!</div>
+          
+          <!-- Queue Number - Direct from store -->
           <div class="text-h1 text-white font-weight-bold my-4">
             {{ kioskStore.ticketNumber || '---' }}
           </div>
+          
           <div class="text-subtitle-1 text-white" :style="{ opacity: 0.9 }">
             Your queue number for {{ kioskStore.ticketOffice || 'Testing' }}
           </div>
+          
+          <!-- Position - Direct from store -->
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.75 }">
-            Position in queue: {{ kioskStore.ticketPosition || '1' }}
+            Position in queue: {{ kioskStore.ticketPosition || 1 }}
           </div>
+          
+          <!-- Patient Code - Direct from store -->
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.9 }">
-            Patient Code: <strong>{{ patientFacilityCode || 'N/A' }}</strong>
+            Patient Code: <strong>{{ kioskStore.patientFacilityCode || 'N/A' }}</strong>
           </div>
+          
           <div class="text-body-2 text-white mt-1" :style="{ opacity: 0.9 }">
             Printing your queue slip... Please take your ticket!
           </div>
@@ -398,7 +485,7 @@
       @done="handleKeyboardDone"
     />
 
-    <!-- Power Off Button - Discreetly placed at the bottom -->
+    <!-- Power Off Button -->
     <div class="power-control mt-8 pt-4 text-center">
       <v-btn
         color="error"
@@ -495,12 +582,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import VirtualKeyboard from '@/components/common/VirtualKeyboard.vue'
 import { useKioskStore } from '@/stores/kioskStore'
 import { storeToRefs } from 'pinia'
 import printerService from '@/services/printerService'
 import kioskService from '@/services/kioskService'
+import transactionTypeService from '@/services/transactionTypeService'
 
 // Store
 const kioskStore = useKioskStore()
@@ -508,25 +596,19 @@ const {
   isCheckingIn, 
   isWalkingIn, 
   loading,
-  currentTicket
+  currentTicket,
+  ticketNumber,
+  ticketOffice,
+  ticketPosition,
+  ticketPatientName,
+  patientFacilityCode
 } = storeToRefs(kioskStore)
 
-// Configuration - Point to local kiosk service
+// Configuration
 const API_BASE_URL = import.meta.env.VITE_KIOSK_API_URL || 'http://localhost:5000'
 const SHUTDOWN_TOKEN = import.meta.env.VITE_SHUTDOWN_TOKEN || 'your_secure_token_here'
 
-// Computed - Get facility code from current ticket or store
-const patientFacilityCode = computed(() => {
-  if (currentTicket.value?.patient_facility_code) {
-    return currentTicket.value.patient_facility_code
-  }
-  if (storedFacilityCode.value) {
-    return storedFacilityCode.value
-  }
-  return null
-})
-
-// Local state
+// ============== LOCAL STATE ==============
 const showAppointmentCheckin = ref(false)
 const showWalkinDialog = ref(false)
 const showSuccess = ref(false)
@@ -536,6 +618,11 @@ const walkinError = ref('')
 const isReturningPatient = ref(false)
 const checkingReturning = ref(false)
 const storedFacilityCode = ref(null)
+const testingTransactionTypeId = ref(null)
+
+// Transaction types
+const transactionTypes = ref([])
+const loadingTransactionTypes = ref(false)
 
 // Power off state
 const showPowerOffDialog = ref(false)
@@ -559,51 +646,126 @@ const walkinData = reactive({
   middleName: '',
   lastName: '',
   gender: '',
+  transactionType: null,
   address: ''
 })
 
-// Dispatch Print Job - Direct call to local service
-const issuePrintTicket = async () => {
-  let patientName = 'Patient'
-  if (walkinData.firstName) {
-    patientName = `${walkinData.firstName} ${walkinData.middleName || ''} ${walkinData.lastName}`.trim()
-  } else if (currentTicket.value?.patient_name) {
-    patientName = currentTicket.value.patient_name
-  }
-  
-  const ticketData = {
-    office: currentTicket.value?.office || kioskStore.ticketOffice || 'Testing',
-    queue_number: currentTicket.value?.queue_number || kioskStore.ticketNumber || 'T-000',
-    patient_name: patientName,
-    patient_code: patientFacilityCode.value || 'N/A',
-    date: new Date().toLocaleDateString(),
-    time: new Date().toLocaleTimeString(),
-    wait_time: `${(kioskStore.ticketPosition || 1) * 5} mins`
-  }
-  
-  // Call the local printer service directly
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/kiosk/print`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ticketData })
+// Watch for success dialog to trigger print
+watch(showSuccess, (newVal) => {
+  if (newVal) {
+    // Log all store data for debugging
+    console.log('=== SUCCESS DIALOG DATA ===')
+    console.log('Store data:', {
+      ticketNumber: ticketNumber.value,
+      ticketOffice: ticketOffice.value,
+      ticketPosition: ticketPosition.value,
+      ticketPatientName: ticketPatientName.value,
+      patientFacilityCode: patientFacilityCode.value,
+      currentTicket: currentTicket.value
     })
+    console.log('============================')
     
-    if (!response.ok) {
-      throw new Error('Print failed')
+    // Wait for dialog to render then print
+    nextTick(() => {
+      issuePrintTicket()
+    })
+  }
+})
+// Watch for phone number changes
+watch(() => walkinData.phoneNumber, (newPhone) => {
+  if (newPhone && newPhone.length >= 10) {
+    checkReturningPatient(newPhone)
+  } else {
+    isReturningPatient.value = false
+    storedFacilityCode.value = null
+  }
+})
+
+// ============== METHODS ==============
+
+// Fetch transaction types
+const fetchTransactionTypes = async () => {
+  loadingTransactionTypes.value = true
+  try {
+    const response = await transactionTypeService.getTransactionTypes()
+    
+    if (response.success && response.data) {
+      transactionTypes.value = response.data
+      const testingType = transactionTypes.value.find(t => 
+        t.name.toLowerCase().includes('testing') || 
+        t.office === 'testing'
+      )
+      if (testingType) {
+        testingTransactionTypeId.value = testingType.id
+      }
+    } else if (response.data) {
+      transactionTypes.value = response.data
+      const testingType = transactionTypes.value.find(t => 
+        t.name.toLowerCase().includes('testing') || 
+        t.office === 'testing'
+      )
+      if (testingType) {
+        testingTransactionTypeId.value = testingType.id
+      }
+    } else {
+      console.error('Failed to fetch transaction types:', response)
+      setDefaultTransactionTypes()
     }
-    
-    return await response.json()
   } catch (error) {
-    console.error('Print error:', error)
-    // Fallback to printerService if needed
-    await printerService.printTicket(ticketData)
+    console.error('Error fetching transaction types:', error)
+    setDefaultTransactionTypes()
+  } finally {
+    loadingTransactionTypes.value = false
   }
 }
 
-// Methods
+// Fallback default transaction types
+const setDefaultTransactionTypes = () => {
+  transactionTypes.value = [
+    { id: 1, name: 'Testing', office: 'testing', description: 'General testing', color_code: '#4CAF50', estimated_duration_minutes: 15 },
+    { id: 2, name: 'Treatment', office: 'treatment', description: 'Treatment consultation', color_code: '#2196F3', estimated_duration_minutes: 30 },
+  ]
+  testingTransactionTypeId.value = 1
+}
+
+const checkReturningPatient = async (phoneNumber) => {
+  if (!phoneNumber || phoneNumber.length < 10) {
+    isReturningPatient.value = false
+    return
+  }
+  
+  checkingReturning.value = true
+  try {
+    const result = await kioskService.checkPatientExists(phoneNumber)
+    
+    if (result && result.exists) {
+      isReturningPatient.value = true
+      if (result.patient) {
+        storedFacilityCode.value = result.patient.patient_facility_code || null
+        walkinData.firstName = ''
+        walkinData.middleName = ''
+        walkinData.lastName = ''
+        walkinData.gender = ''
+        walkinData.transactionType = null
+      }
+    } else {
+      isReturningPatient.value = false
+      storedFacilityCode.value = null
+      walkinData.transactionType = testingTransactionTypeId.value
+      walkinData.firstName = ''
+      walkinData.middleName = ''
+      walkinData.lastName = ''
+      walkinData.gender = ''
+    }
+  } catch (error) {
+    console.error('Error checking patient existence:', error)
+    isReturningPatient.value = false
+    storedFacilityCode.value = null
+  } finally {
+    checkingReturning.value = false
+  }
+}
+
 const openKeyboard = (field) => {
   keyboardField.value = field
   
@@ -645,7 +807,6 @@ const handleKeyboardDone = (value) => {
       break
     case 'walkin':
       walkinData.phoneNumber = value
-      checkReturningPatient(value)
       break
     case 'firstName':
       walkinData.firstName = value
@@ -661,40 +822,6 @@ const handleKeyboardDone = (value) => {
   keyboardVisible.value = false
 }
 
-const checkReturningPatient = async (phoneNumber) => {
-  if (!phoneNumber || phoneNumber.length < 10) {
-    isReturningPatient.value = false
-    return
-  }
-  
-  checkingReturning.value = true
-  try {
-    const result = await kioskService.checkPatientExists(phoneNumber)
-    
-    if (result && result.exists) {
-      isReturningPatient.value = true
-      if (result.patient) {
-        walkinData.firstName = result.patient.first_name || ''
-        walkinData.middleName = result.patient.middle_name || ''
-        walkinData.lastName = result.patient.last_name || ''
-        walkinData.gender = result.patient.gender || ''
-        storedFacilityCode.value = result.patient.patient_facility_code || null
-      }
-    } else {
-      isReturningPatient.value = false
-      if (!walkinData.firstName && !walkinData.lastName) {
-        walkinData.middleName = ''
-        walkinData.gender = ''
-      }
-    }
-  } catch (error) {
-    console.error('Error checking patient existence:', error)
-    isReturningPatient.value = false
-  } finally {
-    checkingReturning.value = false
-  }
-}
-
 const closeAppointmentCheckin = () => {
   showAppointmentCheckin.value = false
   appointmentPhone.value = ''
@@ -708,6 +835,7 @@ const closeWalkin = () => {
   walkinData.middleName = ''
   walkinData.lastName = ''
   walkinData.gender = ''
+  walkinData.transactionType = null
   walkinData.address = ''
   isReturningPatient.value = false
   storedFacilityCode.value = null
@@ -731,25 +859,14 @@ const checkInWithAppointment = async () => {
   appointmentError.value = ''
 
   try {
-    const result = await kioskStore.checkInPatient(appointmentPhone.value)
+    await kioskStore.checkInPatient(appointmentPhone.value)
     
-    if (result?.ticket?.patient_facility_code) {
-      storedFacilityCode.value = result.ticket.patient_facility_code
-    }
-    
-    if (result?.patient) {
-      walkinData.firstName = result.patient.first_name || ''
-      walkinData.middleName = result.patient.middle_name || ''
-      walkinData.lastName = result.patient.last_name || ''
-      if (result.patient.patient_facility_code) {
-        storedFacilityCode.value = result.patient.patient_facility_code
-      }
-    }
-    
+    // The store now contains all ticket data
     showAppointmentCheckin.value = false
+    
+    // Show success dialog after a small delay to ensure store is updated
+    await nextTick()
     showSuccess.value = true
-
-    await issuePrintTicket()
 
   } catch (error) {
     appointmentError.value = error.message || 'Failed to check in. Please try again.'
@@ -762,7 +879,12 @@ const processWalkin = async () => {
     return
   }
 
-  if (!isReturningPatient.value) {
+  if (isReturningPatient.value) {
+    if (!walkinData.transactionType) {
+      walkinError.value = 'Please select a service type.'
+      return
+    }
+  } else {
     if (!walkinData.firstName || !walkinData.lastName) {
       walkinError.value = 'Please enter your full name.'
       return
@@ -771,6 +893,7 @@ const processWalkin = async () => {
       walkinError.value = 'Please select your gender.'
       return
     }
+    walkinData.transactionType = testingTransactionTypeId.value
   }
 
   walkinError.value = ''
@@ -780,27 +903,69 @@ const processWalkin = async () => {
       first_name: walkinData.firstName || 'Walk-in',
       middle_name: walkinData.middleName || '',
       last_name: walkinData.lastName || 'Patient',
-      birth_date: '1900-01-01',
       gender: walkinData.gender || 'other',
       contact_number: walkinData.phoneNumber,
-      address: walkinData.address || 'To be updated'
+      address: walkinData.address || 'To be updated',
+      transaction_type_id: walkinData.transactionType || testingTransactionTypeId.value,
+      is_returning: isReturningPatient.value
     }
 
-    const result = await kioskStore.registerWalkIn(patientData)
+    await kioskStore.registerWalkIn(patientData)
     
-    if (result?.patient?.facility_code) {
-      storedFacilityCode.value = result.patient.facility_code
-    } else if (result?.patient?.patient_facility_code) {
-      storedFacilityCode.value = result.patient.patient_facility_code
-    }
-    
+    // The store now contains all ticket data
     showWalkinDialog.value = false
+    
+    // Show success dialog after a small delay to ensure store is updated
+    await nextTick()
     showSuccess.value = true
-
-    await issuePrintTicket()
 
   } catch (error) {
     walkinError.value = error.message || 'Failed to process walk-in. Please try again.'
+  }
+}
+
+// Print Ticket - Uses store data directly
+const issuePrintTicket = async () => {
+  try {
+    // Get data directly from the store
+    const queueNumber = ticketNumber.value || 'T-001'
+    const office = ticketOffice.value || 'Testing'
+    const position = ticketPosition.value || 1
+    const patientName = ticketPatientName.value || 'Patient'
+    const facilityCode = patientFacilityCode.value || 'N/A'
+    
+    // Format the ticket data for printing
+    const ticketDataPrint = {
+      office: office,
+      queue_number: queueNumber,
+      patient_name: patientName,
+      patient_code: facilityCode,
+      date: new Date().toLocaleDateString('en-PH', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      }),
+      time: new Date().toLocaleTimeString('en-PH', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
+      wait_time: `${Math.max(1, Number(position) * 5)} mins`
+    }
+    
+    console.log('📨 Sending print request to kiosk microservice:', ticketDataPrint)
+    
+    // Send to kiosk microservice
+    const result = await printerService.printTicket(ticketDataPrint)
+    
+    if (result.success) {
+      console.log('✅ Ticket printed successfully:', queueNumber)
+    } else {
+      console.warn('⚠️ Print failed but ticket was created:', result.error)
+    }
+  } catch (error) {
+    console.error('❌ Print error:', error)
+    // Don't block the flow - ticket is already created
+    console.warn('⚠️ Printing failed but ticket was created successfully.')
   }
 }
 
@@ -820,7 +985,7 @@ const shutdownSystem = async () => {
     const response = await fetch(`${API_BASE_URL}/api/system/shutdown`, {
       method: 'POST',
       headers: {
-        'Authorization': SHUTDOWN_TOKEN,  // Single token
+        'Authorization': SHUTDOWN_TOKEN,
         'Content-Type': 'application/json'
       }
     })
@@ -839,15 +1004,11 @@ const shutdownSystem = async () => {
   } catch (error) {
     console.error('Shutdown failed:', error)
     shutdownError.value = `Failed to shutdown: ${error.message || 'Unknown error'}`
-    
-    // Show manual shutdown option
-    shutdownError.value += ' Please safely unplug the power cable if the system does not shut down.'
   } finally {
     isShuttingDown.value = false
   }
 }
 
-// Keyboard shortcut for power off (Ctrl+Shift+P)
 const handleKeyPress = (event) => {
   if (event.ctrlKey && event.shiftKey && event.key === 'P') {
     event.preventDefault()
@@ -857,7 +1018,6 @@ const handleKeyPress = (event) => {
   }
 }
 
-// Auto-reset after inactivity (5 minutes)
 let inactivityTimer = null
 const resetInactivityTimer = () => {
   if (inactivityTimer) {
@@ -874,12 +1034,19 @@ const trackActivity = () => {
   resetInactivityTimer()
 }
 
+// ============== LIFECYCLE HOOKS ==============
+
 onMounted(() => {
+  fetchTransactionTypes()
+  
   document.addEventListener('click', trackActivity)
   document.addEventListener('touchstart', trackActivity)
   document.addEventListener('keydown', handleKeyPress)
   document.addEventListener('keydown', trackActivity)
   resetInactivityTimer()
+  
+  // Debug: Log store state changes
+  console.log('Kiosk store initialized:', kioskStore.$state)
 })
 
 onUnmounted(() => {
@@ -959,7 +1126,6 @@ onUnmounted(() => {
   letter-spacing: 0.3px;
 }
 
-/* Power button styles */
 .power-btn {
   opacity: 0.3;
   transition: all 0.3s ease;

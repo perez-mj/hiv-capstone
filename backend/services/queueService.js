@@ -6,12 +6,13 @@ class QueueService {
   /**
    * Get or create a queue for a specific office and date
    */
-  async getOrCreateQueue(office, date) {
+  async getOrCreateQueue(office, date, transaction = null) {
     let queue = await db.Queue.findOne({
       where: {
         office,
         date
-      }
+      },
+      transaction
     });
 
     if (!queue) {
@@ -24,19 +25,68 @@ class QueueService {
         noshow_count: 0,
         total_wait_time_minutes: 0,
         average_wait_time_minutes: 0
-      });
+      }, { transaction });
     }
 
     return queue;
   }
 
   /**
-   * Add a patient to the queue
+   * Get or create a default transaction type for an office
    */
-  async addToQueue(office, date, patientId, appointmentId = null) {
+  async getOrCreateDefaultTransactionType(office, transaction = null) {
+    let transactionType = await db.TransactionType.findOne({
+      where: {
+        office: office,
+        is_active: true,
+        name: { [Op.like]: '%walk-in%' }
+      },
+      transaction
+    });
+
+    if (!transactionType) {
+      // Try to get any active transaction type for this office
+      transactionType = await db.TransactionType.findOne({
+        where: {
+          office: office,
+          is_active: true
+        },
+        transaction
+      });
+    }
+
+    // If still none, create a default one
+    if (!transactionType) {
+      transactionType = await db.TransactionType.create({
+        name: `Walk-in (${office})`,
+        office: office,
+        estimated_duration_minutes: office === 'testing' ? 15 : 30,
+        is_active: true,
+        description: `Default walk-in transaction type for ${office}`
+      }, { transaction });
+    }
+
+    return transactionType;
+  }
+
+  /**
+   * Add a patient to the queue with transaction support
+   * @param {string} office - Office name (testing/treatment)
+   * @param {string} date - Date in YYYY-MM-DD format
+   * @param {number} patientId - Patient ID
+   * @param {number} appointmentId - Appointment ID (optional)
+   * @param {number} transactionTypeId - Transaction type ID (optional, will auto-fetch if not provided)
+   * @param {object} transaction - Sequelize transaction object
+   */
+  async addToQueue(office, date, patientId, appointmentId = null, transactionTypeId = null, transaction = null) {
     try {
+      // Validate required parameters
+      if (!office) throw new Error('Office is required');
+      if (!date) throw new Error('Date is required');
+      if (!patientId) throw new Error('Patient ID is required');
+
       // Get or create the queue for this date and office
-      const queue = await this.getOrCreateQueue(office, date);
+      const queue = await this.getOrCreateQueue(office, date, transaction);
 
       // Check if patient is already in queue for this date and office
       const existing = await db.QueueEntry.findOne({
@@ -44,7 +94,8 @@ class QueueService {
           queue_id: queue.id,
           patient_id: patientId,
           status: { [Op.in]: ['waiting', 'in-progress'] }
-        }
+        },
+        transaction
       });
 
       if (existing) {
@@ -56,10 +107,11 @@ class QueueService {
       }
 
       // Get transaction type info
-      let transactionTypeId = null;
+      let finalTransactionTypeId = transactionTypeId;
       let estimatedDurationMinutes = 30; // Default
 
-      if (appointmentId) {
+      // If transactionTypeId not provided, try to get from appointment
+      if (!finalTransactionTypeId && appointmentId) {
         const appointment = await db.Appointment.findByPk(appointmentId, {
           include: [
             {
@@ -67,58 +119,68 @@ class QueueService {
               as: 'TransactionType',
               attributes: ['id', 'estimated_duration_minutes']
             }
-          ]
+          ],
+          transaction
         });
 
         if (appointment && appointment.TransactionType) {
-          transactionTypeId = appointment.TransactionType.id;
+          finalTransactionTypeId = appointment.TransactionType.id;
           estimatedDurationMinutes = appointment.TransactionType.estimated_duration_minutes || 30;
         }
       }
 
-      // If no transaction type from appointment, get default for the office
-      if (!transactionTypeId) {
-        const defaultType = await db.TransactionType.findOne({
-          where: {
-            office: office,
-            is_active: true
-          },
-          order: [['id', 'ASC']]
-        });
+      // If still no transaction type, get or create default for the office
+      if (!finalTransactionTypeId) {
+        const defaultType = await this.getOrCreateDefaultTransactionType(office, transaction);
+        finalTransactionTypeId = defaultType.id;
+        estimatedDurationMinutes = defaultType.estimated_duration_minutes || 30;
+      }
 
-        if (defaultType) {
-          transactionTypeId = defaultType.id;
-          estimatedDurationMinutes = defaultType.estimated_duration_minutes || 30;
-        } else {
-          throw new Error(`No transaction type configured for ${office} office`);
-        }
+      // Verify the transaction type exists
+      const transactionType = await db.TransactionType.findByPk(finalTransactionTypeId, { transaction });
+      if (!transactionType) {
+        throw new Error(`Transaction type ${finalTransactionTypeId} not found`);
+      }
+
+      // Update estimated duration from transaction type if available
+      if (transactionType.estimated_duration_minutes) {
+        estimatedDurationMinutes = transactionType.estimated_duration_minutes;
       }
 
       // Calculate next position
       const maxPosition = await db.QueueEntry.max('position', {
-        where: { queue_id: queue.id }
+        where: { queue_id: queue.id },
+        transaction
       });
 
       const position = (maxPosition || 0) + 1;
 
-      // Generate queue number (e.g., "001", "002", etc.)
-      const queueNumber = String(position).padStart(3, '0');
+      // Generate queue number with prefix (e.g., "T-001", "X-015")
+      const paddedNumber = String(position).padStart(3, '0');
+      const prefix = office === 'testing' ? 'T' : 'X';
+      const queueNumber = `${prefix}-${paddedNumber}`;
 
       // Create queue entry with all required fields
       const entry = await db.QueueEntry.create({
         queue_id: queue.id,
         patient_id: patientId,
         appointment_id: appointmentId,
-        transaction_type_id: transactionTypeId,
+        transaction_type_id: finalTransactionTypeId,
         queue_number: queueNumber,
         position: position,
         status: 'waiting',
         estimated_duration_minutes: estimatedDurationMinutes
-      });
+      }, { transaction });
+
+      // Update queue current number
+      await queue.update({
+        current_number: position
+      }, { transaction });
 
       // Get patient info for response
       const patient = await db.Patient.findByPk(patientId, {
-        attributes: ['id', 'first_name', 'last_name', 'contact_number']
+        attributes: ['id', 'first_name', 'last_name', 'contact_number', 'patient_facility_code'],
+        transaction
       });
 
       // Fetch the full queue entry with associations
@@ -127,7 +189,7 @@ class QueueService {
           {
             model: db.Patient,
             as: 'Patient',
-            attributes: ['id', 'first_name', 'last_name', 'contact_number']
+            attributes: ['id', 'first_name', 'last_name', 'contact_number', 'patient_facility_code']
           },
           {
             model: db.TransactionType,
@@ -139,16 +201,76 @@ class QueueService {
             as: 'Queue',
             attributes: ['id', 'office', 'date', 'current_number']
           }
-        ]
+        ],
+        transaction
       });
 
-      return {
+      // If we're in a transaction, the fullEntry might not have all associations loaded
+      // due to transaction isolation, so we build the response manually
+      const response = {
         success: true,
-        queueEntry: fullEntry.toJSON()
+        queueEntry: {
+          id: entry.id,
+          queue_number: entry.queue_number,
+          position: entry.position,
+          status: entry.status,
+          estimated_duration_minutes: entry.estimated_duration_minutes,
+          created_at: entry.created_at,
+          Patient: patient ? {
+            id: patient.id,
+            first_name: patient.first_name,
+            last_name: patient.last_name,
+            contact_number: patient.contact_number,
+            patient_facility_code: patient.patient_facility_code
+          } : null,
+          TransactionType: transactionType ? {
+            id: transactionType.id,
+            name: transactionType.name,
+            estimated_duration_minutes: transactionType.estimated_duration_minutes,
+            color_code: transactionType.color_code
+          } : null,
+          Queue: queue ? {
+            id: queue.id,
+            office: queue.office,
+            date: queue.date,
+            current_number: queue.current_number
+          } : null
+        }
       };
+
+      return response;
     } catch (error) {
       console.error('Error adding to queue:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get waiting count for a specific office and date
+   */
+  async getWaitingCount(office, date, transaction = null) {
+    try {
+      const queue = await db.Queue.findOne({
+        where: { office, date },
+        transaction
+      });
+
+      if (!queue) {
+        return 0;
+      }
+
+      const count = await db.QueueEntry.count({
+        where: {
+          queue_id: queue.id,
+          status: 'waiting'
+        },
+        transaction
+      });
+
+      return count;
+    } catch (error) {
+      console.error('Error getting waiting count:', error);
+      return 0;
     }
   }
 
@@ -174,7 +296,7 @@ class QueueService {
               {
                 model: db.Patient,
                 as: 'Patient',
-                attributes: ['id', 'first_name', 'last_name', 'contact_number']
+                attributes: ['id', 'patient_facility_code', 'contact_number']
               },
               {
                 model: db.TransactionType,
@@ -226,13 +348,14 @@ class QueueService {
   /**
    * Call next patient in queue
    */
-  async callNext(office, date) {
+  async callNext(office, date, transaction = null) {
     try {
       const queue = await db.Queue.findOne({
         where: {
           office,
           date
-        }
+        },
+        transaction
       });
 
       if (!queue) {
@@ -252,7 +375,8 @@ class QueueService {
             as: 'Patient',
             attributes: ['id', 'first_name', 'last_name']
           }
-        ]
+        ],
+        transaction
       });
 
       if (!nextEntry) {
@@ -266,12 +390,12 @@ class QueueService {
       await nextEntry.update({
         status: 'in-progress',
         called_at: new Date()
-      });
+      }, { transaction });
 
       // Update queue current number
       await queue.update({
         current_number: nextEntry.position
-      });
+      }, { transaction });
 
       return {
         success: true,
@@ -286,13 +410,14 @@ class QueueService {
   /**
    * Skip current patient
    */
-  async skipCurrent(office, date, reason = 'Skipped by staff') {
+  async skipCurrent(office, date, reason = 'Skipped by staff', transaction = null) {
     try {
       const queue = await db.Queue.findOne({
         where: {
           office,
           date
-        }
+        },
+        transaction
       });
 
       if (!queue) {
@@ -310,7 +435,8 @@ class QueueService {
             as: 'Patient',
             attributes: ['id', 'first_name', 'last_name']
           }
-        ]
+        ],
+        transaction
       });
 
       if (!currentEntry) {
@@ -323,10 +449,10 @@ class QueueService {
       await currentEntry.update({
         status: 'skipped',
         skip_reason: reason
-      });
+      }, { transaction });
 
       // Update queue stats
-      await queue.increment('skipped_count');
+      await queue.increment('skipped_count', { by: 1, transaction });
 
       return {
         success: true,
@@ -341,13 +467,14 @@ class QueueService {
   /**
    * Reset queue (end of day)
    */
-  async resetQueue(office, date) {
+  async resetQueue(office, date, transaction = null) {
     try {
       const queue = await db.Queue.findOne({
         where: {
           office,
           date
-        }
+        },
+        transaction
       });
 
       if (!queue) {
@@ -364,7 +491,8 @@ class QueueService {
           where: {
             queue_id: queue.id,
             status: { [Op.in]: ['waiting', 'in-progress'] }
-          }
+          },
+          transaction
         }
       );
 
@@ -372,7 +500,7 @@ class QueueService {
       await queue.update({
         current_number: 0,
         completed_count: queue.completed_count || 0 // Keep completed count
-      });
+      }, { transaction });
 
       return {
         success: true,
@@ -387,13 +515,14 @@ class QueueService {
   /**
    * Complete current patient
    */
-  async completeCurrent(office, date) {
+  async completeCurrent(office, date, transaction = null) {
     try {
       const queue = await db.Queue.findOne({
         where: {
           office,
           date
-        }
+        },
+        transaction
       });
 
       if (!queue) {
@@ -404,7 +533,8 @@ class QueueService {
         where: {
           queue_id: queue.id,
           status: 'in-progress'
-        }
+        },
+        transaction
       });
 
       if (!currentEntry) {
@@ -417,10 +547,10 @@ class QueueService {
       await currentEntry.update({
         status: 'completed',
         completed_at: new Date()
-      });
+      }, { transaction });
 
       // Update queue stats
-      await queue.increment('completed_count');
+      await queue.increment('completed_count', { by: 1, transaction });
 
       // Update average wait time
       if (currentEntry.called_at) {
@@ -433,7 +563,7 @@ class QueueService {
         await queue.update({
           total_wait_time_minutes: newTotalWait,
           average_wait_time_minutes: avgWait
-        });
+        }, { transaction });
       }
 
       return {
@@ -449,9 +579,9 @@ class QueueService {
   /**
    * Mark patient as no-show
    */
-  async markNoShow(office, date, queueEntryId) {
+  async markNoShow(office, date, queueEntryId, transaction = null) {
     try {
-      const entry = await db.QueueEntry.findByPk(queueEntryId);
+      const entry = await db.QueueEntry.findByPk(queueEntryId, { transaction });
 
       if (!entry) {
         throw new Error('Queue entry not found');
@@ -459,12 +589,12 @@ class QueueService {
 
       await entry.update({
         status: 'no-show'
-      });
+      }, { transaction });
 
       // Update queue stats
-      const queue = await db.Queue.findByPk(entry.queue_id);
+      const queue = await db.Queue.findByPk(entry.queue_id, { transaction });
       if (queue) {
-        await queue.increment('noshow_count');
+        await queue.increment('noshow_count', { by: 1, transaction });
       }
 
       return {
@@ -474,6 +604,35 @@ class QueueService {
     } catch (error) {
       console.error('Error marking no-show:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Get estimated wait time for a patient
+   */
+  async getEstimatedWaitTime(queueId, position, transaction = null) {
+    try {
+      const entries = await db.QueueEntry.findAll({
+        where: {
+          queue_id: queueId,
+          status: 'waiting',
+          position: {
+            [Op.lte]: position
+          }
+        },
+        order: [['position', 'ASC']],
+        transaction
+      });
+
+      let totalWaitTime = 0;
+      for (const entry of entries) {
+        totalWaitTime += entry.estimated_duration_minutes || 15;
+      }
+
+      return totalWaitTime;
+    } catch (error) {
+      console.error('Error getting estimated wait time:', error);
+      return 0;
     }
   }
 }
