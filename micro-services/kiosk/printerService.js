@@ -34,14 +34,17 @@ class PrinterService {
 
   // Format payload into standard ESC/POS Buffer
   formatTicket(ticketData) {
-    const { office, queue_number, patient_name, date, time, wait_time } = ticketData;
+    const { office, queue_number, date, time } = ticketData;
     const cmds = this.ESC_POS;
+
+    // Combine date and time into single line
+    const dateTime = date && time ? `${date} ${time}` : (date || time || new Date().toLocaleString());
 
     const parts = [
       cmds.INIT,
       cmds.ALIGN_CENTER,
       cmds.TXT_BOLD_ON,
-      Buffer.from('OMPH HIV-CARE CLINIC\n', 'utf8'),
+      Buffer.from('PURPLE RAIN CLINIC\n', 'utf8'),
       cmds.TXT_NORMAL,
       Buffer.from('Queue Slip\n', 'utf8'),
       Buffer.from('--------------------------------\n', 'utf8'),
@@ -54,10 +57,7 @@ class PrinterService {
       
       cmds.TXT_NORMAL,
       cmds.TXT_BOLD_OFF,
-      Buffer.from(`Patient: ${patient_name || 'Walk-in'}\n`, 'utf8'),
-      Buffer.from(`Date: ${date || new Date().toLocaleDateString()}\n`, 'utf8'),
-      Buffer.from(`Time: ${time || new Date().toLocaleTimeString()}\n`, 'utf8'),
-      wait_time ? Buffer.from(`Est. Wait: ${wait_time}\n`, 'utf8') : Buffer.from(''),
+      Buffer.from(`${dateTime}\n`, 'utf8'),
       
       Buffer.from('--------------------------------\n', 'utf8'),
       Buffer.from('Please wait for your number\nto be called.\n\n\n', 'utf8'),

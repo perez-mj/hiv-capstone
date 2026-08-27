@@ -8,12 +8,12 @@
           Welcome
         </div>
         <div class="text-subtitle-1 text-medium-emphasis mt-2">
-          Please select your check-in option
+          Please select your queue option
         </div>
       </v-card-text>
     </v-card>
 
-    <!-- Check-in Options -->
+    <!-- Queue Options -->
     <v-row>
       <v-col cols="12" md="6">
         <v-card 
@@ -37,7 +37,7 @@
               I Have an Appointment
             </div>
             <div class="text-subtitle-1 text-medium-emphasis mt-2">
-              Check in with your scheduled appointment
+              Join the queue with your scheduled appointment
             </div>
           </v-card-text>
         </v-card>
@@ -65,26 +65,26 @@
               Walk-in
             </div>
             <div class="text-subtitle-1 text-medium-emphasis mt-2">
-              No appointment? We'll help you
+              No appointment? Join the queue and we'll help you
             </div>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <!-- Appointment Check-in Dialog -->
+    <!-- Appointment Queue Dialog -->
     <v-dialog v-model="showAppointmentCheckin" max-width="500" persistent>
       <v-card>
         <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-primary)); color: white;">
           <v-icon color="white" class="mr-2">mdi-calendar-check</v-icon>
-          Appointment Check-in
+          Appointment Queue
         </v-card-title>
         
         <v-card-text class="pa-6">
           <v-form ref="appointmentForm" @submit.prevent="checkInWithAppointment">
-            <div class="text-subtitle-2 text-medium-emphasis mb-2">
-              Enter your Phone Number
-            </div>
+            <div class="text-subtitle-2 font-weight-bold mb-2" style="color: rgb(var(--v-theme-primary));">
+          Enter your Phone Number
+        </div>
             
             <div class="d-flex align-center">
               <v-text-field
@@ -150,275 +150,190 @@
     </v-dialog>
 
     <!-- Walk-in Dialog -->
-    <v-dialog v-model="showWalkinDialog" max-width="500" persistent>
-      <v-card>
-        <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-warning)); color: white;">
-          <v-icon color="white" class="mr-2">mdi-walk</v-icon>
-          Walk-in Registration
-        </v-card-title>
+<v-dialog v-model="showWalkinDialog" max-width="500" persistent>
+  <v-card>
+    <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-warning)); color: white;">
+      <v-icon color="white" class="mr-2">mdi-walk</v-icon>
+      Walk-in Queue
+    </v-card-title>
+    
+    <v-card-text class="pa-6">
+      <v-form ref="walkinForm" @submit.prevent="processWalkin">
+        <div class="text-subtitle-2 font-weight-bold mb-2" style="color: rgb(var(--v-theme-primary));">
+          Enter your Phone Number
+        </div>
         
-        <v-card-text class="pa-6">
-          <v-form ref="walkinForm" @submit.prevent="processWalkin">
-            <div class="text-subtitle-2 font-weight-bold mb-2" style="color: rgb(var(--v-theme-primary));">
-              Enter your Phone Number
-            </div>
-            <div class="text-caption text-medium-emphasis mb-3">
-              If you're a returning patient, enter your phone number to get your queue number.
-              New patients will be registered with minimal information.
-            </div>
-            
-            <div class="d-flex align-center">
-              <v-text-field
-                v-model="walkinData.phoneNumber"
-                label="Phone Number"
-                placeholder="Tap to enter"
-                variant="outlined"
-                density="comfortable"
-                prepend-inner-icon="mdi-phone"
-                clearable
-                :rules="[v => !!v || 'Phone number is required', v => v.length >= 10 || 'Phone number must be at least 10 digits']"
-                color="primary"
-                readonly
-                hide-details="auto"
-                class="flex-grow-1"
-                @click="openKeyboard('walkin')"
-              ></v-text-field>
-              <v-btn
-                icon="mdi-keyboard"
-                variant="text"
-                color="primary"
-                class="ml-2"
-                size="large"
-                @click="openKeyboard('walkin')"
-              ></v-btn>
+        <div class="d-flex align-center">
+          <v-text-field
+            v-model="walkinData.phoneNumber"
+            label="Phone Number"
+            placeholder="Tap to enter"
+            variant="outlined"
+            density="comfortable"
+            prepend-inner-icon="mdi-phone"
+            clearable
+            :rules="[v => !!v || 'Phone number is required', v => v.length >= 10 || 'Phone number must be at least 10 digits']"
+            color="primary"
+            readonly
+            hide-details="auto"
+            class="flex-grow-1"
+            @click="openKeyboard('walkin')"
+          ></v-text-field>
+          <v-btn
+            icon="mdi-keyboard"
+            variant="text"
+            color="primary"
+            class="ml-2"
+            size="large"
+            @click="openKeyboard('walkin')"
+          ></v-btn>
+        </div>
+
+        <!-- Loading indicator for patient check -->
+        <div v-if="checkingReturning" class="d-flex justify-center my-4">
+          <v-progress-circular indeterminate color="primary" size="32"></v-progress-circular>
+          <span class="ml-2 text-caption">Checking for existing patient...</span>
+        </div>
+
+        <!-- Returning patient info -->
+        <v-alert
+          v-if="isReturningPatient && !checkingReturning"
+          type="info"
+          variant="tonal"
+          class="mt-2"
+        >
+          <div class="font-weight-bold">Welcome back!</div>
+          <div class="text-caption">
+            Patient Code: <strong>{{ storedFacilityCode }}</strong>
+          </div>
+        </v-alert>
+
+        <!-- Show transaction type selection ONLY for returning patients -->
+        <v-expand-transition>
+          <div v-if="isReturningPatient && !checkingReturning && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
+            <v-divider class="my-4">
+              <v-chip color="surface-variant" variant="text" size="small">
+                Service Selection
+              </v-chip>
+            </v-divider>
+
+            <div class="text-caption text-medium-emphasis mb-2">
+              Please select the type of service you need.
             </div>
 
-            <!-- Loading indicator for patient check -->
-            <div v-if="checkingReturning" class="d-flex justify-center my-4">
-              <v-progress-circular indeterminate color="primary" size="32"></v-progress-circular>
-              <span class="ml-2 text-caption">Checking for existing patient...</span>
-            </div>
+            <v-row>
+              <v-col cols="12">
+                <v-select
+                  v-model="walkinData.transactionType"
+                  :items="transactionTypes"
+                  item-title="name"
+                  item-value="id"
+                  label="Service Type"
+                  variant="outlined"
+                  density="comfortable"
+                  prepend-inner-icon="mdi-clipboard-text"
+                  :rules="[v => !!v || 'Service type is required']"
+                  color="primary"
+                  hint="Select the type of service you need"
+                  persistent-hint
+                  :loading="loadingTransactionTypes"
+                  :disabled="loadingTransactionTypes"
+                >
+                  <template #item="{ item, props }">
+                    <v-list-item v-bind="props">
+                      <template #prepend>
+                        <v-icon :color="item.raw.color_code || 'primary'" class="mr-2">
+                          mdi-circle
+                        </v-icon>
+                      </template>
+                      <v-list-item-subtitle v-if="item.raw.estimated_duration_minutes">
+                        (~{{ item.raw.estimated_duration_minutes }} mins)
+                      </v-list-item-subtitle>
+                    </v-list-item>
+                  </template>
+                  <template #selection="{ item }">
+                    <div class="d-flex align-center">
+                      <v-icon :color="item.raw.color_code || 'primary'" size="16" class="mr-2">
+                        mdi-circle
+                      </v-icon>
+                      <span>{{ item.raw.name }}</span>
+                    </div>
+                  </template>
+                </v-select>
+              </v-col>
+            </v-row>
+          </div>
+        </v-expand-transition>
 
-            <!-- Returning patient info -->
+        <!-- STAFF NOTICE for new patients - NO input fields -->
+        <v-expand-transition>
+          <div v-if="!isReturningPatient && !checkingReturning && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
+            <v-divider class="my-4">
+              <v-chip color="warning" variant="text" size="small">
+                <v-icon size="16" class="mr-1">mdi-alert</v-icon>
+                New Patient Registration
+              </v-chip>
+            </v-divider>
+
             <v-alert
-              v-if="isReturningPatient && !checkingReturning"
+              icon="mdi-account-plus"
               type="info"
               variant="tonal"
-              class="mt-2"
+              class="mb-2"
+              border="start"
+              border-color="info"
             >
-              <div class="font-weight-bold">Welcome back!</div>
-              <div class="text-caption">
-                Patient Code: <strong>{{ storedFacilityCode }}</strong>
+              <div class="d-flex align-center">
+                <div>
+                  <div class="font-weight-bold">Staff will collect your full details</div>
+                  <div class="text-caption text-medium-emphasis">
+                    You only need to provide your phone number to get a queue number.
+                    Staff will register your name and other information during consultation.
+                  </div>
+                </div>
               </div>
             </v-alert>
+          </div>
+        </v-expand-transition>
 
-            <!-- Show transaction type selection ONLY for returning patients -->
-            <v-expand-transition>
-              <div v-if="isReturningPatient && !checkingReturning && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
-                <v-divider class="my-4">
-                  <v-chip color="surface-variant" variant="text" size="small">
-                    Service Selection
-                  </v-chip>
-                </v-divider>
+        <v-alert
+          v-if="walkinError"
+          type="error"
+          variant="tonal"
+          class="mt-2"
+          closable
+          @click:close="walkinError = ''"
+        >
+          {{ walkinError }}
+        </v-alert>
 
-                <div class="text-caption text-medium-emphasis mb-2">
-                  Please select the type of service you need.
-                </div>
+        <div class="d-flex justify-space-between mt-4">
+          <v-btn
+            variant="text"
+            size="large"
+            @click="closeWalkin"
+            prepend-icon="mdi-close"
+            color="surface-variant"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="success"
+            type="submit"
+            size="large"
+            :loading="kioskStore.isWalkingIn"
+            prepend-icon="mdi-check"
+            :disabled="!walkinData.phoneNumber || walkinData.phoneNumber.length < 10 || checkingReturning || (isReturningPatient && !walkinData.transactionType)"
+          >
+            Get Queue No.
+          </v-btn>
+        </div>
+      </v-form>
+    </v-card-text>
+  </v-card>
+</v-dialog>
 
-                <v-row>
-                  <v-col cols="12">
-                    <v-select
-                      v-model="walkinData.transactionType"
-                      :items="transactionTypes"
-                      item-title="name"
-                      item-value="id"
-                      label="Service Type"
-                      variant="outlined"
-                      density="comfortable"
-                      prepend-inner-icon="mdi-clipboard-text"
-                      :rules="[v => !!v || 'Service type is required']"
-                      color="primary"
-                      hint="Select the type of service you need"
-                      persistent-hint
-                      :loading="loadingTransactionTypes"
-                      :disabled="loadingTransactionTypes"
-                    >
-                      <template #item="{ item, props }">
-                        <v-list-item v-bind="props">
-                          <template #prepend>
-                            <v-icon :color="item.raw.color_code || 'primary'" class="mr-2">
-                              mdi-circle
-                            </v-icon>
-                          </template>
-                          <v-list-item-subtitle v-if="item.raw.estimated_duration_minutes">
-                            (~{{ item.raw.estimated_duration_minutes }} mins)
-                          </v-list-item-subtitle>
-                        </v-list-item>
-                      </template>
-                      <template #selection="{ item }">
-                        <div class="d-flex align-center">
-                          <v-icon :color="item.raw.color_code || 'primary'" size="16" class="mr-2">
-                            mdi-circle
-                          </v-icon>
-                          <span>{{ item.raw.name }}</span>
-                        </div>
-                      </template>
-                    </v-select>
-                  </v-col>
-                </v-row>
-              </div>
-            </v-expand-transition>
-
-            <!-- Minimal patient info - only for new patients -->
-            <v-expand-transition>
-              <div v-if="!isReturningPatient && !checkingReturning && walkinData.phoneNumber && walkinData.phoneNumber.length >= 10">
-                <v-divider class="my-4">
-                  <v-chip color="surface-variant" variant="text" size="small">
-                    New Patient Information
-                  </v-chip>
-                </v-divider>
-
-                <div class="text-caption text-medium-emphasis mb-2">
-                  Please provide minimal information to create your record.
-                  Staff will collect full details during consultation.
-                </div>
-
-                <v-row>
-                  <v-col cols="6">
-                    <div class="d-flex align-center">
-                      <v-text-field
-                        v-model="walkinData.firstName"
-                        label="First Name"
-                        placeholder="Tap to enter"
-                        variant="outlined"
-                        density="comfortable"
-                        prepend-inner-icon="mdi-account"
-                        :rules="[v => !!v || 'First name is required']"
-                        color="primary"
-                        readonly
-                        hide-details="auto"
-                        class="flex-grow-1"
-                        @click="openKeyboard('firstName')"
-                      ></v-text-field>
-                      <v-btn
-                        icon="mdi-keyboard"
-                        variant="text"
-                        color="primary"
-                        class="ml-2"
-                        size="large"
-                        @click="openKeyboard('firstName')"
-                      ></v-btn>
-                    </div>
-                  </v-col>
-                  <v-col cols="6">
-                    <div class="d-flex align-center">
-                      <v-text-field
-                        v-model="walkinData.middleName"
-                        label="Middle Name"
-                        placeholder="Tap to enter (optional)"
-                        variant="outlined"
-                        density="comfortable"
-                        prepend-inner-icon="mdi-account"
-                        color="primary"
-                        readonly
-                        hide-details="auto"
-                        class="flex-grow-1"
-                        @click="openKeyboard('middleName')"
-                      ></v-text-field>
-                      <v-btn
-                        icon="mdi-keyboard"
-                        variant="text"
-                        color="primary"
-                        class="ml-2"
-                        size="large"
-                        @click="openKeyboard('middleName')"
-                      ></v-btn>
-                    </div>
-                  </v-col>
-                </v-row>
-
-                <v-row>
-                  <v-col cols="6">
-                    <div class="d-flex align-center">
-                      <v-text-field
-                        v-model="walkinData.lastName"
-                        label="Last Name"
-                        placeholder="Tap to enter"
-                        variant="outlined"
-                        density="comfortable"
-                        prepend-inner-icon="mdi-account"
-                        :rules="[v => !!v || 'Last name is required']"
-                        color="primary"
-                        readonly
-                        hide-details="auto"
-                        class="flex-grow-1"
-                        @click="openKeyboard('lastName')"
-                      ></v-text-field>
-                      <v-btn
-                        icon="mdi-keyboard"
-                        variant="text"
-                        color="primary"
-                        class="ml-2"
-                        size="large"
-                        @click="openKeyboard('lastName')"
-                      ></v-btn>
-                    </div>
-                  </v-col>
-                  <v-col cols="6">
-                    <v-select
-                      v-model="walkinData.gender"
-                      :items="['male', 'female']"
-                      label="Gender"
-                      variant="outlined"
-                      density="comfortable"
-                      prepend-inner-icon="mdi-gender-male-female"
-                      :rules="[v => !!v || 'Gender is required']"
-                      color="primary"
-                      hide-details="auto"
-                    ></v-select>
-                  </v-col>
-                </v-row>
-              </div>
-            </v-expand-transition>
-
-            <v-alert
-              v-if="walkinError"
-              type="error"
-              variant="tonal"
-              class="mt-2"
-              closable
-              @click:close="walkinError = ''"
-            >
-              {{ walkinError }}
-            </v-alert>
-
-            <div class="d-flex justify-space-between mt-4">
-              <v-btn
-                variant="text"
-                size="large"
-                @click="closeWalkin"
-                prepend-icon="mdi-close"
-                color="surface-variant"
-              >
-                Cancel
-              </v-btn>
-              <v-btn
-                color="success"
-                type="submit"
-                size="large"
-                :loading="kioskStore.isWalkingIn"
-                prepend-icon="mdi-check"
-                :disabled="!walkinData.phoneNumber || walkinData.phoneNumber.length < 10 || checkingReturning || (!isReturningPatient && (!walkinData.firstName || !walkinData.lastName || !walkinData.gender)) || (isReturningPatient && !walkinData.transactionType)"
-              >
-                Get Queue No.
-              </v-btn>
-            </div>
-          </v-form>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
-
-    <!-- Success Dialog - Using kioskStore data directly -->
+    <!-- Success Dialog - With Print Options -->
     <v-dialog v-model="showSuccess" max-width="500" persistent>
       <v-card style="background: linear-gradient(135deg, rgb(var(--v-theme-success)), rgb(var(--v-theme-primary)));">
         <v-card-text class="text-center pa-8">
@@ -438,29 +353,42 @@
           
           <!-- Position - Direct from store -->
           <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.75 }">
-            Position in queue: {{ kioskStore.ticketPosition || 1 }}
-          </div>
-          
-          <!-- Patient Code - Direct from store -->
-          <div class="text-body-2 text-white mt-2" :style="{ opacity: 0.9 }">
-            Patient Code: <strong>{{ kioskStore.patientFacilityCode || 'N/A' }}</strong>
+            Position in queue: {{ kioskStore.ticketPosition || '---' }}
           </div>
           
           <div class="text-body-2 text-white mt-1" :style="{ opacity: 0.9 }">
-            Printing your queue slip... Please take your ticket!
+            {{ printStatus }}
           </div>
           
-          <v-btn
-            color="white"
-            variant="text"
-            size="large"
-            class="mt-6"
-            @click="resetAll"
-            prepend-icon="mdi-home"
-            :style="{ color: 'white', opacity: 0.9 }"
-          >
-            Back to Home
-          </v-btn>
+          <!-- Print Options -->
+          <div class="mt-4 d-flex justify-center gap-4 flex-wrap">
+            <v-btn
+              color="white"
+              variant="outlined"
+              size="large"
+              @click="printTicket"
+              prepend-icon="mdi-printer"
+              :loading="isPrinting"
+              :disabled="isPrinting || printSkipped"
+              class="print-btn"
+              style="border-color: rgba(255,255,255,0.5); color: white;"
+            >
+              {{ isPrinting ? 'Printing...' : 'Print Ticket' }}
+            </v-btn>
+            
+            <v-btn
+              color="white"
+              variant="text"
+              size="large"
+              @click="skipPrintAndDone"
+              prepend-icon="mdi-check"
+              :disabled="isPrinting"
+              class="skip-btn"
+              style="color: rgba(255,255,255,0.8);"
+            >
+              {{ printSkipped ? 'Done' : 'Skip Print & Done' }}
+            </v-btn>
+          </div>
         </v-card-text>
       </v-card>
     </v-dialog>
@@ -620,6 +548,12 @@ const checkingReturning = ref(false)
 const storedFacilityCode = ref(null)
 const testingTransactionTypeId = ref(null)
 
+// Print state
+const isPrinting = ref(false)
+const printSkipped = ref(false)
+const printStatus = ref('Printing your queue slip... Please take your ticket!')
+const printAttempted = ref(false)
+
 // Transaction types
 const transactionTypes = ref([])
 const loadingTransactionTypes = ref(false)
@@ -642,35 +576,9 @@ const tempInput = ref('')
 
 const walkinData = reactive({
   phoneNumber: '',
-  firstName: '',
-  middleName: '',
-  lastName: '',
-  gender: '',
-  transactionType: null,
-  address: ''
+  transactionType: null
 })
 
-// Watch for success dialog to trigger print
-watch(showSuccess, (newVal) => {
-  if (newVal) {
-    // Log all store data for debugging
-    console.log('=== SUCCESS DIALOG DATA ===')
-    console.log('Store data:', {
-      ticketNumber: ticketNumber.value,
-      ticketOffice: ticketOffice.value,
-      ticketPosition: ticketPosition.value,
-      ticketPatientName: ticketPatientName.value,
-      patientFacilityCode: patientFacilityCode.value,
-      currentTicket: currentTicket.value
-    })
-    console.log('============================')
-    
-    // Wait for dialog to render then print
-    nextTick(() => {
-      issuePrintTicket()
-    })
-  }
-})
 // Watch for phone number changes
 watch(() => walkinData.phoneNumber, (newPhone) => {
   if (newPhone && newPhone.length >= 10) {
@@ -742,20 +650,12 @@ const checkReturningPatient = async (phoneNumber) => {
       isReturningPatient.value = true
       if (result.patient) {
         storedFacilityCode.value = result.patient.patient_facility_code || null
-        walkinData.firstName = ''
-        walkinData.middleName = ''
-        walkinData.lastName = ''
-        walkinData.gender = ''
         walkinData.transactionType = null
       }
     } else {
       isReturningPatient.value = false
       storedFacilityCode.value = null
       walkinData.transactionType = testingTransactionTypeId.value
-      walkinData.firstName = ''
-      walkinData.middleName = ''
-      walkinData.lastName = ''
-      walkinData.gender = ''
     }
   } catch (error) {
     console.error('Error checking patient existence:', error)
@@ -778,18 +678,6 @@ const openKeyboard = (field) => {
       keyboardValue.value = walkinData.phoneNumber
       keyboardLabel.value = 'Enter Phone Number'
       break
-    case 'firstName':
-      keyboardValue.value = walkinData.firstName
-      keyboardLabel.value = 'Enter First Name'
-      break
-    case 'middleName':
-      keyboardValue.value = walkinData.middleName
-      keyboardLabel.value = 'Enter Middle Name (optional)'
-      break
-    case 'lastName':
-      keyboardValue.value = walkinData.lastName
-      keyboardLabel.value = 'Enter Last Name'
-      break
   }
   
   tempInput.value = keyboardValue.value
@@ -808,15 +696,6 @@ const handleKeyboardDone = (value) => {
     case 'walkin':
       walkinData.phoneNumber = value
       break
-    case 'firstName':
-      walkinData.firstName = value
-      break
-    case 'middleName':
-      walkinData.middleName = value
-      break
-    case 'lastName':
-      walkinData.lastName = value
-      break
   }
   
   keyboardVisible.value = false
@@ -831,12 +710,7 @@ const closeAppointmentCheckin = () => {
 const closeWalkin = () => {
   showWalkinDialog.value = false
   walkinData.phoneNumber = ''
-  walkinData.firstName = ''
-  walkinData.middleName = ''
-  walkinData.lastName = ''
-  walkinData.gender = ''
   walkinData.transactionType = null
-  walkinData.address = ''
   isReturningPatient.value = false
   storedFacilityCode.value = null
   walkinError.value = ''
@@ -845,6 +719,9 @@ const closeWalkin = () => {
 const resetAll = () => {
   showSuccess.value = false
   storedFacilityCode.value = null
+  printSkipped.value = false
+  printAttempted.value = false
+  printStatus.value = 'Printing your queue slip... Please take your ticket!'
   kioskStore.resetCheckIn()
   closeAppointmentCheckin()
   closeWalkin()
@@ -861,15 +738,15 @@ const checkInWithAppointment = async () => {
   try {
     await kioskStore.checkInPatient(appointmentPhone.value)
     
-    // The store now contains all ticket data
     showAppointmentCheckin.value = false
-    
-    // Show success dialog after a small delay to ensure store is updated
     await nextTick()
     showSuccess.value = true
+    
+    // Auto-print after successful check-in
+    await autoPrintTicket()
 
   } catch (error) {
-    appointmentError.value = error.message || 'Failed to check in. Please try again.'
+    appointmentError.value = error.message || 'Failed to join the queue. Please try again.'
   }
 }
 
@@ -884,62 +761,59 @@ const processWalkin = async () => {
       walkinError.value = 'Please select a service type.'
       return
     }
-  } else {
-    if (!walkinData.firstName || !walkinData.lastName) {
-      walkinError.value = 'Please enter your full name.'
-      return
-    }
-    if (!walkinData.gender) {
-      walkinError.value = 'Please select your gender.'
-      return
-    }
-    walkinData.transactionType = testingTransactionTypeId.value
   }
 
   walkinError.value = ''
 
   try {
+    // For new patients: use placeholder values that staff will update later
     const patientData = {
-      first_name: walkinData.firstName || 'Walk-in',
-      middle_name: walkinData.middleName || '',
-      last_name: walkinData.lastName || 'Patient',
-      gender: walkinData.gender || 'other',
+      first_name: 'Walk-in',
+      last_name: 'Patient',
+      middle_name: '',
+      gender: 'other',
       contact_number: walkinData.phoneNumber,
-      address: walkinData.address || 'To be updated',
+      address: 'To be updated by staff',
       transaction_type_id: walkinData.transactionType || testingTransactionTypeId.value,
       is_returning: isReturningPatient.value
     }
 
     await kioskStore.registerWalkIn(patientData)
     
-    // The store now contains all ticket data
     showWalkinDialog.value = false
-    
-    // Show success dialog after a small delay to ensure store is updated
     await nextTick()
     showSuccess.value = true
+    
+    // Auto-print after successful walk-in
+    await autoPrintTicket()
 
   } catch (error) {
-    walkinError.value = error.message || 'Failed to process walk-in. Please try again.'
+    walkinError.value = error.message || 'Failed to join the queue. Please try again.'
   }
 }
 
-// Print Ticket - Uses store data directly
-const issuePrintTicket = async () => {
+// Auto-print function
+const autoPrintTicket = async () => {
+  printAttempted.value = true
+  await printTicket()
+}
+
+// Manual print function
+const printTicket = async () => {
+  if (isPrinting.value) return
+  
+  isPrinting.value = true
+  printStatus.value = 'Printing...'
+  printSkipped.value = false
+  
   try {
-    // Get data directly from the store
     const queueNumber = ticketNumber.value || 'T-001'
     const office = ticketOffice.value || 'Testing'
     const position = ticketPosition.value || 1
-    const patientName = ticketPatientName.value || 'Patient'
-    const facilityCode = patientFacilityCode.value || 'N/A'
     
-    // Format the ticket data for printing
     const ticketDataPrint = {
       office: office,
       queue_number: queueNumber,
-      patient_name: patientName,
-      patient_code: facilityCode,
       date: new Date().toLocaleDateString('en-PH', { 
         year: 'numeric', 
         month: 'short', 
@@ -948,25 +822,39 @@ const issuePrintTicket = async () => {
       time: new Date().toLocaleTimeString('en-PH', { 
         hour: '2-digit', 
         minute: '2-digit' 
-      }),
-      wait_time: `${Math.max(1, Number(position) * 5)} mins`
+      })
     }
     
     console.log('📨 Sending print request to kiosk microservice:', ticketDataPrint)
-    
-    // Send to kiosk microservice
     const result = await printerService.printTicket(ticketDataPrint)
     
     if (result.success) {
       console.log('✅ Ticket printed successfully:', queueNumber)
+      printStatus.value = '✅ Ticket printed successfully!'
     } else {
       console.warn('⚠️ Print failed but ticket was created:', result.error)
+      printStatus.value = '⚠️ Print failed. Please see staff for assistance.'
     }
   } catch (error) {
     console.error('❌ Print error:', error)
-    // Don't block the flow - ticket is already created
-    console.warn('⚠️ Printing failed but ticket was created successfully.')
+    printStatus.value = '⚠️ Print failed. Please see staff for assistance.'
+  } finally {
+    isPrinting.value = false
   }
+}
+
+// Skip print and close
+const skipPrintAndDone = () => {
+  printSkipped.value = true
+  printStatus.value = '📋 Ticket printing skipped. Please see staff for your queue number.'
+  setTimeout(() => {
+    resetAll()
+  }, 1500)
+}
+
+const issuePrintTicket = async () => {
+  // This function is kept for backward compatibility
+  await printTicket()
 }
 
 // Power Off Methods
@@ -1045,7 +933,6 @@ onMounted(() => {
   document.addEventListener('keydown', trackActivity)
   resetInactivityTimer()
   
-  // Debug: Log store state changes
   console.log('Kiosk store initialized:', kioskStore.$state)
 })
 
@@ -1116,16 +1003,6 @@ onUnmounted(() => {
   border-width: 2px;
 }
 
-:deep(.v-dialog .v-card) {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-:deep(.v-card-title) {
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
 .power-btn {
   opacity: 0.3;
   transition: all 0.3s ease;
@@ -1146,6 +1023,19 @@ onUnmounted(() => {
   padding-top: 16px !important;
 }
 
+/* Print button styles */
+.print-btn {
+  min-width: 160px;
+}
+
+.skip-btn {
+  min-width: 140px;
+}
+
+.gap-4 {
+  gap: 16px;
+}
+
 @media (max-width: 600px) {
   .kiosk-checkin {
     padding: 12px;
@@ -1161,6 +1051,12 @@ onUnmounted(() => {
 
   .power-btn {
     font-size: 0.7rem;
+  }
+  
+  .print-btn,
+  .skip-btn {
+    min-width: 120px;
+    font-size: 0.85rem;
   }
 }
 </style>

@@ -91,47 +91,46 @@ class PatientCodeService {
    * @returns {Promise<string>} - Unique code
    */
   async makeUniqueCode(baseCode) {
-    const Patient = this.getPatientModel();
-    
-    if (!Patient) {
-      console.warn('Patient model not available, using base code without uniqueness check');
-      return baseCode;
-    }
-    
-    let code = baseCode;
-    let counter = 1;
-    let exists = true;
-    
-    try {
-      const existing = await Patient.findOne({
-        where: { patient_facility_code: code }
-      });
-      
-      if (!existing) {
-        return code;
-      }
-      
-      while (exists) {
-        const checkCode = `${baseCode}${counter}`;
-        const found = await Patient.findOne({
-          where: { patient_facility_code: checkCode }
-        });
-        
-        if (!found) {
-          code = checkCode;
-          exists = false;
-        } else {
-          counter++;
-        }
-      }
-      
-      return code;
-    } catch (error) {
-      console.error('Error checking uniqueness of facility code:', error);
-      const timestamp = Date.now().toString().slice(-4);
-      return `${baseCode}${timestamp}`;
-    }
+  const Patient = this.getPatientModel();
+  
+  if (!Patient) {
+    console.warn('Patient model not available, using base code without uniqueness check');
+    return baseCode;
   }
+  
+  try {
+    // Check if base code exists
+    const existing = await Patient.findOne({
+      where: { patient_facility_code: baseCode }
+    });
+    
+    if (!existing) return baseCode;
+    
+    // Find all existing codes with this base
+    const existingCodes = await Patient.findAll({
+      where: {
+        patient_facility_code: {
+          [Op.like]: `${baseCode}%`
+        }
+      },
+      attributes: ['patient_facility_code']
+    });
+    
+    const existingSet = new Set(existingCodes.map(p => p.patient_facility_code));
+    
+    // Find the next available number
+    let counter = 2;
+    while (existingSet.has(`${baseCode}${counter}`)) {
+      counter++;
+    }
+    
+    return `${baseCode}${counter}`;
+  } catch (error) {
+    console.error('Error checking uniqueness of facility code:', error);
+    const timestamp = Date.now().toString().slice(-4);
+    return `${baseCode}${timestamp}`;
+  }
+}
 
   /**
    * Validate a facility code format
@@ -219,6 +218,7 @@ class PatientCodeService {
       treatment_transition_date: patient.treatment_transition_date
     });
     
+    // If the new code is the same as the current code, add a counter starting from 2
     if (newCode === patient.patient_facility_code) {
       const baseCode = newCode;
       let counter = 2;
@@ -250,6 +250,40 @@ class PatientCodeService {
     }
     
     return newCode;
+  }
+
+  /**
+   * Find the next available code with counter starting from 2
+   * @param {string} baseCode - Base code to check
+   * @param {number} startCounter - Starting counter number (default: 2)
+   * @returns {Promise<string>} - Next available code
+   */
+  async getNextAvailableCode(baseCode, startCounter = 2) {
+    const Patient = this.getPatientModel();
+    
+    if (!Patient) {
+      return `${baseCode}${startCounter}`;
+    }
+    
+    let counter = startCounter;
+    
+    try {
+      while (true) {
+        const testCode = `${baseCode}${counter}`;
+        const existing = await Patient.findOne({
+          where: { patient_facility_code: testCode }
+        });
+        
+        if (!existing) {
+          return testCode;
+        }
+        counter++;
+      }
+    } catch (error) {
+      console.error('Error finding next available code:', error);
+      const timestamp = Date.now().toString().slice(-4);
+      return `${baseCode}${timestamp}`;
+    }
   }
 }
 
