@@ -281,6 +281,8 @@ const isMobile = computed(() => windowWidth.value < 960)
 
 const user = computed(() => authStore.user)
 const isAdmin = computed(() => authStore.isAdmin)
+const isStaff = computed(() => authStore.userRole === 'staff')
+const userOffice = computed(() => authStore.userOffice)
 
 const userInitials = computed(() => {
   if (user.value?.fullName) {
@@ -294,14 +296,53 @@ const userInitials = computed(() => {
   return user.value?.username?.charAt(0).toUpperCase() || 'U'
 })
 
-// Menu Items
-const menuItems = [
-  { title: 'Dashboard', icon: 'mdi-view-dashboard', to: '/dashboard' },
-  { title: 'Patients', icon: 'mdi-account-multiple', to: '/patients' },
-  { title: 'Appointments', icon: 'mdi-calendar', to: '/appointments' },
-  { title: 'Reports', icon: 'mdi-chart-bar', to: '/reports' },
-]
+// Dynamic Menu Items - REMOVED DASHBOARD
+const menuItems = computed(() => {
+  const items = []
+  
+  // Staff menu items
+  if (isStaff.value && userOffice.value) {
+    const officeName = userOffice.value.charAt(0).toUpperCase() + userOffice.value.slice(1)
+    items.push(
+      { 
+        title: `${officeName} Queue`, 
+        icon: 'mdi-human-queue', 
+        to: `/${userOffice.value}/queue` 
+      },
+    )
+  }
+  
+  // Admin menu items
+  if (isAdmin.value) {
+    items.push(
+      { title: 'Testing Queue', icon: 'mdi-test-tube', to: '/testing/queue' },
+      { title: 'Treatment Queue', icon: 'mdi-hospital', to: '/treatment/queue' }
+    )
+  }
+  
+  // Common items for staff and admin
+  if (isStaff.value || isAdmin.value) {
+    items.push(
+      { title: 'Patients', icon: 'mdi-account-multiple', to: '/patients' },
+      { title: 'Appointments', icon: 'mdi-calendar', to: '/appointments' },
+      { title: 'Reports', icon: 'mdi-chart-bar', to: '/reports' }
+    )
+  }
+  
+  // Patient menu items
+  if (authStore.userRole === 'patient') {
+    items.push(
+      { title: 'Dashboard', icon: 'mdi-view-dashboard', to: '/patient/dashboard' },
+      { title: 'Appointments', icon: 'mdi-calendar', to: '/patient/appointments' },
+      { title: 'Results', icon: 'mdi-file-document', to: '/patient/results' },
+      { title: 'Profile', icon: 'mdi-account', to: '/patient/profile' }
+    )
+  }
+  
+  return items
+})
 
+// Admin items (shown in profile dropdown)
 const adminItems = [
   { title: 'Admin Dashboard', icon: 'mdi-chart-line', to: '/admin' },
   { title: 'User Management', icon: 'mdi-account-group', to: '/admin/users' },
@@ -343,10 +384,8 @@ const confirmLogout = async () => {
   }
 }
 
-// Handle window resize
 const handleResize = () => {
   windowWidth.value = window.innerWidth
-  // Auto-close drawer on desktop if it was opened
   if (!isMobile.value) {
     drawer.value = true
   }
@@ -359,9 +398,7 @@ onMounted(() => {
     theme.global.name.value = savedTheme
   }
   
-  // Set drawer state based on screen size
   drawer.value = !isMobile.value
-  
   window.addEventListener('resize', handleResize)
 })
 

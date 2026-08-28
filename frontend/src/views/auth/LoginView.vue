@@ -170,13 +170,33 @@ const login = async () => {
   if (!form.value?.validate()) return;
   
   loading.value = true;
+  snackbar.value.show = false;
+  
   const result = await authStore.login(username.value, password.value);
   
   if (result.success) {
-    if (result.user.role === 'admin') {
+    // Get user role and office from the store
+    const role = authStore.userRole;
+    const office = authStore.userOffice;
+    
+    console.log('Login successful - Role:', role, 'Office:', office);
+    
+    // Redirect based on role
+    if (role === 'admin') {
       router.push('/admin');
+    } else if (role === 'staff') {
+      // Staff go to their office queue
+      if (office) {
+        router.push(`/${office}/queue`);
+      } else {
+        // Fallback if office is not set
+        router.push('/');
+      }
+    } else if (role === 'patient') {
+      router.push('/patient/dashboard');
     } else {
-      router.push('/dashboard');
+      // Fallback for any other role
+      router.push('/');
     }
   } else {
     snackbar.value = {

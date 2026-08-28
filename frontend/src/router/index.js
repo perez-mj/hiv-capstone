@@ -15,15 +15,22 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       // Staff & Admin Dashboard
-      {
+            {
         path: '',
-        redirect: '/dashboard'
-      },
-      {
-        path: 'dashboard',
-        name: 'Dashboard',
-        component: () => import('@/views/staff/DashboardView.vue'),
-        meta: { roles: ['staff', 'admin'] }
+        redirect: (to) => {
+          const authStore = useAuthStore();
+          const role = authStore.userRole;
+          const office = authStore.userOffice;
+          
+          if (role === 'admin') {
+            return '/admin';
+          } else if (role === 'staff' && office) {
+            return `/${office}/queue`;
+          } else if (role === 'patient') {
+            return '/patient/dashboard';
+          }
+          return '/login';
+        }
       },
 
       // Staff - Testing Office
@@ -238,29 +245,75 @@ const router = createRouter({
 });
 
 // FIXED: Navigation guard without deprecated next() callback
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore();
+  
+  console.log('=== ROUTE GUARD ===');
+  console.log('Path:', to.path);
+  console.log('Requires Auth:', to.meta.requiresAuth !== false);
+  
+  // If auth hasn't been checked yet, wait for it
+  if (!authStore.isAuthChecked) {
+    console.log('Auth not checked yet, checking...');
+    await authStore.checkAuth();
+    console.log('Auth check completed:', authStore.isAuthenticated);
+  }
+  
   const requiresAuth = to.meta.requiresAuth !== false;
   const isAuthenticated = authStore.isAuthenticated;
 
+  // If route requires auth and user is not authenticated
   if (requiresAuth && !isAuthenticated) {
+    console.log('Not authenticated, redirecting to login');
     return '/login';
   }
 
-  if (to.meta.roles && !to.meta.roles.includes(authStore.userRole)) {
-    if (authStore.userRole === 'admin') {
-      return '/admin';
-    } else if (authStore.userRole === 'staff') {
-      return '/dashboard';
-    } else if (authStore.userRole === 'patient') {
-      return '/patient/dashboard';
-    } else {
+  // If going to login and already authenticated, redirect to appropriate page
+  if (to.path === '/login' && isAuthenticated) {
+    const role = authStore.userRole;
+    const office = authStore.userOffice;
+    
+    if (role === 'admin') return '/admin';
+    if (role === 'staff' && office) return `/${office}/queue`;
+    if (role === 'patient') return '/patient/dashboard';
+    return '/';
+  }
+
+  // Role-based access control
+  if (to.meta.roles) {
+    const userRole = authStore.userRole;
+    console.log('Role check:', { userRole, required: to.meta.roles });
+    
+    if (!to.meta.roles.includes(userRole)) {
+      console.warn('Access denied for role:', userRole);
+      
+      if (userRole === 'admin') return '/admin';
+      if (userRole === 'staff') {
+        const office = authStore.userOffice;
+        return office ? `/${office}/queue` : '/';
+      }
+      if (userRole === 'patient') return '/patient/dashboard';
       return '/login';
     }
   }
 
-  if (to.meta.office && !to.meta.office.includes(authStore.userOffice) && authStore.userRole !== 'admin') {
-    return `/${authStore.userOffice}/queue`;
+  // Office-based access control
+  if (to.meta.office) {
+    const userRole = authStore.userRole;
+    const userOffice = authStore.userOffice;
+    
+    // Admin can access any office
+    if (userRole === 'admin') {
+      return true;
+    }
+    
+    // Staff must have matching office
+    if (userRole === 'staff' && userOffice) {
+      if (!to.meta.office.includes(userOffice)) {
+        console.warn('Office mismatch:', { userOffice, required: to.meta.office });
+        return `/${userOffice}/queue`;
+      }
+    }
   }
 
   return true;
