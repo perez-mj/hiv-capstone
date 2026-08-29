@@ -5,8 +5,7 @@
       <v-col cols="12" lg="8">
         <!-- Queue Display -->
         <v-card>
-          <v-card-title class="text-h5">
-            <v-icon start>mdi-format-list-numbered</v-icon>
+          <v-card-title class="d-flex justify-space-between align-center">
             Treatment Queue
             <v-spacer></v-spacer>
             <v-chip color="primary" variant="flat">

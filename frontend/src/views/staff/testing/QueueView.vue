@@ -5,8 +5,7 @@
       <v-col cols="12" lg="8">
         <!-- Queue Display -->
         <v-card>
-          <v-card-title class="text-h5">
-            <v-icon start>mdi-format-list-numbered</v-icon>
+          <v-card-title class="d-flex justify-space-between align-center">
             Testing Queue
             <v-spacer></v-spacer>
             <v-chip color="primary" variant="flat">
@@ -19,10 +18,10 @@
             <!-- Now Serving -->
             <v-row class="mb-4">
               <v-col cols="12">
-                <v-card color="success" variant="tonal" class="pa-4">
+                <v-card color="info" variant="tonal" class="pa-4">
                   <v-row align="center">
                     <v-col cols="auto">
-                      <v-icon size="48" color="success">mdi-account-check</v-icon>
+                      <v-icon size="48" color="info">mdi-account-check</v-icon>
                     </v-col>
                     <v-col>
                       <div class="text-overline">NOW SERVING</div>
@@ -46,7 +45,7 @@
                         Skip
                       </v-btn>
                       <v-btn 
-                        color="success" 
+                        color="info" 
                         variant="flat"
                         @click="callNext"
                         :disabled="waitingCount === 0"

@@ -4,8 +4,7 @@
     <v-row>
       <v-col cols="12">
         <v-card class="rounded-lg">
-          <v-card-title class="text-h5 pa-4 bg-surface">
-            <v-icon class="mr-2 text-primary">mdi-format-list-bulleted</v-icon>
+          <v-card-title class="d-flex justify-space-between align-center">
             Appointments List
             <v-spacer></v-spacer>
             <v-btn 
@@ -13,7 +12,6 @@
               @click="navigateToCreate" 
               class="mr-2 text-capitalize"
               variant="flat"
-              rounded
             >
               <v-icon left size="20">mdi-plus</v-icon>
               New
@@ -22,7 +20,6 @@
               color="primary" 
               @click="navigateToCalendar"
               variant="flat"
-              rounded
             >
               <v-icon left size="20">mdi-calendar</v-icon>
               Calendar View
@@ -196,10 +193,10 @@
                   </template>
                 </v-tooltip>
                 
-                <v-tooltip text="Check in patient" location="top">
+                <v-tooltip text="Add to Queue" location="top">
                   <template v-slot:activator="{ props }">
                     <v-btn 
-                      icon="mdi-check"
+                      icon="mdi-plus"
                       size="small" 
                       color="success" 
                       variant="text"

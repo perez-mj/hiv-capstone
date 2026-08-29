@@ -109,7 +109,7 @@
 
               <!-- Consultation Notes (SOAP) -->
               <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-info-lighten-4">
+                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
                   <v-icon start>mdi-note-text</v-icon>
                   Consultation Notes (SOAP Format)
                 </v-card-title>
@@ -158,7 +158,7 @@
 
               <!-- ART Prescription -->
               <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-success-lighten-4">
+                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
                   <v-icon start>mdi-pill</v-icon>
                   ART Prescription
                 </v-card-title>
@@ -225,7 +225,7 @@
 
               <!-- Lab Results -->
               <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-warning-lighten-4">
+                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
                   <v-icon start>mdi-flask</v-icon>
                   Lab Results
                 </v-card-title>
@@ -282,7 +282,7 @@
 
               <!-- Adherence Monitoring -->
               <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-error-lighten-4">
+                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
                   <v-icon start>mdi-calendar-check</v-icon>
                   Adherence Monitoring
                 </v-card-title>
@@ -323,7 +323,7 @@
 
               <!-- Next Appointment (Optional) -->
               <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-primary-lighten-4">
+                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
                   <v-icon start>mdi-calendar-plus</v-icon>
                   Next Appointment 
                   <v-chip size="small" color="grey" variant="tonal" class="ml-2">Optional</v-chip>
@@ -445,17 +445,6 @@
                   </v-btn>
                   
                   <div>
-                    <v-btn 
-                      v-if="!isEditMode"
-                      color="primary" 
-                      variant="tonal"
-                      @click="saveDraft"
-                      class="mr-2"
-                    >
-                      <v-icon start>mdi-content-save</v-icon>
-                      Save Draft
-                    </v-btn>
-                    
                     <v-btn 
                       color="success" 
                       @click="submitEncounter"
@@ -775,9 +764,6 @@ export default {
       return results
     }
 
-    const saveDraft = () => {
-      showSnackbar('Draft saved (local)', 'info')
-    }
 
     const submitEncounter = async () => {
       if (!form.value || !form.value.validate()) {
@@ -879,7 +865,6 @@ export default {
       availableSlotsMessage,
       searchPatients,
       selectPatient,
-      saveDraft,
       submitEncounter,
       cancel,
       navigateToPatientCreate,
@@ -892,21 +877,3 @@ export default {
   }
 }
 </script>
-
-<style scoped>
-.bg-info-lighten-4 {
-  background-color: #e3f2fd !important;
-}
-.bg-success-lighten-4 {
-  background-color: #e8f5e9 !important;
-}
-.bg-warning-lighten-4 {
-  background-color: #fff3e0 !important;
-}
-.bg-error-lighten-4 {
-  background-color: #fce4ec !important;
-}
-.bg-primary-lighten-4 {
-  background-color: #e3f2fd !important;
-}
-</style>

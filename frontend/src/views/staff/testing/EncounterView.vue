@@ -4,8 +4,7 @@
     <v-row>
       <v-col cols="12" lg="8" offset-lg="2">
         <v-card>
-          <v-card-title class="text-h5">
-            <v-icon start>mdi-clipboard-pulse</v-icon>
+          <v-card-title class="d-flex justify-space-between align-center">
             {{ isEditMode ? 'Edit' : 'New' }} Testing Encounter
             <v-spacer></v-spacer>
             <v-chip color="info" variant="flat" v-if="patient">
@@ -284,17 +283,6 @@
                   
                   <div>
                     <v-btn 
-                      v-if="!isEditMode"
-                      color="primary" 
-                      variant="tonal"
-                      @click="saveDraft"
-                      class="mr-2"
-                    >
-                      <v-icon start>mdi-content-save</v-icon>
-                      Save Draft
-                    </v-btn>
-                    
-                    <v-btn 
                       color="success" 
                       @click="submitEncounter"
                       :loading="submitting"
@@ -460,11 +448,6 @@ export default {
       searchResults.value = []
     }
 
-    const saveDraft = async () => {
-      // For draft, we can just show a message
-      showSnackbar('Draft saved (local)', 'info')
-    }
-
     const submitEncounter = async () => {
       if (!form.value || !form.value.validate()) {
         showSnackbar('Please fill in all required fields', 'warning')
@@ -566,7 +549,6 @@ export default {
       // Methods
       searchPatients,
       selectPatient,
-      saveDraft,
       submitEncounter,
       cancel,
       navigateToPatientCreate

@@ -4,13 +4,11 @@
     <v-row>
       <v-col cols="12">
         <v-card>
-          <v-card-title class="text-h5">
-            <v-icon left>mdi-account-group</v-icon>
+          <v-card-title class="d-flex justify-space-between align-center">
             Patient Management
-            <v-spacer></v-spacer>
             <v-btn color="primary" @click="navigateToCreate">
               <v-icon left>mdi-account-plus</v-icon>
-              Add Patient
+              Add
             </v-btn>
           </v-card-title>
           <v-divider></v-divider>
