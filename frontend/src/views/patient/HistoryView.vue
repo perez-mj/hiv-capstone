@@ -1,4 +1,4 @@
-<!-- frontend/src/views/patient/ResultsView.vue -->
+<!-- frontend/src/views/patient/HistoryView.vue -->
 <template>
   <div>
     <v-row>

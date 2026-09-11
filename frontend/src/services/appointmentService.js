@@ -25,17 +25,35 @@ const formatDateToYYYYMMDD = (date) => {
 }
 
 export default {
-  async createAppointment(data) {
-    try {
-      console.log('Creating appointment with data:', data)
-      const response = await api.post('/appointments', data)
-      console.log('Create appointment response:', response.data)
-      return response.data
-    } catch (error) {
-      console.error('Create appointment error:', error.response?.data || error)
-      throw error
+async createAppointment(data) {
+  try {
+    // For patients, we don't need patient_id or office
+    // The backend gets patient_id from the authenticated user
+    // office is determined from transaction_type_id
+    console.log('Creating appointment with data:', data)
+    
+    // Only send what's needed
+    const payload = {
+      transaction_type_id: data.transaction_type_id,
+      appointment_date: data.appointment_date,
+      time_slot: data.time_slot,
+      notes: data.notes || ''
     }
-  },
+    
+    // Only include patient_id if provided (for staff/admin)
+    if (data.patient_id) {
+      payload.patient_id = data.patient_id
+    }
+    
+    console.log('Sending payload:', payload)
+    const response = await api.post('/appointments', payload)
+    console.log('Create appointment response:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('Create appointment error:', error.response?.data || error)
+    throw error
+  }
+},
 
   async getAppointment(id) {
     try {

@@ -200,9 +200,9 @@ const routes = [
         component: () => import('@/views/patient/AppointmentsView.vue'),
       },
       {
-        path: 'results',
-        name: 'PatientResults',
-        component: () => import('@/views/patient/ResultsView.vue'),
+        path: 'Visits',
+        name: 'VisitHistory',
+        component: () => import('@/views/patient/HistoryView.vue'),
       },
       {
         path: 'profile',

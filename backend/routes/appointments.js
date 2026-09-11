@@ -13,7 +13,7 @@ router.post('/', auth, async (req, res) => {
   try {
     let { patient_id, office, appointment_date, time_slot, notes, transaction_type_id } = req.body;
     
-    console.log('Creating appointment with data:', { patient_id, office, appointment_date, time_slot });
+    console.log('Creating appointment with data:', { patient_id, office, appointment_date, time_slot, transaction_type_id });
     
     // If user is patient, get their patient_id from the authenticated user
     if (req.user.role === 'patient') {
@@ -34,6 +34,15 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Patient ID is required' });
     }
     
+    // If office is not provided, get it from transaction_type
+    if (!office && transaction_type_id) {
+      const transactionType = await db.TransactionType.findByPk(transaction_type_id);
+      if (transactionType) {
+        office = transactionType.office;
+        console.log(`Office determined from transaction type: ${office}`);
+      }
+    }
+    
     if (!office) {
       return res.status(400).json({ error: 'Office is required' });
     }
@@ -44,6 +53,22 @@ router.post('/', auth, async (req, res) => {
     
     if (!time_slot) {
       return res.status(400).json({ error: 'Time slot is required' });
+    }
+    
+    if (!transaction_type_id) {
+      // Get default transaction type for the office
+      const defaultType = await db.TransactionType.findOne({
+        where: { 
+          office: office,
+          is_active: true 
+        },
+        order: [['id', 'ASC']]
+      });
+      
+      if (!defaultType) {
+        return res.status(400).json({ error: 'No transaction type configured for this office' });
+      }
+      transaction_type_id = defaultType.id;
     }
     
     // Validate that the time slot is available
@@ -63,23 +88,6 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: 'Selected time slot is not available' });
     }
     
-    // If no transaction_type_id provided, get default for the office
-    let finalTransactionTypeId = transaction_type_id;
-    if (!finalTransactionTypeId) {
-      const defaultType = await db.TransactionType.findOne({
-        where: { 
-          office: office,
-          is_active: true 
-        },
-        order: [['id', 'ASC']]
-      });
-      
-      if (!defaultType) {
-        return res.status(400).json({ error: 'No transaction type configured for this office' });
-      }
-      finalTransactionTypeId = defaultType.id;
-    }
-    
     // Create appointment
     const appointment = await db.Appointment.create({
       patient_id,
@@ -88,7 +96,7 @@ router.post('/', auth, async (req, res) => {
       time_slot,
       status: 'pending',
       notes: notes || '',
-      transaction_type_id: finalTransactionTypeId
+      transaction_type_id
     });
     
     // Create audit log

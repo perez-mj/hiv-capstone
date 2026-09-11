@@ -110,6 +110,45 @@ export const useAuthStore = defineStore('auth', {
         await this.checkAuth();
       }
       return this.isAuthenticated;
+    },
+
+    // CHANGE PASSWORD METHOD - ADD THIS
+    async changePassword(data) {
+      try {
+        const response = await api.post('/auth/change-password', {
+          current_password: data.current_password,
+          new_password: data.new_password
+        });
+        return response.data;
+      } catch (error) {
+        console.error('Change password error:', error);
+        throw error;
+      }
+    },
+
+    // Optional: Refresh token method
+    async refreshAccessToken() {
+      try {
+        const response = await api.post('/auth/refresh', {
+          refresh_token: this.refreshToken
+        });
+        
+        const { access_token, refresh_token } = response.data;
+        
+        this.accessToken = access_token;
+        this.refreshToken = refresh_token;
+        
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+        
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        
+        return true;
+      } catch (error) {
+        console.error('Refresh token error:', error);
+        this.logout();
+        return false;
+      }
     }
   }
 });

@@ -24,9 +24,9 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token structure' });
     }
 
-    const user = await db.User.findByPk(userId, {
-      attributes: ['id', 'username', 'email', 'role', 'office', 'is_active']
-    });
+    // Fetch the FULL user instance (not just attributes)
+    // This ensures all instance methods (like validatePassword) are available
+    const user = await db.User.findByPk(userId);
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -36,13 +36,8 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ error: 'User account is deactivated' });
     }
 
-    req.user = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      office: user.office
-    };
+    // Attach the full user instance to req.user
+    req.user = user;
     req.token = token;
     
     next();

@@ -67,22 +67,33 @@ export const useAppointmentStore = defineStore('appointment', {
   },
 
   actions: {
-    async bookAppointment(data) {
-      this.loading = true
-      this.error = null
-      try {
-        console.log('Store: Booking appointment with data:', data)
-        const result = await appointmentService.createAppointment(data)
-        await this.loadMyAppointments()
-        return result
-      } catch (error) {
-        console.error('Failed to book appointment:', error)
-        this.error = error.message
-        throw error
-      } finally {
-        this.loading = false
-      }
-    },
+async bookAppointment(data) {
+  this.loading = true
+  this.error = null
+  try {
+    console.log('Store: Booking appointment with data:', data)
+    
+    // Ensure we have the required fields
+    const appointmentData = { ...data }
+    
+    // If patient_id is not provided, the backend will get it from the authenticated user
+    // For patients, we don't need to send patient_id - backend handles it
+    // Only send patient_id for staff/admin booking on behalf of patients
+    
+    // Ensure office is set (should come from transaction_type_id)
+    // The backend will determine office from transaction_type_id
+    
+    const result = await appointmentService.createAppointment(appointmentData)
+    await this.loadMyAppointments()
+    return result
+  } catch (error) {
+    console.error('Failed to book appointment:', error)
+    this.error = error.message
+    throw error
+  } finally {
+    this.loading = false
+  }
+},
 
     async loadMyAppointments() {
       this.loading = true
