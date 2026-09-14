@@ -291,7 +291,6 @@ const login = async () => {
   letter-spacing: 0.5px;
   margin-bottom: 6px;
   display: block;
-  color: rgb(var(--v-theme-on-surface-variant));
 }
 
 .modern-input :deep(.v-field) {

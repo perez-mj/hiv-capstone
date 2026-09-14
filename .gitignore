@@ -4,3 +4,5 @@ structure
 backups
 docs
 .env
+logs/
+*.log

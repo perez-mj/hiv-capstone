@@ -43,10 +43,6 @@ module.exports = (sequelize) => {
     next_appointment_date: {
       type: DataTypes.DATEONLY,
       allowNull: true
-    },
-    blockchain_hash: {
-      type: DataTypes.STRING(255),
-      allowNull: true
     }
   }, {
     tableName: 'treatment_encounters',

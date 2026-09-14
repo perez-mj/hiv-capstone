@@ -39,10 +39,6 @@ module.exports = (sequelize) => {
     referral: {
       type: DataTypes.JSON,
       allowNull: true
-    },
-    blockchain_hash: {
-      type: DataTypes.STRING(255),
-      allowNull: true
     }
   }, {
     tableName: 'testing_encounters',

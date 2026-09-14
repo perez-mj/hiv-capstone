@@ -2,314 +2,187 @@
 const db = require('../models');
 const { Op } = require('sequelize');
 const patientCodeService = require('./patientCodeService');
+const audit = require('../utils/audit');
+const { hmac } = require('../utils/crypto');
 
 class PatientService {
-  /**
-   * Get paginated list of patients with search
-   */
-  async getPatients({ page = 1, limit = 20, search = '', includeUser = true }) {
-    const offset = (page - 1) * limit;
 
+  // ---------- READ ----------
+  async getPatients({ page = 1, limit = 20, search = '', includeUser = true, actorId = null, req = null }) {
+    const offset = (page - 1) * limit;
     const where = {};
     if (search) {
+      // NOTE: with encryption, name search is exact-only via hash columns.
+      // patient_facility_code stays plaintext and supports LIKE.
       where[Op.or] = [
-        { first_name: { [Op.like]: `%${search}%` } },
-        { last_name: { [Op.like]: `%${search}%` } },
-        { contact_number: { [Op.like]: `%${search}%` } },
-        { patient_facility_code: { [Op.like]: `%${search}%` } }
+        { patient_facility_code: { [Op.like]: `%${search}%` } },
+        // add hash-based exact matches for name/contact if you want:
+        { first_name_hash: hmac(search) },
+        { last_name_hash: hmac(search) },
+        { contact_number_hash: hmac(search) }
       ];
     }
 
     const include = [];
     if (includeUser) {
-      include.push({
-        model: db.User,
-        as: 'User',
-        attributes: ['id', 'username', 'email']
-      });
+      include.push({ model: db.User, as: 'User', attributes: ['id', 'username', 'email'] });
     }
 
     const { count, rows } = await db.Patient.findAndCountAll({
-      where,
-      include,
-      limit,
-      offset,
+      where, include, limit, offset,
       order: [['created_at', 'DESC']]
     });
 
-    return {
-      items: rows,
-      total: count,
-      page,
-      totalPages: Math.ceil(count / limit)
-    };
-  }
-
-  /**
-   * Find patient by ID with optional includes
-   */
-  async getPatientById(id, includes = []) {
-    const defaultIncludes = [
-      {
-        model: db.User,
-        as: 'User',
-        attributes: ['id', 'username', 'email']
-      }
-    ];
-
-    const allIncludes = [...defaultIncludes, ...includes];
-
-    const patient = await db.Patient.findByPk(id, {
-      include: allIncludes
+    // Audit the read (no PII in old/new — just metadata)
+    audit.write({
+      userId: actorId,
+      action: 'LIST',
+      entityType: 'Patient',
+      metadata: { search, page, limit, resultCount: count },
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
     });
 
-    if (!patient) {
-      throw new Error('Patient not found');
-    }
-
-    return patient;
+    return { items: rows, total: count, page, totalPages: Math.ceil(count / limit) };
   }
 
-  /**
-   * Find patient by contact number
-   */
-  async getPatientByContact(contactNumber) {
-    return await db.Patient.findOne({
-      where: { contact_number: contactNumber }
-    });
-  }
-
-  /**
-   * Find patient by user ID
-   */
-  async getPatientByUserId(userId) {
-    return await db.Patient.findOne({
-      where: { user_id: userId },
-      include: [{
-        model: db.User,
-        as: 'User',
-        attributes: ['username', 'email']
-      }]
-    });
-  }
-
-  /**
-   * Search patients by name or contact
-   */
-  async searchPatients(query, limit = 10) {
-    return await db.Patient.findAll({
+  async searchPatients(query, limit = 10, actorId = null, req = null) {
+    const rows = await db.Patient.findAll({
       where: {
         [Op.or]: [
-          { first_name: { [Op.like]: `%${query}%` } },
-          { last_name: { [Op.like]: `%${query}%` } },
-          { contact_number: { [Op.like]: `%${query}%` } },
           { patient_facility_code: { [Op.like]: `%${query}%` } }
         ]
       },
-      include: [{
-        model: db.User,
-        as: 'User',
-        attributes: ['id', 'username', 'email']
-      }],
+      include: [{ model: db.User, as: 'User', attributes: ['id', 'username', 'email'] }],
       limit,
-      order: [['last_name', 'ASC']]
+      order: [['patient_facility_code', 'ASC']]
     });
+
+    audit.write({
+      userId: actorId,
+      action: 'SEARCH',
+      entityType: 'Patient',
+      metadata: { query, limit, resultCount: rows.length },
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
+
+    return rows;
   }
 
-  /**
-   * Create a new patient
-   */
-  async createPatient(patientData, userId = null) {
-    // Check if contact number already exists
-    const existing = await this.getPatientByContact(patientData.contact_number);
-    if (existing) {
-      throw new Error('Contact number already registered');
-    }
+  async getPatientById(id, includes = [], actorId = null, req = null) {
+    const defaultIncludes = [
+      { model: db.User, as: 'User', attributes: ['id', 'username', 'email'] }
+    ];
+    const patient = await db.Patient.findByPk(id, {
+      include: [...defaultIncludes, ...includes]
+    });
+    if (!patient) throw new Error('Patient not found');
 
-    // Create patient (code will be auto-generated by hook)
-    const patient = await db.Patient.create(patientData);
+    audit.write({
+      userId: actorId,
+      action: 'READ',
+      entityType: 'Patient',
+      entityId: id,
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
 
     return patient;
   }
 
-  /**
-   * Update a patient
-   */
-  async updatePatient(id, updates, userId = null, userRole = null) {
-    const patient = await this.getPatientById(id);
+  // ---------- CREATE ----------
+  async createPatient(patientData, userId = null, req = null) {
+    const existing = await this.getPatientByContact(patientData.contact_number);
+    if (existing) throw new Error('Contact number already registered');
 
-    // If patient user, restrict updatable fields
-    if (userRole === 'patient') {
-      const userPatient = await this.getPatientByUserId(userId);
-      if (!userPatient || userPatient.id !== patient.id) {
-        throw new Error('Access denied');
-      }
+    const patient = await db.Patient.create(patientData);
 
-      // Patients can update these fields - ADDED guardian fields
-      const allowedUpdates = [
-        'address',
-        'contact_number',
-        'emergency_contact',
-        'emergency_phone',
-        'guardian_name',      // ADD THIS
-        'guardian_contact'    // ADD THIS
-      ];
+    audit.write({
+      userId,
+      action: 'CREATE',
+      entityType: 'Patient',
+      entityId: patient.id,
+      newData: patient.toJSON(),   // sanitizer redacts PII
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
 
-      const filteredUpdates = {};
-      Object.keys(updates).forEach(key => {
-        if (allowedUpdates.includes(key)) {
-          // Allow null values to be set
-          filteredUpdates[key] = updates[key] === '' ? null : updates[key];
-        }
-      });
-      updates = filteredUpdates;
-    }
-
-    // Get old data for audit
-    const oldData = patient.toJSON();
-
-    // Update
-    await patient.update(updates);
-
-    return {
-      patient,
-      oldData
-    };
+    return patient;
   }
 
-  /**
-   * Delete a patient (soft delete or hard delete)
-   */
-  async deletePatient(id, hardDelete = false) {
+  // ---------- UPDATE ----------
+  async updatePatient(id, updates, userId = null, userRole = null, req = null) {
     const patient = await this.getPatientById(id);
+    const oldData = patient.toJSON();
+
+    if (userRole === 'patient') {
+      const userPatient = await this.getPatientByUserId(userId);
+      if (!userPatient || userPatient.id !== patient.id) throw new Error('Access denied');
+      const allowed = ['address', 'contact_number', 'emergency_contact',
+                       'emergency_phone', 'guardian_name', 'guardian_contact'];
+      const filtered = {};
+      Object.keys(updates).forEach(k => {
+        if (allowed.includes(k)) filtered[k] = updates[k] === '' ? null : updates[k];
+      });
+      updates = filtered;
+    }
+
+    await patient.update(updates);
+
+    audit.write({
+      userId,
+      action: 'UPDATE',
+      entityType: 'Patient',
+      entityId: patient.id,
+      oldData,
+      newData: patient.toJSON(),
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
+
+    return { patient, oldData };
+  }
+
+  // ---------- DELETE ----------
+  async deletePatient(id, hardDelete = false, userId = null, req = null) {
+    const patient = await this.getPatientById(id);
+    const oldData = patient.toJSON();
 
     if (hardDelete) {
       await patient.destroy({ force: true });
+      audit.write({
+        userId, action: 'DELETE', entityType: 'Patient', entityId: id,
+        oldData, ipAddress: req?.ip, userAgent: req?.get?.('User-Agent')
+      });
       return { deleted: true, hard: true };
-    } else {
-      // Soft delete - update status
-      await patient.update({ status: 'inactive' });
-      return { deleted: true, hard: false, status: 'inactive' };
-    }
-  }
-
-  /**
-   * Get patient history (all encounters)
-   */
-  async getPatientHistory(id, userId = null, userRole = null) {
-    // Check permissions
-    if (userRole === 'patient') {
-      const userPatient = await this.getPatientByUserId(userId);
-      if (!userPatient || userPatient.id !== parseInt(id)) {
-        throw new Error('Access denied');
-      }
     }
 
-    // Get testing encounters - Use 'User' as the alias, not 'Staff'
-    const testingEncounters = await db.TestingEncounter.findAll({
-      where: { patient_id: id },
-      include: [{
-        model: db.User,
-        attributes: ['id', 'username']
-      }],
-      order: [['created_at', 'DESC']]
+    await patient.update({ status: 'inactive' });
+    audit.write({
+      userId, action: 'SOFT_DELETE', entityType: 'Patient', entityId: id,
+      oldData, newData: { status: 'inactive' },
+      ipAddress: req?.ip, userAgent: req?.get?.('User-Agent')
     });
-
-    // Get treatment encounters - Use 'User' as the alias, not 'Staff'
-    const treatmentEncounters = await db.TreatmentEncounter.findAll({
-      where: { patient_id: id },
-      include: [{
-        model: db.User,
-        attributes: ['id', 'username']
-      }],
-      order: [['created_at', 'DESC']]
-    });
-
-    return {
-      testing: testingEncounters,
-      treatment: treatmentEncounters
-    };
+    return { deleted: true, hard: false, status: 'inactive' };
   }
 
-  /**
-   * Regenerate facility code for a patient
-   */
-  async regeneratePatientCode(id) {
+  // ---------- REGENERATE CODE ----------
+  async regeneratePatientCode(id, userId = null, req = null) {
     const patient = await this.getPatientById(id);
     const oldCode = patient.patient_facility_code;
     const newCode = await patient.regenerateFacilityCode();
     await patient.save();
 
-    return {
-      patient,
-      oldCode,
-      newCode
-    };
-  }
-
-  /**
-   * Validate a facility code
-   */
-  validateCode(code) {
-    return patientCodeService.validateFacilityCode(code);
-  }
-
-  /**
-   * Parse a facility code
-   */
-  parseCode(code) {
-    return patientCodeService.parseFacilityCode(code);
-  }
-
-  /**
-   * Bulk generate codes
-   */
-  async bulkGenerateCodes(patients) {
-    return await patientCodeService.bulkGenerateCodes(patients);
-  }
-
-  /**
-   * Get patient statistics
-   */
-  async getPatientStats() {
-    const total = await db.Patient.count();
-    const byStatus = await db.Patient.findAll({
-      attributes: [
-        'status',
-        [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
-      ],
-      group: ['status']
+    audit.write({
+      userId, action: 'REGENERATE_CODE', entityType: 'FacilityCode',
+      entityId: id,
+      oldData: { patient_facility_code: oldCode },
+      newData: { patient_facility_code: newCode },
+      ipAddress: req?.ip, userAgent: req?.get?.('User-Agent')
     });
 
-    const byGender = await db.Patient.findAll({
-      attributes: [
-        'gender',
-        [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
-      ],
-      group: ['gender']
-    });
-
-    const today = new Date().toISOString().split('T')[0];
-    const registeredToday = await db.Patient.count({
-      where: {
-        created_at: {
-          [Op.gte]: new Date(today)
-        }
-      }
-    });
-
-    return {
-      total,
-      registeredToday,
-      byStatus: byStatus.map(item => ({
-        status: item.status,
-        count: parseInt(item.get('count'))
-      })),
-      byGender: byGender.map(item => ({
-        gender: item.gender,
-        count: parseInt(item.get('count'))
-      }))
-    };
+    return { patient, oldCode, newCode };
   }
 }
 

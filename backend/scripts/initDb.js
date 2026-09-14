@@ -12,7 +12,7 @@ class DatabaseInitializer {
       users: [],
       patients: [],
       settings: [],
-      appointmentSettings: [], // New
+      appointmentSettings: [],
       appointments: [],
       refreshTokens: [],
       transactionTypes: []
@@ -448,7 +448,7 @@ class DatabaseInitializer {
         address: '789 Osmeña Blvd, Cebu City',
         status: 'treatment',
         emergency_contact: 'Ana Reyes',
-        emergency_phone: '09175678902',
+        emergency_phone: '09175678987',
         enrollment_date: `${currentYear - 3}-06-20`,
         treatment_transition_date: `${currentYear - 3}-07-15`,
         user: {
@@ -526,7 +526,7 @@ class DatabaseInitializer {
         last_name: 'Aquino',
         birth_date: '1975-11-30',
         gender: 'Male',
-        contact_number: '09175678901',
+        contact_number: '09187141520',
         address: '123 Mabini St, Batangas',
         status: 'treatment',
         emergency_contact: 'Linda Aquino',
@@ -613,218 +613,6 @@ class DatabaseInitializer {
       }
     }
     console.log(`✓ Created ${createdCount} patients`);
-  }
-
-  async createTestingEncounters() {
-    console.log('\nCreating testing encounters...');
-    
-    const patients = await db.Patient.findAll({
-      where: { status: 'testing' },
-      include: [{ model: db.User, as: 'User' }]
-    });
-
-    const staff = await db.User.findOne({
-      where: {
-        office: 'testing',
-        role: 'staff'
-      }
-    });
-
-    if (!staff) {
-      console.log('  ⚠️ No testing staff found, skipping testing encounters');
-      return;
-    }
-
-    const encounters = [
-      {
-        patient: patients.find(p => p.first_name === 'Maria'),
-        result: 'negative',
-        pretest_notes: 'Patient educated about HIV transmission and prevention. Consent obtained.',
-        posttest_notes: 'Negative result explained. Discussed window period and need for repeat testing in 3 months.'
-      },
-      {
-        patient: patients.find(p => p.first_name === 'Ana'),
-        result: 'positive',
-        pretest_notes: 'Comprehensive pre-test counseling provided. Patient understands implications of testing.',
-        posttest_notes: 'Positive result disclosed with empathy. Immediate referral to treatment office arranged. Emotional support provided.'
-      },
-      {
-        patient: patients.find(p => p.first_name === 'Kristine'),
-        result: 'indeterminate',
-        pretest_notes: 'Counseling provided to minor with guardian present.',
-        posttest_notes: 'Indeterminate result explained. Scheduled for repeat testing in 2 weeks.'
-      }
-    ];
-
-    let createdCount = 0;
-    for (const enc of encounters) {
-      if (!enc.patient) continue;
-
-      const encounter = await db.TestingEncounter.create({
-        patient_id: enc.patient.id,
-        staff_id: staff.id,
-        pretest_counseling: {
-          conducted: true,
-          notes: enc.pretest_notes,
-          checklist: [
-            'Explained HIV and AIDS basics',
-            'Discussed modes of transmission',
-            'Explained testing procedure',
-            'Discussed window period',
-            'Explained confidentiality',
-            'Discussed possible outcomes',
-            'Obtained verbal consent'
-          ]
-        },
-        hiv_test: {
-          result: enc.result,
-          kit_lot_number: `HIV-KIT-2024-${Math.floor(Math.random() * 1000)}`,
-          tested_by: staff.username,
-          test_date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString()
-        },
-        posttest_counseling: {
-          conducted: true,
-          notes: enc.posttest_notes,
-          checklist: [
-            'Explained result meaning',
-            'Discussed prevention methods',
-            'Provided risk reduction counseling',
-            'Addressed questions and concerns',
-            'Discussed partner notification',
-            'Scheduled follow-up'
-          ]
-        },
-        referral: {
-          referred_to_treatment: enc.result === 'positive',
-          reason: enc.result === 'positive' ? 'Positive HIV test result' : null,
-          referred_at: enc.result === 'positive' ? new Date().toISOString() : null
-        }
-      });
-
-      createdCount++;
-      if (enc.result === 'positive') {
-        await enc.patient.update({ status: 'treatment' });
-        console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result}) - Referred to treatment`);
-      } else {
-        console.log(`  ✓ Created testing encounter for ${enc.patient.first_name} ${enc.patient.last_name} (${enc.result})`);
-      }
-    }
-    console.log(`✓ Created ${createdCount} testing encounters`);
-  }
-
-  async createTreatmentEncounters() {
-    console.log('\nCreating treatment encounters...');
-    
-    const patients = await db.Patient.findAll({
-      where: { status: 'treatment' },
-      include: [{ model: db.User, as: 'User' }]
-    });
-
-    const staff = await db.User.findOne({
-      where: {
-        office: 'treatment',
-        role: 'staff'
-      }
-    });
-
-    if (!staff) {
-      console.log('  ⚠️ No treatment staff found, skipping treatment encounters');
-      return;
-    }
-
-    const encounters = [
-      {
-        patient: patients.find(p => p.first_name === 'Juan'),
-        art_regimen: 'TDF/3TC/DTG',
-        cd4: 650,
-        viral_load: 'Undetectable',
-        adherence_rate: 100,
-        next_appointment_days: 90
-      },
-      {
-        patient: patients.find(p => p.first_name === 'Jose'),
-        art_regimen: 'AZT/3TC/NVP',
-        cd4: 420,
-        viral_load: '1500',
-        adherence_rate: 95,
-        next_appointment_days: 60
-      },
-      {
-        patient: patients.find(p => p.first_name === 'Michael'),
-        art_regimen: 'TDF/3TC/EFV',
-        cd4: 580,
-        viral_load: 'Undetectable',
-        adherence_rate: 98,
-        next_appointment_days: 90
-      },
-      {
-        patient: patients.find(p => p.first_name === 'Roberto'),
-        art_regimen: 'TDF/3TC/DTG',
-        cd4: 380,
-        viral_load: '2500',
-        adherence_rate: 85,
-        next_appointment_days: 30
-      },
-      {
-        patient: patients.find(p => p.first_name === 'Carmen'),
-        art_regimen: 'ABC/3TC/DTG',
-        cd4: 510,
-        viral_load: 'Undetectable',
-        adherence_rate: 100,
-        next_appointment_days: 90
-      }
-    ];
-
-    let createdCount = 0;
-    for (const enc of encounters) {
-      if (!enc.patient) continue;
-
-      const encounter = await db.TreatmentEncounter.create({
-        patient_id: enc.patient.id,
-        staff_id: staff.id,
-        consultation_notes: {
-          subjective: `Patient reports feeling well. No complaints of side effects. Adherence to ART is ${enc.adherence_rate}%.`,
-          objective: `Vital signs stable. No signs of opportunistic infections. Weight stable.`,
-          assessment: `HIV well-controlled on ${enc.art_regimen}. CD4 count ${enc.cd4}. VL ${enc.viral_load}.`,
-          plan: `Continue current ART regimen. Follow-up in ${enc.next_appointment_days} days with repeat CD4 and VL.`
-        },
-        art_prescription: {
-          medication_name: enc.art_regimen,
-          dosage: '1 tablet',
-          frequency: 'Once daily',
-          quantity: `${enc.next_appointment_days} tablets`,
-          refill_date: new Date(Date.now() + enc.next_appointment_days * 24 * 60 * 60 * 1000),
-          prescribed_by: staff.username
-        },
-        lab_results: [
-          {
-            type: 'CD4',
-            value: enc.cd4,
-            unit: 'cells/mm³',
-            date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-            notes: enc.cd4 > 500 ? 'Good immune function' : 'Monitor closely'
-          },
-          {
-            type: 'viral_load',
-            value: enc.viral_load,
-            unit: 'copies/mL',
-            date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-            notes: enc.viral_load === 'Undetectable' ? 'Excellent viral suppression' : 'Viral load detectable, monitor adherence'
-          }
-        ],
-        adherence: {
-          missed_doses_last_30_days: enc.adherence_rate < 95,
-          missed_dose_count: Math.floor((100 - enc.adherence_rate) / 100 * 30),
-          notes: enc.adherence_rate < 95 ? 'Discussed barriers to adherence. Referred to adherence counselor.' : 'Good adherence reported.'
-        },
-        next_appointment_date: new Date(Date.now() + enc.next_appointment_days * 24 * 60 * 60 * 1000)
-      });
-
-      createdCount++;
-      console.log(`  ✓ Created treatment encounter for ${enc.patient.first_name} ${enc.patient.last_name}`);
-      console.log(`    → ART Regimen: ${enc.art_regimen}, CD4: ${enc.cd4}, VL: ${enc.viral_load}`);
-    }
-    console.log(`✓ Created ${createdCount} treatment encounters`);
   }
 
   async createTransactionTypes() {
@@ -1207,12 +995,6 @@ class DatabaseInitializer {
 
       console.log('\nCreating refresh tokens...');
       await this.createRefreshTokens();
-
-      console.log('\nCreating testing encounters...');
-      await this.createTestingEncounters();
-
-      console.log('\nCreating treatment encounters...');
-      await this.createTreatmentEncounters();
 
       console.log('\nCreating appointments...');
       await this.createAppointments();
