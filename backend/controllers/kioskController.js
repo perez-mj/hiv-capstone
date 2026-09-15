@@ -41,7 +41,7 @@ class KioskController {
 
       if (err.message.includes('not found')) {
         statusCode = 404;
-      } else if (err.message.includes('already checked in')) {
+      } else if (err.message.includes('already in queue')) {
         statusCode = 409;
       } else if (err.message.includes('transaction')) {
         statusCode = 500;

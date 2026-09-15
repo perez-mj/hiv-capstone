@@ -37,7 +37,7 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     status: {
-      type: DataTypes.ENUM('pending', 'checked-in', 'completed', 'cancelled', 'no-show'),
+      type: DataTypes.ENUM('pending', 'queued', 'completed', 'cancelled', 'no-show'),
       defaultValue: 'pending'
     },
     queue_number: {
@@ -52,7 +52,7 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true
     },
-    checked_in_at: {
+    queued_at: {
       type: DataTypes.DATE,
       allowNull: true
     },

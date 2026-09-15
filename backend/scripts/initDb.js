@@ -813,7 +813,7 @@ class DatabaseInitializer {
             if (date < today) {
               status = Math.random() > 0.3 ? 'completed' : 'cancelled';
             } else if (date.getTime() === today.getTime()) {
-              status = Math.random() > 0.5 ? 'pending' : 'checked-in';
+              status = Math.random() > 0.5 ? 'pending' : 'queued';
             }
             
             // Create the appointment
@@ -825,7 +825,7 @@ class DatabaseInitializer {
               time_slot: timeSlot,
               status: status,
               notes: `Seeded appointment for ${patient.first_name} ${patient.last_name}`,
-              checked_in_at: status === 'checked-in' ? new Date() : null,
+              queued_at: status === 'queued' ? new Date() : null,
               completed_at: status === 'completed' ? new Date(date.getTime() + 3600000) : null
             });
 

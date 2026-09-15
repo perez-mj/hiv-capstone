@@ -40,7 +40,7 @@ class KioskService {
       throw new Error('No pending appointment found for today.');
     }
 
-    // Check if patient already checked in
+    // Check if patient already queued
     const existingQueue = await db.QueueEntry.findOne({
       where: {
         patient_id: patient.id,
@@ -61,7 +61,7 @@ class KioskService {
     });
 
     if (existingQueue) {
-      throw new Error('Patient is already checked in.');
+      throw new Error('Patient is already in queue.');
     }
 
     // Use transaction for all operations
@@ -116,7 +116,7 @@ class KioskService {
       // Update appointment with queue number
       await appointment.update({
         queue_number: queueEntry.queue_number,
-        status: 'checked-in'
+        status: 'queued'
       }, { transaction });
 
       return {

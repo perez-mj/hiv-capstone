@@ -247,7 +247,7 @@ const transactionTypeController = {
         const activeAppointments = await Appointment.count({
           where: {
             transaction_type_id: id,
-            status: ['pending', 'checked-in']
+            status: ['pending', 'queued']
           }
         });
         

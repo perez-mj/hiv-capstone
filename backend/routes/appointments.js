@@ -431,8 +431,8 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
     }
     
     const oldData = appointment.toJSON();
-    appointment.status = 'checked-in';
-    appointment.checked_in_at = new Date();
+    appointment.status = 'queued';
+    appointment.queued_at = new Date();
     await appointment.save();
     
     // Add to queue - FIXED: Use the office from appointment with proper date
