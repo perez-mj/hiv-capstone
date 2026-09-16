@@ -18,11 +18,11 @@ module.exports = (sequelize) => {
 
     // ---------- ENCRYPTED PII ----------
     first_name: {
-      type: DataTypes.TEXT,        // ciphertext is longer than plaintext
+      type: DataTypes.TEXT,
       allowNull: false,
       set(value) {
         this.setDataValue('first_name', encrypt(value));
-        this.setDataValue('first_name_hash', hmac(value)); // for exact search
+        this.setDataValue('first_name_hash', hmac(value));
       },
       get() { return decrypt(this.getDataValue('first_name')); }
     },
@@ -63,7 +63,7 @@ module.exports = (sequelize) => {
     },
 
     birth_date: {
-      type: DataTypes.TEXT,        // encrypted string
+      type: DataTypes.TEXT,
       allowNull: false,
       set(value) {
         this.setDataValue('birth_date', encrypt(value));
@@ -92,7 +92,6 @@ module.exports = (sequelize) => {
       index: true
     },
 
-    // contact_number was UNIQUE — now unique on hash instead
     contact_number: {
       type: DataTypes.TEXT,
       allowNull: false,
@@ -116,7 +115,6 @@ module.exports = (sequelize) => {
       get() { return decrypt(this.getDataValue('address')); }
     },
 
-    // ---------- HIV STATUS (sensitive) ----------
     status: {
       type: DataTypes.TEXT,
       defaultValue: encrypt('testing'),
@@ -132,9 +130,6 @@ module.exports = (sequelize) => {
       index: true
     },
 
-    // ---------- FACILITY CODE — PLAINTEXT (Option 1) ----------
-    // Contains PR/P + year + initials + counter. Searchable, sortable, groupable.
-    // Protected by RBAC + audit + TDE at rest.
     patient_facility_code: {
       type: DataTypes.STRING(50),
       allowNull: false,
@@ -142,7 +137,6 @@ module.exports = (sequelize) => {
       index: true
     },
 
-    // ---------- EMERGENCY / GUARDIAN (encrypted) ----------
     emergency_contact: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -176,9 +170,8 @@ module.exports = (sequelize) => {
       get() { return decrypt(this.getDataValue('guardian_contact')); }
     },
 
-    // ---------- DATES ----------
     enrollment_date: {
-      type: DataTypes.DATEONLY,     // keep plaintext — used for reporting
+      type: DataTypes.DATEONLY,
       allowNull: false,
       defaultValue: DataTypes.NOW
     },
@@ -193,15 +186,18 @@ module.exports = (sequelize) => {
   });
 
   // ---------- HOOKS ----------
-  Patient.beforeCreate(async (patient) => {
+  // NOTE: must be beforeValidate (NOT beforeCreate) so notNull validation passes.
+  Patient.beforeValidate(async (patient) => {
     if (!patient.enrollment_date) {
       patient.enrollment_date = new Date().toISOString().split('T')[0];
     }
-    try {
-      if (!patient.first_name || !patient.last_name) {
-        throw new Error('First name and last name are required');
-      }
-      if (!patient.patient_facility_code) {
+
+    // Only generate on create (not on every update)
+    if (patient.isNewRecord && !patient.patient_facility_code) {
+      try {
+        if (!patient.first_name || !patient.last_name) {
+          throw new Error('First name and last name are required');
+        }
         patient.patient_facility_code = await patientCodeService.generateFacilityCode({
           first_name: patient.first_name,
           middle_name: patient.middle_name || '',
@@ -210,11 +206,11 @@ module.exports = (sequelize) => {
           enrollment_date: patient.enrollment_date,
           treatment_transition_date: patient.treatment_transition_date
         });
+      } catch (error) {
+        console.error('Error generating patient facility code:', error);
+        const timestamp = Date.now().toString().slice(-6);
+        patient.patient_facility_code = `ERR-${timestamp}`;
       }
-    } catch (error) {
-      console.error('Error generating patient facility code:', error);
-      const timestamp = Date.now().toString().slice(-6);
-      patient.patient_facility_code = `ERR-${timestamp}`;
     }
   });
 
@@ -263,7 +259,6 @@ module.exports = (sequelize) => {
   };
 
   // ---------- SERIALIZATION ----------
-  // Hide ciphertext + hash columns from API responses by default.
   Patient.prototype.toJSON = function() {
     const values = { ...this.get() };
     const hidden = [

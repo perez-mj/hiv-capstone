@@ -16,7 +16,6 @@ class PatientService {
       // patient_facility_code stays plaintext and supports LIKE.
       where[Op.or] = [
         { patient_facility_code: { [Op.like]: `%${search}%` } },
-        // add hash-based exact matches for name/contact if you want:
         { first_name_hash: hmac(search) },
         { last_name_hash: hmac(search) },
         { contact_number_hash: hmac(search) }
@@ -33,7 +32,6 @@ class PatientService {
       order: [['created_at', 'DESC']]
     });
 
-    // Audit the read (no PII in old/new — just metadata)
     audit.write({
       userId: actorId,
       action: 'LIST',
@@ -91,25 +89,145 @@ class PatientService {
     return patient;
   }
 
-  // ---------- CREATE ----------
-  async createPatient(patientData, userId = null, req = null) {
-    const existing = await this.getPatientByContact(patientData.contact_number);
-    if (existing) throw new Error('Contact number already registered');
+  async getPatientByContact(contactNumber) {
+    if (!contactNumber) return null;
+    return db.Patient.findOne({
+      where: { contact_number_hash: hmac(contactNumber) }
+    });
+  }
 
-    const patient = await db.Patient.create(patientData);
+  async getPatientByUserId(userId) {
+    if (!userId) return null;
+    return db.Patient.findOne({ where: { user_id: userId } });
+  }
+
+  async getPatientHistory(id, actorId = null, actorRole = null, req = null) {
+    if (actorRole === 'patient') {
+      const userPatient = await this.getPatientByUserId(actorId);
+      if (!userPatient || userPatient.id !== parseInt(id)) {
+        throw new Error('Access denied');
+      }
+    }
+
+    const patient = await db.Patient.findByPk(id, {
+      include: [
+        {
+          model: db.Appointment,
+          as: 'Appointments',
+          order: [['appointment_date', 'DESC']]
+        }
+      ]
+    });
+
+    if (!patient) throw new Error('Patient not found');
 
     audit.write({
-      userId,
-      action: 'CREATE',
+      userId: actorId,
+      action: 'READ_HISTORY',
       entityType: 'Patient',
-      entityId: patient.id,
-      newData: patient.toJSON(),   // sanitizer redacts PII
+      entityId: id,
       ipAddress: req?.ip,
       userAgent: req?.get?.('User-Agent')
     });
 
     return patient;
   }
+
+  async getPatientStats(actorId = null, req = null) {
+    const total = await db.Patient.count();
+    const active = await db.Patient.count({ where: { status: 'active' } });
+    const inactive = await db.Patient.count({ where: { status: 'inactive' } });
+
+    audit.write({
+      userId: actorId,
+      action: 'STATS',
+      entityType: 'Patient',
+      metadata: { total, active, inactive },
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
+
+    return { total, active, inactive };
+  }
+
+  // ---------- CREATE ----------
+  // ---------- CREATE ----------
+async createPatient(patientData, userId = null, req = null) {
+  const {
+    create_portal_account,
+    username,
+    email,
+    password,
+    confirmPassword,   // ignore — validated on frontend
+    ...patientFields
+  } = patientData;
+
+  // Duplicate contact check (outside txn is fine; hash is deterministic)
+  const existing = await this.getPatientByContact(patientFields.contact_number);
+  if (existing) throw new Error('Contact number already registered');
+
+  // Pre-validate portal fields before hitting the DB
+  if (create_portal_account) {
+    if (!username || !email || !password) {
+      throw new Error('Username, email, and password are required for portal account');
+    }
+    if (password.length < 8) {
+      throw new Error('Password must be at least 8 characters');
+    }
+  }
+
+  let patient;
+  let user = null;
+
+  try {
+    await db.sequelize.transaction(async (t) => {
+      if (create_portal_account) {
+        // User.beforeCreate hook hashes password_hash automatically
+        user = await db.User.create(
+          {
+            username,
+            email,
+            password_hash: password,
+            role: 'patient',
+            is_active: true
+          },
+          { transaction: t }
+        );
+      }
+
+      patient = await db.Patient.create(
+        {
+          ...patientFields,
+          user_id: user ? user.id : null
+        },
+        { transaction: t }
+      );
+    });
+  } catch (err) {
+    // Translate unique constraint violations into friendly messages
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      const field = err.errors?.[0]?.path;
+      if (field === 'username') throw new Error('Username already taken');
+      if (field === 'email')    throw new Error('Email already registered');
+      if (field === 'contact_number_hash')
+        throw new Error('Contact number already registered');
+    }
+    throw err;
+  }
+
+  audit.write({
+    userId,
+    action: 'CREATE',
+    entityType: 'Patient',
+    entityId: patient.id,
+    newData: patient.toJSON(),
+    metadata: user ? { portal_user_id: user.id } : undefined,
+    ipAddress: req?.ip,
+    userAgent: req?.get?.('User-Agent')
+  });
+
+  return patient;
+}
 
   // ---------- UPDATE ----------
   async updatePatient(id, updates, userId = null, userRole = null, req = null) {
@@ -120,7 +238,7 @@ class PatientService {
       const userPatient = await this.getPatientByUserId(userId);
       if (!userPatient || userPatient.id !== patient.id) throw new Error('Access denied');
       const allowed = ['address', 'contact_number', 'emergency_contact',
-                       'emergency_phone', 'guardian_name', 'guardian_contact'];
+        'emergency_phone', 'guardian_name', 'guardian_contact'];
       const filtered = {};
       Object.keys(updates).forEach(k => {
         if (allowed.includes(k)) filtered[k] = updates[k] === '' ? null : updates[k];
@@ -183,6 +301,34 @@ class PatientService {
     });
 
     return { patient, oldCode, newCode };
+  }
+
+  // ---------- CODE HELPERS ----------
+  validateCode(code) {
+    if (typeof patientCodeService.validateFacilityCode === 'function') {
+      return patientCodeService.validateFacilityCode(code);
+    }
+    return /^[A-Z0-9-]+$/.test(code);
+  }
+
+  parseCode(code) {
+    if (typeof patientCodeService.parseFacilityCode === 'function') {
+      return patientCodeService.parseFacilityCode(code);
+    }
+    return null;
+  }
+
+  async bulkGenerateCodes(patients, actorId = null, req = null) {
+    const results = await patientCodeService.bulkGenerateCodes(patients);
+    audit.write({
+      userId: actorId,
+      action: 'BULK_GENERATE_CODES',
+      entityType: 'FacilityCode',
+      metadata: { count: results.length },
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
+    return results;
   }
 }
 

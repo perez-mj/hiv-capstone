@@ -325,7 +325,6 @@ const menuItems = computed(() => {
     items.push(
       { title: 'Patients', icon: 'mdi-account-multiple', to: '/patients' },
       { title: 'Appointments', icon: 'mdi-calendar', to: '/appointments' },
-      { title: 'Reports', icon: 'mdi-chart-bar', to: '/reports' }
     )
   }
   
@@ -346,10 +345,10 @@ const menuItems = computed(() => {
 const adminItems = [
   { title: 'Admin Dashboard', icon: 'mdi-chart-line', to: '/admin' },
   { title: 'User Management', icon: 'mdi-account-group', to: '/admin/users' },
-  { title: 'System Settings', icon: 'mdi-cog', to: '/admin/settings' },
+  // { title: 'System Settings', icon: 'mdi-cog', to: '/admin/settings' },
   { title: 'Audit Logs', icon: 'mdi-history', to: '/admin/audit-logs' },
   { title: 'Blockchain', icon: 'mdi-shield-key', to: '/admin/blockchain' },
-  { title: 'Backup & Restore', icon: 'mdi-backup-restore', to: '/admin/backup' },
+  // { title: 'Backup & Restore', icon: 'mdi-backup-restore', to: '/admin/backup' },
 ]
 
 // Methods

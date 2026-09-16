@@ -1,3 +1,4 @@
+// backend/config/blockchain.js
 require('dotenv').config();
 module.exports = {
   host: process.env.BLOCKCHAIN_HOST || 'localhost',

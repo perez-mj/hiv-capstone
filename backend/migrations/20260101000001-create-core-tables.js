@@ -68,7 +68,7 @@ module.exports = {
       guardian_name:    { type: S.TEXT, allowNull: true },
       guardian_contact: { type: S.TEXT, allowNull: true },
 
-      enrollment_date:           { type: S.DATEONLY, allowNull: false, defaultValue: S.literal('CURRENT_TIMESTAMP') },
+      enrollment_date:           { type: S.DATEONLY, allowNull: false },
       treatment_transition_date: { type: S.DATEONLY, allowNull: true },
 
       ...ts,
@@ -141,9 +141,10 @@ module.exports = {
     // Partial unique index on office WHERE office IS NOT NULL — DB-specific.
     // MySQL 8+:
     if (queryInterface.sequelize.getDialect() === 'mysql') {
-      await queryInterface.sequelize.query(
-        "CREATE UNIQUE INDEX unique_office_settings ON appointment_settings (office) WHERE office IS NOT NULL"
-      );
+      await queryInterface.addIndex('appointment_settings', ['office'], {
+  name: 'unique_office_settings',
+  unique: true,
+});
     } else {
       await queryInterface.addIndex('appointment_settings', ['office'], {
         name: 'unique_office_settings',
