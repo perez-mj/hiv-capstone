@@ -18,11 +18,13 @@ module.exports = {
   development: { ...base, logging: console.log },
   test: { ...base, logging: false },
   production: {
-    ...base,
-    logging: false,
-    dialectOptions:
-      process.env.DB_SSL === 'true'
-        ? { ssl: { rejectUnauthorized: true } }
-        : {},
+  ...base,
+  logging: false,
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false, 
+    },
   },
+},
 };
