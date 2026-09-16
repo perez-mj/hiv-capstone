@@ -1,16 +1,17 @@
 {
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "dev:init": "node scripts/initDb.js",
-    "migrate": "sequelize-cli db:migrate",
-    "migrate:status": "sequelize-cli db:migrate:status",
-    "migrate:undo": "sequelize-cli db:migrate:undo",
-
-    "migrate:undo:all": "sequelize-cli db:migrate:undo:all",
-    "migrate:prod": "sequelize-cli db:migrate --env production",
-    "seed:prod": "sequelize-cli db:seed --seed 20260101000001-prod-essentials.js --env production"
-  },
+  "start": "node server.js",
+  "dev": "nodemon server.js",
+  "dev:init": "node scripts/initDb.js",
+  "db:drop": "node scripts/dropDb.js",
+  "db:status":" node scripts/dbStatus.js",
+  "migrate": "sequelize-cli db:migrate",
+  "migrate:status": "sequelize-cli db:migrate:status",
+  "migrate:undo": "sequelize-cli db:migrate:undo",
+  "migrate:undo:all": "sequelize-cli db:migrate:undo:all",
+  "migrate:prod": "sequelize-cli db:migrate --env production",
+  "seed:prod": "sequelize-cli db:seed --seed 20260101000001-prod-essentials.js --env production"
+},
   "dependencies": {
     "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",
