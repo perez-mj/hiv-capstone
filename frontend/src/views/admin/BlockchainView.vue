@@ -398,17 +398,21 @@ const showSnackbar = (message, color = 'success') => {
 /** Decode a hex-encoded JSON stream item, tolerant of failures. */
 const decodeStreamItem = (raw) => {
   try {
-    const hex = raw.data;
-    const json = JSON.parse(
-      Buffer
-        ? Buffer.from(hex, 'hex').toString('utf8') // Node fallback (shouldn't run in browser)
-        : atob(hex).split('').map(c => c.charCodeAt(0)).reduce(
-            (acc, b, i) => i === 0 ? String.fromCharCode(b) : acc + String.fromCharCode(b),
-            ''
-          )
+    const hex = raw?.data;
+
+    if (!hex || typeof hex !== 'string') {
+      return null;
+    }
+
+    const bytes = new Uint8Array(
+      hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
     );
-    return json;
-  } catch {
+
+    const json = new TextDecoder('utf-8').decode(bytes);
+
+    return JSON.parse(json);
+  } catch (e) {
+    console.error('Failed to decode stream item:', e);
     return null;
   }
 };
