@@ -1,0 +1,23 @@
+services:
+  multichain-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.multichain
+    restart: unless-stopped
+    volumes:
+      - multichain-data:/root/.multichain
+    environment:
+      - BLOCKCHAIN_CHAIN=${BLOCKCHAIN_CHAIN}
+      - BLOCKCHAIN_PORT=${BLOCKCHAIN_PORT}
+      - BLOCKCHAIN_RPC_PORT=${BLOCKCHAIN_RPC_PORT}
+      - BLOCKCHAIN_RPC_USER=${BLOCKCHAIN_RPC_USER}
+      - BLOCKCHAIN_RPC_PASSWORD=${BLOCKCHAIN_RPC_PASSWORD}
+    networks:
+      - dokploy-network
+
+volumes:
+  multichain-data:
+
+networks:
+  dokploy-network:
+    external: true
