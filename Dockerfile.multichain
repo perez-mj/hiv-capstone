@@ -1,0 +1,23 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    curl wget tar \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and install MultiChain binaries
+RUN wget https://www.multichain.com/download/multichain-2.3.3.tar.gz && \
+    tar -xvzf multichain-2.3.3.tar.gz && \
+    mv multichain-2.3.3/multichaind multichain-2.3.3/multichain-cli multichain-2.3.3/multichain-util /usr/local/bin/ && \
+    rm -rf multichain-2.3.3*
+
+# Data directory mount point
+VOLUME /root/.multichain
+
+# P2P and RPC ports
+EXPOSE 6820 6821
+
+# Entrypoint: initialize if needed, then run multichaind in foreground
+COPY scripts/multichain-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
