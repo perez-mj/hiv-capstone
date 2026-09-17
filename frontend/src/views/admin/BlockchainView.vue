@@ -395,24 +395,45 @@ const showSnackbar = (message, color = 'success') => {
   snackbar.value = { show: true, message, color };
 };
 
-/** Decode a hex-encoded JSON stream item, tolerant of failures. */
+/**
+ * Safely decode a MultiChain stream item's `data` field.
+ *
+ * Returns the parsed object, or null if the item isn't a JSON payload we
+ * recognize. Never throws and never logs per-item (non-JSON items are
+ * expected in streams that also carry raw binary data).
+ */
 const decodeStreamItem = (raw) => {
+  if (!raw) return null;
+
+  const { data } = raw;
+
+  // Already-decoded object (future-proofing)
+  if (data && typeof data === 'object') return data;
+
+  if (typeof data !== 'string' || data.length === 0) return null;
+  if (data.length % 2 !== 0) return null;
+  if (!/^[0-9a-f]+$/i.test(data)) return null;
+
+  let text;
   try {
-    const hex = raw?.data;
-
-    if (!hex || typeof hex !== 'string') {
-      return null;
+    const bytes = new Uint8Array(data.length / 2);
+    for (let i = 0; i < data.length; i += 2) {
+      bytes[i / 2] = parseInt(data.slice(i, i + 2), 16);
     }
+    text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  } catch {
+    return null;
+  }
 
-    const bytes = new Uint8Array(
-      hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
-    );
+  // Our anchors are always JSON objects — skip anything else silently.
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith('{')) return null;
 
-    const json = new TextDecoder('utf-8').decode(bytes);
-
-    return JSON.parse(json);
-  } catch (e) {
-    console.error('Failed to decode stream item:', e);
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
     return null;
   }
 };
@@ -435,26 +456,32 @@ const loadStatus = async () => {
 const loadRecentItems = async () => {
   loadingItems.value = true;
   try {
-    // Backend returns raw MultiChain items (verbose). We normalize below.
     const { data } = await api.get('/blockchain/items', {
       params: { count: 20, verbose: true }
     });
 
-    const list = Array.isArray(data) ? data : [];
-    recentItems.value = list.map((raw) => {
-      const decoded = decodeStreamItem(raw) || {};
-      return {
-        txid:          raw.txid,
-        key:           raw.key,
-        type:          decoded.type || null,
-        entityId:      decoded.entity_id ?? null,
-        ts:            decoded.ts || (raw.blocktime ? new Date(raw.blocktime * 1000).toISOString() : null),
-        payloadHash:   decoded.payload_hash || null,
-        actorId:       decoded.actor_id ?? null,
-        confirmations: raw.confirmations ?? 0,
-        _raw:          raw
-      };
-    });
+    // tolerate bare array, {items:[]}, {data:[]}, {result:[]}
+    const list = Array.isArray(data)
+      ? data
+      : data?.items || data?.data || data?.result || [];
+
+    recentItems.value = list
+      .map((raw) => {
+        const decoded = decodeStreamItem(raw);
+        if (!decoded) return null;
+        return {
+          txid:          raw.txid,
+          key:           raw.key ?? raw.keys?.[0] ?? null,
+          type:          decoded.type || null,
+          entityId:      decoded.entity_id ?? null,
+          ts:            decoded.ts || (raw.blocktime ? new Date(raw.blocktime * 1000).toISOString() : null),
+          payloadHash:   decoded.payload_hash || null,
+          actorId:       decoded.actor_id ?? null,
+          confirmations: raw.confirmations ?? 0,
+          _raw:          raw
+        };
+      })
+      .filter(Boolean);
   } catch (e) {
     showSnackbar('Failed to load recent items', 'error');
     recentItems.value = [];
@@ -472,7 +499,16 @@ const verifyRecord = async () => {
   try {
     const { data } = await api.get(`/blockchain/verify/${verifyForm.value.txid}`);
     verificationResult.value = data;
-    showSnackbar('Verification completed');
+
+    if (!data.found) {
+      showSnackbar('TxID not found on chain', 'warning');
+    } else if (data.matches === false) {
+      showSnackbar('⚠ Hash mismatch — record modified', 'error');
+    } else if (data.matches === true) {
+      showSnackbar('Verified against blockchain');
+    } else {
+      showSnackbar('Fetched on-chain record');
+    }
   } catch (e) {
     if (e?.response?.status === 404) {
       verificationResult.value = null;
@@ -493,12 +529,6 @@ const verifyByTxid = (txid) => {
 // ---------------------------------------------------------------------------
 // Scan recent activity
 // ---------------------------------------------------------------------------
-/**
- * Walks the last N on-chain items and reports any whose `payload_hash` is
- * missing or malformed. Since we can't recompute the hash without the original
- * DB payload, the scan reports structural integrity — mismatches against the
- * DB are the job of `verify()` on a per-txid basis.
- */
 const scanRecentActivity = async () => {
   scanning.value = true;
   scanResult.value = null;
@@ -506,21 +536,19 @@ const scanRecentActivity = async () => {
     const { data } = await api.get('/blockchain/items', {
       params: { count: 50, verbose: true }
     });
-    const list = Array.isArray(data) ? data : [];
+
+    const list = Array.isArray(data)
+      ? data
+      : data?.items || data?.data || data?.result || [];
 
     const mismatches = [];
+    let scanned = 0;
+
     for (const raw of list) {
       const decoded = decodeStreamItem(raw);
-      if (!decoded) {
-        mismatches.push({
-          txid: raw.txid,
-          type: null,
-          entityId: null,
-          onChainHash: null,
-          reason: 'Undecodable payload'
-        });
-        continue;
-      }
+      if (!decoded) continue;          // skip non-JSON items silently
+      scanned++;
+
       if (!decoded.payload_hash || !/^[0-9a-f]{64}$/i.test(decoded.payload_hash)) {
         mismatches.push({
           txid: raw.txid,
@@ -532,10 +560,10 @@ const scanRecentActivity = async () => {
       }
     }
 
-    scanResult.value = { scanned: list.length, mismatches };
+    scanResult.value = { scanned, mismatches };
     showSnackbar(
       mismatches.length === 0
-        ? `Scan complete. ${list.length} item(s) OK.`
+        ? `Scan complete. ${scanned} anchor(s) OK.`
         : `Scan complete. ${mismatches.length} issue(s) found.`,
       mismatches.length === 0 ? 'success' : 'warning'
     );
