@@ -1,3 +1,4 @@
+// backend/migrations/20260101000002-create-clinical-tables.js
 'use strict';
 
 module.exports = {
@@ -64,7 +65,7 @@ module.exports = {
       },
       action:       { type: S.STRING(50), allowNull: false },
       entity_type:  { type: S.STRING(50), allowNull: false },
-      entity_id:    { type: S.STRING(50), allowNull: true },
+      entity_id:    { type: S.STRING(128), allowNull: true },
       old_data:     { type: S.JSON, allowNull: true },
       new_data:     { type: S.JSON, allowNull: true },
       request_data: { type: S.JSON, allowNull: true },

@@ -18,7 +18,7 @@
             </v-btn>
           </v-card-title>
           <v-divider></v-divider>
-          
+
           <v-card-text v-if="patient">
             <v-row>
               <!-- Patient Information -->
@@ -29,7 +29,9 @@
                     <v-list-item>
                       <v-list-item-content>
                         <v-list-item-title class="text-caption text-grey">Full Name</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.first_name }} {{ patient.middle_name }} {{ patient.last_name }}</v-list-item-subtitle>
+                        <v-list-item-subtitle>
+                          {{ patient.first_name }} {{ patient.middle_name }} {{ patient.last_name }}
+                        </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
                     <v-divider></v-divider>
@@ -45,7 +47,10 @@
                     <v-list-item>
                       <v-list-item-content>
                         <v-list-item-title class="text-caption text-grey">Date of Birth</v-list-item-title>
-                        <v-list-item-subtitle>{{ formatDate(patient.birth_date) }} ({{ calculateAge(patient.birth_date) }} years)</v-list-item-subtitle>
+                        <v-list-item-subtitle>
+                          {{ formatDate(patient.birth_date) }}
+                          ({{ calculateAge(patient.birth_date) }} years)
+                        </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
                     <v-divider></v-divider>
@@ -120,6 +125,7 @@
                   </v-list>
                 </v-card>
 
+                <!-- Emergency Contact -->
                 <v-card outlined class="pa-4">
                   <div class="text-subtitle-1 font-weight-bold mb-3">Emergency Contact</div>
                   <v-list dense>
@@ -140,13 +146,207 @@
                     <v-list-item v-if="patient.guardian_name">
                       <v-list-item-content>
                         <v-list-item-title class="text-caption text-grey">Guardian</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.guardian_name }} ({{ patient.guardian_contact }})</v-list-item-subtitle>
+                        <v-list-item-subtitle>
+                          {{ patient.guardian_name }} ({{ patient.guardian_contact }})
+                        </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
                   </v-list>
                 </v-card>
               </v-col>
             </v-row>
+
+            <!-- ============================================================
+                 Blockchain Verification panel
+                 ============================================================ -->
+            <v-row class="mt-2">
+              <v-col cols="12">
+                <v-card outlined>
+                  <v-card-title class="d-flex align-center flex-wrap ga-2">
+                    <v-icon class="mr-1">mdi-link-chain</v-icon>
+                    <span>Blockchain Verification</span>
+
+                    <v-chip
+                      v-if="!loadingChain"
+                      :color="chainStatusColor"
+                      size="small"
+                      variant="tonal"
+                      class="ml-2"
+                    >
+                      {{ chainStatusText }}
+                    </v-chip>
+
+                    <v-spacer></v-spacer>
+
+                    <v-btn
+                      size="small"
+                      variant="tonal"
+                      color="secondary"
+                      :loading="loadingChain"
+                      @click="loadChainRecords"
+                    >
+                      <v-icon left size="18">mdi-refresh</v-icon>
+                      Refresh
+                    </v-btn>
+
+                    <v-btn
+                      v-if="chainRecords.length"
+                      size="small"
+                      variant="tonal"
+                      color="primary"
+                      :loading="verifyingAll"
+                      @click="verifyAllRecords"
+                    >
+                      <v-icon left size="18">mdi-shield-check</v-icon>
+                      Verify All
+                    </v-btn>
+                  </v-card-title>
+
+                  <v-divider />
+
+                  <v-card-text>
+                    <!-- TAMPER ALERT -->
+                    <v-alert
+                      v-if="chainVerifyResult && chainVerifyResult.found && chainVerifyResult.matches === false"
+                      type="error"
+                      variant="flat"
+                      prominent
+                      class="mb-3"
+                    >
+                      <div class="text-subtitle-1 font-weight-bold">
+                        ⚠ Record has been tampered with
+                      </div>
+                      <div class="text-caption mt-1">
+                        {{ chainVerifyResult.reason || 'Payload hash mismatch between the database and the blockchain.' }}
+                      </div>
+                      <div class="text-caption mt-2">
+                        <div>
+                          <strong>On-chain hash:</strong>
+                          <code>{{ chainVerifyResult.onChainHash }}</code>
+                        </div>
+                        <div>
+                          <strong>Recomputed from DB:</strong>
+                          <code>{{ chainVerifyResult.recomputedHash }}</code>
+                        </div>
+                        <div>
+                          <strong>Latest anchor txid:</strong>
+                          <code>{{ chainVerifyResult.txid }}</code>
+                        </div>
+                      </div>
+                    </v-alert>
+
+                    <!-- VERIFIED BANNER -->
+                    <v-alert
+                      v-else-if="chainVerifyResult && chainVerifyResult.found && chainVerifyResult.matches === true"
+                      type="success"
+                      variant="tonal"
+                      density="compact"
+                      class="mb-3"
+                    >
+                      <div class="text-subtitle-2 font-weight-bold">
+                        ✓ Record verified against the blockchain
+                      </div>
+                      <div class="text-caption">
+                        Latest anchor txid:
+                        <code>{{ truncateHash(chainVerifyResult.txid) }}</code>
+                      </div>
+                    </v-alert>
+
+                    <!-- NO ANCHORS -->
+                    <v-alert
+                      v-if="!loadingChain && chainRecords.length === 0"
+                      type="info"
+                      variant="tonal"
+                      density="compact"
+                    >
+                      No on-chain records found for this patient yet.
+                      An anchor is written automatically after each create / update / delete.
+                    </v-alert>
+
+                    <!-- ANCHOR TABLE -->
+                    <v-data-table
+                      v-if="chainRecords.length"
+                      :headers="chainHeaders"
+                      :items="chainRecords"
+                      :loading="loadingChain"
+                      density="comfortable"
+                      item-value="txid"
+                      class="elevation-0"
+                      :items-per-page="5"
+                    >
+                      <template #item.txid="{ item }">
+                        <div class="d-flex align-center">
+                          <span class="text-caption font-monospace">
+                            {{ truncateHash(item.txid) }}
+                          </span>
+                          <v-btn
+                            icon
+                            size="x-small"
+                            variant="text"
+                            class="ml-1"
+                            @click="copyToClipboard(item.txid)"
+                          >
+                            <v-icon size="14">mdi-content-copy</v-icon>
+                          </v-btn>
+                        </div>
+                      </template>
+
+                      <template #item.type="{ item }">
+                        <v-chip
+                          size="small"
+                          variant="tonal"
+                          :color="eventTypeColor(item.type)"
+                        >
+                          {{ item.type }}
+                        </v-chip>
+                      </template>
+
+                      <template #item.ts="{ item }">
+                        <span class="text-caption">{{ formatDateTime(item.ts) }}</span>
+                      </template>
+
+                      <template #item.confirmations="{ item }">
+                        <v-chip
+                          size="small"
+                          :color="item.confirmations > 0 ? 'success' : 'warning'"
+                          variant="tonal"
+                        >
+                          {{ item.confirmations }}
+                        </v-chip>
+                      </template>
+
+                      <template #item.state="{ item }">
+                        <v-chip
+                          v-if="item._state"
+                          size="small"
+                          :color="item._state.color"
+                          variant="flat"
+                        >
+                          <v-icon left size="14">{{ item._state.icon }}</v-icon>
+                          {{ item._state.label }}
+                        </v-chip>
+                        <span v-else class="text-caption text-medium-emphasis">—</span>
+                      </template>
+
+                      <template #item.actions="{ item }">
+                        <v-btn
+                          size="small"
+                          variant="text"
+                          color="primary"
+                          :loading="item._verifying"
+                          @click="verifySingleAnchor(item)"
+                        >
+                          Inspect
+                        </v-btn>
+                      </template>
+                    </v-data-table>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+            <!-- ============================================================
+                 END Blockchain Verification panel
+                 ============================================================ -->
 
             <!-- History Tabs -->
             <v-row>
@@ -178,9 +378,11 @@
                           items-per-page="10"
                         >
                           <template v-slot:item.hiv_test="{ item }">
-                            <v-chip :color="item.hiv_test?.result === 'positive' ? 'error' : 
-                                            item.hiv_test?.result === 'negative' ? 'success' : 'warning'" 
-                                    small>
+                            <v-chip
+                              :color="item.hiv_test?.result === 'positive' ? 'error' :
+                                      item.hiv_test?.result === 'negative' ? 'success' : 'warning'"
+                              small
+                            >
                               {{ item.hiv_test?.result || 'N/A' }}
                             </v-chip>
                           </template>
@@ -317,10 +519,12 @@
             <v-col cols="12" md="6">
               <div class="text-subtitle-2 font-weight-bold">Prescription</div>
               <div class="text-caption" v-if="selectedTreatment.art_prescription">
-                {{ selectedTreatment.art_prescription.medication_name }} 
+                {{ selectedTreatment.art_prescription.medication_name }}
                 {{ selectedTreatment.art_prescription.dosage }}
                 <br>
-                <span class="text-caption text-grey">Refill: {{ selectedTreatment.art_prescription.refill_date || 'N/A' }}</span>
+                <span class="text-caption text-grey">
+                  Refill: {{ selectedTreatment.art_prescription.refill_date || 'N/A' }}
+                </span>
               </div>
               <div v-else class="text-caption">No prescription</div>
             </v-col>
@@ -351,9 +555,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import patientService from '@/services/patientService'
-import testingService from '@/services/testingService'
-import treatmentService from '@/services/treatmentService'
 import appointmentService from '@/services/appointmentService'
+import api from '@/plugins/axios'
 import { useAuthStore } from '@/stores/authStore'
 
 export default {
@@ -362,7 +565,7 @@ export default {
     const router = useRouter()
     const route = useRoute()
     const authStore = useAuthStore()
-    
+
     const patient = ref(null)
     const loading = ref(false)
     const loadingHistory = ref(false)
@@ -375,12 +578,23 @@ export default {
     const selectedTesting = ref(null)
     const selectedTreatment = ref(null)
 
+    // -------------------------------------------------------------------
+    // Blockchain verification state
+    // -------------------------------------------------------------------
+    const chainRecords = ref([])        // normalized rows for the table
+    const loadingChain = ref(false)
+    const verifyingAll = ref(false)
+    const chainVerifyResult = ref(null) // aggregate result of the last verify
+
     const snackbar = ref({
       show: false,
       message: '',
       color: 'success'
     })
 
+    // -------------------------------------------------------------------
+    // Table headers
+    // -------------------------------------------------------------------
     const testingHeaders = [
       { title: 'Date', key: 'createdAt' },
       { title: 'Pre-test', key: 'pretest_counseling.conducted', align: 'center' },
@@ -404,30 +618,56 @@ export default {
       { title: 'Status', key: 'status', align: 'center' }
     ]
 
+    const chainHeaders = [
+      { title: 'TxID', key: 'txid', sortable: false },
+      { title: 'Event', key: 'type', sortable: true },
+      { title: 'Timestamp', key: 'ts', sortable: true },
+      { title: 'Confs', key: 'confirmations', sortable: true, align: 'center' },
+      { title: 'Status', key: 'state', sortable: false, align: 'center' },
+      { title: '', key: 'actions', sortable: false, align: 'end' }
+    ]
+
+    // -------------------------------------------------------------------
+    // Computeds
+    // -------------------------------------------------------------------
     const canStartEncounter = computed(() => {
       if (!patient.value) return false
       const office = authStore.userOffice
-      if (office === 'testing') {
-        return patient.value.status === 'testing'
-      }
-      if (office === 'treatment') {
-        return patient.value.status === 'treatment'
-      }
+      if (office === 'testing') return patient.value.status === 'testing'
+      if (office === 'treatment') return patient.value.status === 'treatment'
       return false
     })
 
-    const encounterLabel = computed(() => {
-      return authStore.userOffice === 'testing' ? 'Testing' : 'Treatment'
+    const encounterLabel = computed(() =>
+      authStore.userOffice === 'testing' ? 'Testing' : 'Treatment'
+    )
+
+    const encounterIcon = computed(() =>
+      authStore.userOffice === 'testing' ? 'mdi-test-tube' : 'mdi-pill'
+    )
+
+    const chainStatusColor = computed(() => {
+      if (loadingChain.value) return 'info'
+      if (!chainRecords.value.length) return 'warning'
+      const r = chainVerifyResult.value
+      if (!r || !r.found) return 'grey'
+      return r.matches ? 'success' : 'error'
     })
 
-    const encounterIcon = computed(() => {
-      return authStore.userOffice === 'testing' ? 'mdi-test-tube' : 'mdi-pill'
+    const chainStatusText = computed(() => {
+      if (loadingChain.value) return 'Loading…'
+      if (!chainRecords.value.length) return 'No anchors'
+      const r = chainVerifyResult.value
+      if (!r || !r.found) return 'Not verified'
+      return r.matches ? 'Verified' : 'TAMPERED'
     })
 
+    // -------------------------------------------------------------------
+    // Patient + history loading
+    // -------------------------------------------------------------------
     const loadPatient = async () => {
       const patientId = route.params.id
       if (!patientId) return
-
       loading.value = true
       try {
         const data = await patientService.getPatient(patientId)
@@ -440,26 +680,180 @@ export default {
     }
 
     const loadHistory = async () => {
-  const patientId = route.params.id
-  if (!patientId) return
+      const patientId = route.params.id
+      if (!patientId) return
+      loadingHistory.value = true
+      try {
+        const history = await patientService.getPatientHistory(patientId)
+        testingHistory.value = history.testing || []
+        treatmentHistory.value = history.treatment || []
 
-  loadingHistory.value = true
-  try {
-    const history = await patientService.getPatientHistory(patientId)
-    testingHistory.value = history.testing || []
-    treatmentHistory.value = history.treatment || []
-    
-    // FIXED: Fetch actual appointments using the new method
-    const appointmentData = await appointmentService.getAppointmentsByPatient(patientId)
-    appointments.value = appointmentData || []
-    
-  } catch (error) {
-    console.error('Failed to load history:', error)
-    showSnackbar('Failed to load patient history: ' + error.message, 'error')
-  } finally {
-    loadingHistory.value = false
-  }
-}
+        const appointmentData = await appointmentService.getAppointmentsByPatient(patientId)
+        appointments.value = appointmentData || []
+      } catch (error) {
+        console.error('Failed to load history:', error)
+        showSnackbar('Failed to load patient history: ' + error.message, 'error')
+      } finally {
+        loadingHistory.value = false
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // Blockchain loading
+    // -------------------------------------------------------------------
+    /**
+     * Load every on-chain anchor that references this patient.
+     *
+     * We pull a generous slice of recent items from /blockchain/items and
+     * keep only items whose entity_id matches the patient. This handles
+     * patient.* events and (once encounter services are anchored) will
+     * also pick up testing.'treatment.' once those anchor with the same
+     * entity_id scheme.
+     */
+    const loadChainRecords = async () => {
+      const patientId = patient.value?.id
+      if (!patientId) return
+
+      loadingChain.value = true
+      try {
+        const { data } = await api.get('/blockchain/items', {
+          params: { count: 500, verbose: true }
+        })
+        const list = Array.isArray(data) ? data : []
+
+        chainRecords.value = list
+          .map(decodeStreamItem)
+          .filter(x => x && x.record)
+          .filter(x => String(x.record.entity_id) === String(patientId))
+          .map(x => ({
+            txid: x.txid,
+            key: x.key,
+            type: x.record.type,
+            entityId: x.record.entity_id,
+            ts: x.record.ts,
+            payloadHash: x.record.payload_hash,
+            confirmations: x.confirmations ?? 0,
+            _state: null,
+            _verifying: false
+          }))
+          .sort((a, b) => new Date(b.ts) - new Date(a.ts))
+
+        // Any change in the anchor set invalidates the previous verification.
+        chainVerifyResult.value = null
+      } catch (e) {
+        showSnackbar('Failed to load blockchain records', 'error')
+        chainRecords.value = []
+      } finally {
+        loadingChain.value = false
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // Verification — patient-scoped
+    // -------------------------------------------------------------------
+    /**
+     * Ask the backend to recompute the patient's canonical hash from the
+     * current DB row and compare it to the newest on-chain anchor.
+     *
+     * Backend endpoint: GET /blockchain/verify/patient/:patientId
+     * Response shape:
+     *   {
+     *     patientId, found, matches,
+     *     onChainHash, recomputedHash,
+     *     txid, record, reason
+     *   }
+     */
+    const verifyPatient = async () => {
+      const patientId = patient.value?.id
+      if (!patientId) return null
+
+      const { data } = await api.get(`/blockchain/verify/patient/${patientId}`)
+      chainVerifyResult.value = data
+
+      // Mark only the txid that was actually compared; leave other rows neutral.
+      chainRecords.value.forEach(row => {
+        if (row.txid === data.txid) {
+          row._state = data.matches
+            ? { label: 'Verified', color: 'success', icon: 'mdi-shield-check' }
+            : { label: 'TAMPERED', color: 'error',   icon: 'mdi-shield-alert' }
+        } else {
+          row._state = null
+        }
+      })
+
+      return data
+    }
+
+    /** Verify All button — one network call for the whole patient. */
+    const verifyAllRecords = async () => {
+      verifyingAll.value = true
+      try {
+        const data = await verifyPatient()
+        if (!data || !data.found) {
+          showSnackbar('No anchor found for this patient', 'warning')
+          return
+        }
+        showSnackbar(
+          data.matches
+            ? 'Patient record verified against the blockchain'
+            : '⚠ WARNING — record has been tampered with',
+          data.matches ? 'success' : 'error'
+        )
+      } catch (e) {
+        showSnackbar('Verification failed: ' + (e?.response?.data?.error || e.message), 'error')
+      } finally {
+        verifyingAll.value = false
+      }
+    }
+
+    /**
+     * Per-row "Inspect" — just calls the same patient-scoped verify so the
+     * panel state stays consistent. A single anchor cannot be meaningfully
+     * verified in isolation because we need the current DB row.
+     */
+    const verifySingleAnchor = async (row) => {
+      row._verifying = true
+      try {
+        const data = await verifyPatient()
+        if (!data || !data.found) {
+          showSnackbar('No anchor found for this patient', 'warning')
+        } else if (data.matches) {
+          showSnackbar('Record verified against the blockchain')
+        } else {
+          showSnackbar('⚠ Record has been tampered with', 'error')
+        }
+      } catch (e) {
+        showSnackbar('Verification failed', 'error')
+      } finally {
+        row._verifying = false
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------
+    const decodeStreamItem = (raw) => {
+      if (!raw) return null
+      let record = null
+      try {
+        const hex = raw.data
+        if (typeof Buffer !== 'undefined') {
+          record = JSON.parse(Buffer.from(hex, 'hex').toString('utf8'))
+        } else {
+          const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)))
+          record = JSON.parse(new TextDecoder('utf-8').decode(bytes))
+        }
+      } catch {
+        record = null
+      }
+      return {
+        txid: raw.txid,
+        key: raw.key,
+        record,
+        confirmations: raw.confirmations ?? 0,
+        blocktime: raw.blocktime
+      }
+    }
 
     const editPatient = () => {
       router.push(`/patients/${patient.value.id}/edit`)
@@ -486,9 +880,7 @@ export default {
       const birth = new Date(birthDate)
       let age = today.getFullYear() - birth.getFullYear()
       const m = today.getMonth() - birth.getMonth()
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-        age--
-      }
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
       return age
     }
 
@@ -498,6 +890,17 @@ export default {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
+      })
+    }
+
+    const formatDateTime = (iso) => {
+      if (!iso) return 'N/A'
+      return new Date(iso).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
       })
     }
 
@@ -522,16 +925,53 @@ export default {
       return colors[status] || 'primary'
     }
 
+    const truncateHash = (hash) => {
+      if (!hash) return '—'
+      if (hash.length <= 24) return hash
+      return `${hash.slice(0, 14)}…${hash.slice(-8)}`
+    }
+
+    const eventTypeColor = (type) => {
+      if (!type) return 'grey'
+      if (type.startsWith('patient.create')) return 'success'
+      if (type.startsWith('patient.update')) return 'info'
+      if (type.startsWith('patient.soft_delete')) return 'error'
+      if (type.startsWith('patient.hard_delete')) return 'deep-orange'
+      if (type.startsWith('patient.code_regenerate')) return 'warning'
+      if (type.startsWith('patient.bulk_generate_codes')) return 'purple'
+      if (type.startsWith('testing.')) return 'purple'
+      if (type.startsWith('treatment.')) return 'teal'
+      return 'primary'
+    }
+
+    const copyToClipboard = async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        showSnackbar('TxID copied')
+      } catch {
+        showSnackbar('Copy failed', 'error')
+      }
+    }
+
     const showSnackbar = (message, color = 'success') => {
       snackbar.value = { show: true, message, color }
     }
 
-    onMounted(() => {
-      loadPatient()
-      loadHistory()
+    onMounted(async () => {
+      await loadPatient()
+      await Promise.all([loadHistory(), loadChainRecords()])
+      // Auto-verify on load so the panel reflects reality without a click.
+      if (chainRecords.value.length) {
+        try {
+          await verifyPatient()
+        } catch {
+          /* verification errors are surfaced via the panel state */
+        }
+      }
     })
 
     return {
+      // patient
       patient,
       loading,
       loadingHistory,
@@ -543,9 +983,14 @@ export default {
       treatmentDialog,
       selectedTesting,
       selectedTreatment,
+
+      // headers
       testingHeaders,
       treatmentHeaders,
       appointmentHeaders,
+      chainHeaders,
+
+      // encounter
       canStartEncounter,
       encounterLabel,
       encounterIcon,
@@ -553,10 +998,29 @@ export default {
       startEncounter,
       viewTestingEncounter,
       viewTreatmentEncounter,
+
+      // formatting
       calculateAge,
       formatDate,
+      formatDateTime,
       formatTimeSlot,
       getStatusColor,
+      truncateHash,
+      eventTypeColor,
+      copyToClipboard,
+
+      // blockchain panel
+      chainRecords,
+      loadingChain,
+      verifyingAll,
+      chainVerifyResult,
+      chainStatusColor,
+      chainStatusText,
+      loadChainRecords,
+      verifyAllRecords,
+      verifySingleAnchor,
+
+      // snackbar
       snackbar
     }
   }

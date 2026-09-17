@@ -21,8 +21,13 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: false
     },
+    // Widened from STRING(50) -> STRING(128).
+    // Must fit:
+    //   - 64-char MultiChain txids
+    //   - compound keys like "patient.create:42" or "testing.create:1001"
+    //   - batch identifiers like "batch-1789606731234"
     entity_id: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING(128),
       allowNull: true
     },
     old_data: {

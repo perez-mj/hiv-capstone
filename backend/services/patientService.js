@@ -2,6 +2,7 @@
 const db = require('../models');
 const { Op } = require('sequelize');
 const patientCodeService = require('./patientCodeService');
+const blockchainService = require('./blockchainService');
 const audit = require('../utils/audit');
 const { hmac } = require('../utils/crypto');
 
@@ -151,83 +152,85 @@ class PatientService {
   }
 
   // ---------- CREATE ----------
-  // ---------- CREATE ----------
-async createPatient(patientData, userId = null, req = null) {
-  const {
-    create_portal_account,
-    username,
-    email,
-    password,
-    confirmPassword,   // ignore — validated on frontend
-    ...patientFields
-  } = patientData;
+  async createPatient(patientData, userId = null, req = null) {
+    const {
+      create_portal_account,
+      username,
+      email,
+      password,
+      confirmPassword,   // ignore — validated on frontend
+      ...patientFields
+    } = patientData;
 
-  // Duplicate contact check (outside txn is fine; hash is deterministic)
-  const existing = await this.getPatientByContact(patientFields.contact_number);
-  if (existing) throw new Error('Contact number already registered');
+    // Duplicate contact check (outside txn is fine; hash is deterministic)
+    const existing = await this.getPatientByContact(patientFields.contact_number);
+    if (existing) throw new Error('Contact number already registered');
 
-  // Pre-validate portal fields before hitting the DB
-  if (create_portal_account) {
-    if (!username || !email || !password) {
-      throw new Error('Username, email, and password are required for portal account');
+    // Pre-validate portal fields before hitting the DB
+    if (create_portal_account) {
+      if (!username || !email || !password) {
+        throw new Error('Username, email, and password are required for portal account');
+      }
+      if (password.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
     }
-    if (password.length < 8) {
-      throw new Error('Password must be at least 8 characters');
-    }
-  }
 
-  let patient;
-  let user = null;
+    let patient;
+    let user = null;
 
-  try {
-    await db.sequelize.transaction(async (t) => {
-      if (create_portal_account) {
-        // User.beforeCreate hook hashes password_hash automatically
-        user = await db.User.create(
+    try {
+      await db.sequelize.transaction(async (t) => {
+        if (create_portal_account) {
+          // User.beforeCreate hook hashes password_hash automatically
+          user = await db.User.create(
+            {
+              username,
+              email,
+              password_hash: password,
+              role: 'patient',
+              is_active: true
+            },
+            { transaction: t }
+          );
+        }
+
+        patient = await db.Patient.create(
           {
-            username,
-            email,
-            password_hash: password,
-            role: 'patient',
-            is_active: true
+            ...patientFields,
+            user_id: user ? user.id : null
           },
           { transaction: t }
         );
+      });
+    } catch (err) {
+      // Translate unique constraint violations into friendly messages
+      if (err.name === 'SequelizeUniqueConstraintError') {
+        const field = err.errors?.[0]?.path;
+        if (field === 'username') throw new Error('Username already taken');
+        if (field === 'email')    throw new Error('Email already registered');
+        if (field === 'contact_number_hash')
+          throw new Error('Contact number already registered');
       }
-
-      patient = await db.Patient.create(
-        {
-          ...patientFields,
-          user_id: user ? user.id : null
-        },
-        { transaction: t }
-      );
-    });
-  } catch (err) {
-    // Translate unique constraint violations into friendly messages
-    if (err.name === 'SequelizeUniqueConstraintError') {
-      const field = err.errors?.[0]?.path;
-      if (field === 'username') throw new Error('Username already taken');
-      if (field === 'email')    throw new Error('Email already registered');
-      if (field === 'contact_number_hash')
-        throw new Error('Contact number already registered');
+      throw err;
     }
-    throw err;
+
+    // Anchor on-chain (best-effort — never throws; logs on failure)
+    await blockchainService.anchorPatientCreate(patient, userId);
+
+    audit.write({
+      userId,
+      action: 'CREATE',
+      entityType: 'Patient',
+      entityId: patient.id,
+      newData: patient.toJSON(),
+      metadata: user ? { portal_user_id: user.id } : undefined,
+      ipAddress: req?.ip,
+      userAgent: req?.get?.('User-Agent')
+    });
+
+    return patient;
   }
-
-  audit.write({
-    userId,
-    action: 'CREATE',
-    entityType: 'Patient',
-    entityId: patient.id,
-    newData: patient.toJSON(),
-    metadata: user ? { portal_user_id: user.id } : undefined,
-    ipAddress: req?.ip,
-    userAgent: req?.get?.('User-Agent')
-  });
-
-  return patient;
-}
 
   // ---------- UPDATE ----------
   async updatePatient(id, updates, userId = null, userRole = null, req = null) {
@@ -246,7 +249,11 @@ async createPatient(patientData, userId = null, req = null) {
       updates = filtered;
     }
 
+    const changedFields = Object.keys(updates);
     await patient.update(updates);
+
+    // Anchor on-chain (best-effort)
+    await blockchainService.anchorPatientUpdate(patient, userId, changedFields);
 
     audit.write({
       userId,
@@ -268,7 +275,13 @@ async createPatient(patientData, userId = null, req = null) {
     const oldData = patient.toJSON();
 
     if (hardDelete) {
+      // Capture the instance reference before destroy so we can still anchor
       await patient.destroy({ force: true });
+
+      // Anchor on-chain (best-effort). Uses `patient.id` from the in-memory
+      // instance, which is still valid after destroy.
+      await blockchainService.anchorPatientDelete(patient, userId, true);
+
       audit.write({
         userId, action: 'DELETE', entityType: 'Patient', entityId: id,
         oldData, ipAddress: req?.ip, userAgent: req?.get?.('User-Agent')
@@ -277,6 +290,10 @@ async createPatient(patientData, userId = null, req = null) {
     }
 
     await patient.update({ status: 'inactive' });
+
+    // Anchor on-chain (best-effort)
+    await blockchainService.anchorPatientDelete(patient, userId, false);
+
     audit.write({
       userId, action: 'SOFT_DELETE', entityType: 'Patient', entityId: id,
       oldData, newData: { status: 'inactive' },
@@ -291,6 +308,22 @@ async createPatient(patientData, userId = null, req = null) {
     const oldCode = patient.patient_facility_code;
     const newCode = await patient.regenerateFacilityCode();
     await patient.save();
+
+    // Anchor on-chain (best-effort) — dedicated event type for code regen
+    await blockchainService.anchorSafe(
+      'patient.code_regenerate',
+      patient.id,
+      {
+        id: patient.id,
+        old_code: oldCode,
+        new_code: newCode,
+        patient_facility_code: newCode,
+        status_ct: patient.getDataValue('status'),
+        updated_at: patient.updated_at
+      },
+      userId,
+      { old_code: oldCode, new_code: newCode }
+    );
 
     audit.write({
       userId, action: 'REGENERATE_CODE', entityType: 'FacilityCode',
@@ -320,6 +353,20 @@ async createPatient(patientData, userId = null, req = null) {
 
   async bulkGenerateCodes(patients, actorId = null, req = null) {
     const results = await patientCodeService.bulkGenerateCodes(patients);
+
+    // Anchor a single summary event (not one per patient) — keeps the stream
+    // readable and avoids spamming N publishes for a bulk op.
+    await blockchainService.anchorSafe(
+      'patient.bulk_generate_codes',
+      `batch-${Date.now()}`,
+      {
+        count: results.length,
+        codes: results.map(r => r.patient_facility_code).filter(Boolean)
+      },
+      actorId,
+      { count: results.length }
+    );
+
     audit.write({
       userId: actorId,
       action: 'BULK_GENERATE_CODES',

@@ -3,95 +3,194 @@
     <v-row>
       <v-col cols="12">
         <v-card>
-          <v-card-title class="d-flex justify-space-between align-center">
-            <div>Blockchain Verification</div>
-            <v-btn color="primary" @click="scanForTampering">
-              <v-icon left>mdi-shield-search</v-icon>
-              Scan for Tampering
-            </v-btn>
+          <v-card-title class="d-flex justify-space-between align-center flex-wrap ga-2">
+            <div class="d-flex align-center">
+              <v-icon class="mr-2">mdi-link-chain</v-icon>
+              Blockchain Verification
+            </div>
+            <div class="d-flex ga-2">
+              <v-btn color="secondary" variant="tonal" :loading="loadingStats" @click="loadStatus">
+                <v-icon left>mdi-refresh</v-icon>
+                Refresh
+              </v-btn>
+              <v-btn color="primary" :loading="scanning" @click="scanRecentActivity">
+                <v-icon left>mdi-shield-search</v-icon>
+                Scan Recent Activity
+              </v-btn>
+            </div>
           </v-card-title>
-          
+
+          <v-divider />
+
           <v-card-text>
-            <!-- Blockchain Stats -->
+            <!-- Chain status -->
             <v-row>
-              <v-col cols="12" md-3>
-                <v-card color="primary" dark class="text-center pa-3">
-                  <v-icon size="30">mdi-link-chain</v-icon>
-                  <div class="text-h4 mt-2">{{ blockchainStats.totalBlocks || 0 }}</div>
-                  <div>Total Blocks</div>
+              <v-col cols="12" sm="6" md="3">
+                <v-card color="primary" theme="dark" class="text-center pa-4">
+                  <v-icon size="32">mdi-cube-outline</v-icon>
+                  <div class="text-h4 mt-2">{{ status.blocks ?? '—' }}</div>
+                  <div class="text-caption">Blocks</div>
                 </v-card>
               </v-col>
-              
-              <v-col cols="12" md-3>
-                <v-card :color="blockchainStats.chainValid ? 'success' : 'error'" dark class="text-center pa-3">
-                  <v-icon size="30">mdi-shield-check</v-icon>
-                  <div class="text-h4 mt-2">{{ blockchainStats.chainValid ? 'Valid' : 'Invalid' }}</div>
-                  <div>Chain Status</div>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-card
+                  :color="status.ok ? 'success' : 'error'"
+                  theme="dark"
+                  class="text-center pa-4"
+                >
+                  <v-icon size="32">mdi-shield-check</v-icon>
+                  <div class="text-h5 mt-2">
+                    {{ status.ok ? 'Online' : 'Offline' }}
+                  </div>
+                  <div class="text-caption">Chain Status</div>
+                </v-card>
+              </v-col>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-card color="info" theme="dark" class="text-center pa-4">
+                  <v-icon size="32">mdi-transit-connection-variant</v-icon>
+                  <div class="text-h4 mt-2">{{ status.connections ?? '—' }}</div>
+                  <div class="text-caption">Peers</div>
+                </v-card>
+              </v-col>
+
+              <v-col cols="12" sm="6" md="3">
+                <v-card
+                  :color="status.streamExists ? 'success' : 'warning'"
+                  theme="dark"
+                  class="text-center pa-4"
+                >
+                  <v-icon size="32">mdi-database</v-icon>
+                  <div class="text-h5 mt-2">
+                    {{ status.streamExists ? 'Ready' : 'Missing' }}
+                  </div>
+                  <div class="text-caption">Stream · {{ status.stream || '—' }}</div>
                 </v-card>
               </v-col>
             </v-row>
-            
-            <!-- Verification Form -->
+
+            <!-- Chain metadata -->
             <v-row class="mt-4">
               <v-col cols="12">
-                <v-card outlined>
-                  <v-card-title>Verify Single Record</v-card-title>
+                <v-card variant="outlined">
+                  <v-card-title class="text-subtitle-1">Chain Info</v-card-title>
+                  <v-card-text>
+                    <v-row dense>
+                      <v-col cols="12" sm="6" md="4">
+                        <div class="text-caption text-medium-emphasis">Chain</div>
+                        <div>{{ status.chain || '—' }}</div>
+                      </v-col>
+                      <v-col cols="12" sm="6" md="4">
+                        <div class="text-caption text-medium-emphasis">Version</div>
+                        <div>{{ status.version || '—' }}</div>
+                      </v-col>
+                      <v-col cols="12" sm="6" md="4">
+                        <div class="text-caption text-medium-emphasis">Protocol</div>
+                        <div>{{ status.protocol || '—' }}</div>
+                      </v-col>
+                      <v-col cols="12" sm="6" md="4">
+                        <div class="text-caption text-medium-emphasis">Node Address</div>
+                        <div class="text-truncate">{{ status.nodeaddress || '—' }}</div>
+                      </v-col>
+                      <v-col cols="12" sm="6" md="4">
+                        <div class="text-caption text-medium-emphasis">RPC</div>
+                        <div>{{ status.rpc || '—' }}</div>
+                      </v-col>
+                      <v-col cols="12" sm="6" md="4">
+                        <div class="text-caption text-medium-emphasis">Stream Restrict</div>
+                        <div>
+                          <v-chip
+                            v-if="status.streamRestrict"
+                            size="small"
+                            :color="status.streamRestrict.write ? 'success' : 'warning'"
+                            variant="tonal"
+                          >
+                            write={{ status.streamRestrict.write }} · read={{ status.streamRestrict.read }}
+                          </v-chip>
+                          <span v-else class="text-medium-emphasis">—</span>
+                        </div>
+                      </v-col>
+                    </v-row>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Verify single record by txid -->
+            <v-row class="mt-4">
+              <v-col cols="12">
+                <v-card variant="outlined">
+                  <v-card-title class="text-subtitle-1">Verify Single Item by TxID</v-card-title>
                   <v-card-text>
                     <v-row>
-                      <v-col cols="12" md-4>
-                        <v-select
-                          v-model="verifyForm.recordType"
-                          :items="recordTypes"
-                          label="Record Type"
-                        ></v-select>
-                      </v-col>
-                      <v-col cols="12" md-4>
+                      <v-col cols="12" md="8">
                         <v-text-field
-                          v-model="verifyForm.recordId"
-                          label="Record ID"
-                          type="number"
-                        ></v-text-field>
+                          v-model="verifyForm.txid"
+                          label="Transaction ID (txid)"
+                          placeholder="e.g. bc373bd8b1293d11..."
+                          prepend-inner-icon="mdi-pound"
+                          variant="outlined"
+                          density="comfortable"
+                          hide-details="auto"
+                        />
                       </v-col>
-                      <v-col cols="12" md-4>
+                      <v-col cols="12" md="4">
                         <v-btn
                           color="primary"
                           block
+                          :loading="verifying"
+                          :disabled="!verifyForm.txid"
                           @click="verifyRecord"
-                          :disabled="!verifyForm.recordId"
                         >
+                          <v-icon left>mdi-check-decagram</v-icon>
                           Verify
                         </v-btn>
                       </v-col>
                     </v-row>
-                    
-                    <!-- Verification Result -->
+
                     <v-expand-transition>
-                      <v-card v-if="verificationResult" class="mt-4" outlined>
-                        <v-card-title>
+                      <v-card
+                        v-if="verificationResult"
+                        class="mt-4"
+                        variant="outlined"
+                      >
+                        <v-card-title class="d-flex align-center">
                           Verification Result
-                          <v-chip :color="verificationResult.isValid ? 'success' : 'error'" class="ml-2">
-                            {{ verificationResult.isValid ? 'VALID' : 'TAMPERED' }}
+                          <v-chip
+                            :color="verificationResult.matches === false ? 'error' : 'success'"
+                            class="ml-2"
+                            size="small"
+                          >
+                            {{ verificationResult.matches === false ? 'MISMATCH' : 'FOUND' }}
                           </v-chip>
                         </v-card-title>
                         <v-card-text>
-                          <v-list dense>
+                          <v-list density="compact">
                             <v-list-item>
-                              <v-list-item-content>
-                                <v-list-item-title class="font-weight-bold">Stored Hash</v-list-item-title>
-                                <v-list-item-subtitle class="text-caption">{{ verificationResult.storedHash }}</v-list-item-subtitle>
-                              </v-list-item-content>
+                              <v-list-item-title class="font-weight-bold">TxID</v-list-item-title>
+                              <v-list-item-subtitle class="text-caption text-wrap">
+                                {{ verificationResult.txid }}
+                              </v-list-item-subtitle>
                             </v-list-item>
-                            <v-list-item>
-                              <v-list-item-content>
-                                <v-list-item-title class="font-weight-bold">Recomputed Hash</v-list-item-title>
-                                <v-list-item-subtitle class="text-caption">{{ verificationResult.recomputedHash }}</v-list-item-subtitle>
-                              </v-list-item-content>
+                            <v-list-item v-if="verificationResult.record">
+                              <v-list-item-title class="font-weight-bold">Type</v-list-item-title>
+                              <v-list-item-subtitle class="text-caption">
+                                {{ verificationResult.record.type }}
+                                · entity #{{ verificationResult.record.entity_id }}
+                              </v-list-item-subtitle>
                             </v-list-item>
-                            <v-list-item>
-                              <v-list-item-content>
-                                <v-list-item-title class="font-weight-bold">Previous Hash</v-list-item-title>
-                                <v-list-item-subtitle class="text-caption">{{ verificationResult.previousHash }}</v-list-item-subtitle>
-                              </v-list-item-content>
+                            <v-list-item v-if="verificationResult.onChainHash">
+                              <v-list-item-title class="font-weight-bold">On-chain Hash</v-list-item-title>
+                              <v-list-item-subtitle class="text-caption text-wrap">
+                                {{ verificationResult.onChainHash }}
+                              </v-list-item-subtitle>
+                            </v-list-item>
+                            <v-list-item v-if="verificationResult.expectedHash">
+                              <v-list-item-title class="font-weight-bold">Expected Hash</v-list-item-title>
+                              <v-list-item-subtitle class="text-caption text-wrap">
+                                {{ verificationResult.expectedHash }}
+                              </v-list-item-subtitle>
                             </v-list-item>
                           </v-list>
                         </v-card-text>
@@ -101,41 +200,108 @@
                 </v-card>
               </v-col>
             </v-row>
-            
-            <!-- Tampered Records -->
+
+            <!-- Recent activity -->
             <v-row class="mt-4">
               <v-col cols="12">
-                <v-card outlined>
-                  <v-card-title>
-                    Tampered Records
-                    <v-spacer></v-spacer>
+                <v-card variant="outlined">
+                  <v-card-title class="d-flex align-center">
+                    Recent On-chain Activity
+                    <v-spacer />
                     <v-btn
-                      v-if="tamperedRecords.length > 0"
-                      color="warning"
-                      @click="repairChain"
+                      size="small"
+                      variant="text"
+                      :loading="loadingItems"
+                      @click="loadRecentItems"
                     >
-                      <v-icon left>mdi-wrench</v-icon>
-                      Repair Chain
+                      <v-icon left size="18">mdi-refresh</v-icon>
+                      Reload
                     </v-btn>
                   </v-card-title>
                   <v-card-text>
                     <v-data-table
-                      :headers="tamperHeaders"
-                      :items="tamperedRecords"
-                      :loading="scanning"
-                      class="elevation-1"
+                      :headers="itemHeaders"
+                      :items="recentItems"
+                      :loading="loadingItems"
+                      item-value="txid"
+                      density="comfortable"
+                      class="elevation-0"
+                      no-data-text="No items have been anchored yet."
                     >
-                      <template v-slot:item.expectedHash="{ item }">
-                        <div class="text-caption">{{ truncateHash(item.expectedHash) }}</div>
+                      <template #item.txid="{ item }">
+                        <span class="text-caption">{{ truncateHash(item.txid) }}</span>
                       </template>
-                      <template v-slot:item.actualHash="{ item }">
-                        <div class="text-caption">{{ truncateHash(item.actualHash) }}</div>
+                      <template #item.type="{ item }">
+                        <v-chip size="small" variant="tonal" color="primary">
+                          {{ item.type || '—' }}
+                        </v-chip>
+                      </template>
+                      <template #item.entityId="{ item }">
+                        <span>{{ item.entityId ?? '—' }}</span>
+                      </template>
+                      <template #item.ts="{ item }">
+                        <span class="text-caption">{{ formatTime(item.ts) }}</span>
+                      </template>
+                      <template #item.payloadHash="{ item }">
+                        <span class="text-caption">{{ truncateHash(item.payloadHash) }}</span>
+                      </template>
+                      <template #item.confirmations="{ item }">
+                        <v-chip
+                          size="small"
+                          :color="item.confirmations > 0 ? 'success' : 'warning'"
+                          variant="tonal"
+                        >
+                          {{ item.confirmations }}
+                        </v-chip>
+                      </template>
+                      <template #item.actions="{ item }">
+                        <v-btn
+                          size="small"
+                          variant="text"
+                          color="primary"
+                          @click="verifyByTxid(item.txid)"
+                        >
+                          Verify
+                        </v-btn>
                       </template>
                     </v-data-table>
-                    
-                    <v-alert v-if="scanComplete && tamperedRecords.length === 0" type="success" class="mt-4">
-                      No tampered records found. Blockchain integrity verified.
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Scan results -->
+            <v-row v-if="scanResult" class="mt-4">
+              <v-col cols="12">
+                <v-card variant="outlined">
+                  <v-card-title>Scan Result</v-card-title>
+                  <v-card-text>
+                    <v-alert
+                      :type="scanResult.mismatches.length === 0 ? 'success' : 'error'"
+                      variant="tonal"
+                    >
+                      <div v-if="scanResult.mismatches.length === 0">
+                        Scanned {{ scanResult.scanned }} item(s). All payload hashes match.
+                      </div>
+                      <div v-else>
+                        Scanned {{ scanResult.scanned }} item(s). {{ scanResult.mismatches.length }} mismatch(es) found.
+                      </div>
                     </v-alert>
+
+                    <v-data-table
+                      v-if="scanResult.mismatches.length"
+                      class="mt-3"
+                      :headers="mismatchHeaders"
+                      :items="scanResult.mismatches"
+                      density="comfortable"
+                    >
+                      <template #item.txid="{ item }">
+                        <span class="text-caption">{{ truncateHash(item.txid) }}</span>
+                      </template>
+                      <template #item.onChainHash="{ item }">
+                        <span class="text-caption">{{ truncateHash(item.onChainHash) }}</span>
+                      </template>
+                    </v-data-table>
                   </v-card-text>
                 </v-card>
               </v-col>
@@ -144,7 +310,7 @@
         </v-card>
       </v-col>
     </v-row>
-    
+
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
       {{ snackbar.message }}
     </v-snackbar>
@@ -155,97 +321,232 @@
 import { ref, onMounted } from 'vue';
 import api from '@/plugins/axios';
 
-const scanning = ref(false);
-const scanComplete = ref(false);
-const blockchainStats = ref({});
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const loadingStats = ref(false);
+const loadingItems = ref(false);
+const verifying    = ref(false);
+const scanning     = ref(false);
+
+const status = ref({
+  ok: false,
+  chain: null,
+  version: null,
+  protocol: null,
+  blocks: null,
+  connections: null,
+  nodeaddress: null,
+  rpc: null,
+  stream: null,
+  streamExists: false,
+  streamRestrict: null
+});
+
+const recentItems = ref([]);
 const verificationResult = ref(null);
-const tamperedRecords = ref([]);
 
-const verifyForm = ref({
-  recordType: 'testing',
-  recordId: ''
-});
+const verifyForm = ref({ txid: '' });
 
-const recordTypes = [
-  { title: 'Testing Encounter', value: 'testing' },
-  { title: 'Treatment Encounter', value: 'treatment' }
+const scanResult = ref(null); // { scanned, mismatches: [...] }
+
+const snackbar = ref({ show: false, message: '', color: 'success' });
+
+// ---------------------------------------------------------------------------
+// Table headers
+// ---------------------------------------------------------------------------
+const itemHeaders = [
+  { title: 'TxID',         key: 'txid',          sortable: false },
+  { title: 'Type',         key: 'type',          sortable: true  },
+  { title: 'Entity',       key: 'entityId',      sortable: true  },
+  { title: 'Timestamp',    key: 'ts',            sortable: true  },
+  { title: 'Payload Hash', key: 'payloadHash',   sortable: false },
+  { title: 'Confs',        key: 'confirmations', sortable: true  },
+  { title: '',             key: 'actions',       sortable: false, align: 'end' }
 ];
 
-const tamperHeaders = [
-  { title: 'Record ID', key: 'id', sortable: true },
-  { title: 'Record Type', key: 'recordType', sortable: true },
-  { title: 'Expected Hash', key: 'expectedHash', sortable: false },
-  { title: 'Actual Hash', key: 'actualHash', sortable: false }
+const mismatchHeaders = [
+  { title: 'TxID',          key: 'txid',         sortable: false },
+  { title: 'Type',          key: 'type',         sortable: true  },
+  { title: 'Entity',        key: 'entityId',     sortable: true  },
+  { title: 'On-chain Hash', key: 'onChainHash',  sortable: false },
+  { title: 'Reason',        key: 'reason',       sortable: false }
 ];
 
-const snackbar = ref({
-  show: false,
-  message: '',
-  color: 'success'
-});
-
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 const truncateHash = (hash) => {
-  if (!hash) return 'N/A';
-  return hash.substring(0, 16) + '...' + hash.substring(hash.length - 8);
+  if (!hash || typeof hash !== 'string') return 'N/A';
+  if (hash.length <= 24) return hash;
+  return `${hash.slice(0, 16)}…${hash.slice(-8)}`;
 };
 
-const loadBlockchainStats = async () => {
+const formatTime = (iso) => {
+  if (!iso) return '—';
   try {
-    const response = await api.get('/blockchain/stats');
-    blockchainStats.value = response.data;
-  } catch (error) {
-    showSnackbar('Failed to load blockchain stats', 'error');
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
   }
 };
 
+const showSnackbar = (message, color = 'success') => {
+  snackbar.value = { show: true, message, color };
+};
+
+/** Decode a hex-encoded JSON stream item, tolerant of failures. */
+const decodeStreamItem = (raw) => {
+  try {
+    const hex = raw.data;
+    const json = JSON.parse(
+      Buffer
+        ? Buffer.from(hex, 'hex').toString('utf8') // Node fallback (shouldn't run in browser)
+        : atob(hex).split('').map(c => c.charCodeAt(0)).reduce(
+            (acc, b, i) => i === 0 ? String.fromCharCode(b) : acc + String.fromCharCode(b),
+            ''
+          )
+    );
+    return json;
+  } catch {
+    return null;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Data loading
+// ---------------------------------------------------------------------------
+const loadStatus = async () => {
+  loadingStats.value = true;
+  try {
+    const { data } = await api.get('/blockchain/status');
+    status.value = { ...status.value, ...data };
+  } catch (e) {
+    showSnackbar('Failed to load chain status', 'error');
+  } finally {
+    loadingStats.value = false;
+  }
+};
+
+const loadRecentItems = async () => {
+  loadingItems.value = true;
+  try {
+    // Backend returns raw MultiChain items (verbose). We normalize below.
+    const { data } = await api.get('/blockchain/items', {
+      params: { count: 20, verbose: true }
+    });
+
+    const list = Array.isArray(data) ? data : [];
+    recentItems.value = list.map((raw) => {
+      const decoded = decodeStreamItem(raw) || {};
+      return {
+        txid:          raw.txid,
+        key:           raw.key,
+        type:          decoded.type || null,
+        entityId:      decoded.entity_id ?? null,
+        ts:            decoded.ts || (raw.blocktime ? new Date(raw.blocktime * 1000).toISOString() : null),
+        payloadHash:   decoded.payload_hash || null,
+        actorId:       decoded.actor_id ?? null,
+        confirmations: raw.confirmations ?? 0,
+        _raw:          raw
+      };
+    });
+  } catch (e) {
+    showSnackbar('Failed to load recent items', 'error');
+    recentItems.value = [];
+  } finally {
+    loadingItems.value = false;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Verification
+// ---------------------------------------------------------------------------
 const verifyRecord = async () => {
+  if (!verifyForm.value.txid) return;
+  verifying.value = true;
   try {
-    const response = await api.get(`/blockchain/verify/${verifyForm.value.recordType}/${verifyForm.value.recordId}`);
-    verificationResult.value = response.data;
+    const { data } = await api.get(`/blockchain/verify/${verifyForm.value.txid}`);
+    verificationResult.value = data;
     showSnackbar('Verification completed');
-  } catch (error) {
-    showSnackbar('Verification failed', 'error');
+  } catch (e) {
+    if (e?.response?.status === 404) {
+      verificationResult.value = null;
+      showSnackbar('TxID not found on chain', 'warning');
+    } else {
+      showSnackbar('Verification failed', 'error');
+    }
+  } finally {
+    verifying.value = false;
   }
 };
 
-const scanForTampering = async () => {
+const verifyByTxid = (txid) => {
+  verifyForm.value.txid = txid;
+  verifyRecord();
+};
+
+// ---------------------------------------------------------------------------
+// Scan recent activity
+// ---------------------------------------------------------------------------
+/**
+ * Walks the last N on-chain items and reports any whose `payload_hash` is
+ * missing or malformed. Since we can't recompute the hash without the original
+ * DB payload, the scan reports structural integrity — mismatches against the
+ * DB are the job of `verify()` on a per-txid basis.
+ */
+const scanRecentActivity = async () => {
   scanning.value = true;
-  scanComplete.value = false;
+  scanResult.value = null;
   try {
-    const response = await api.get('/blockchain/scan-tampering');
-    tamperedRecords.value = response.data.tamperedRecords;
-    scanComplete.value = true;
-    showSnackbar(`Scan completed. Found ${response.data.totalTampered} tampered records.`);
-  } catch (error) {
+    const { data } = await api.get('/blockchain/items', {
+      params: { count: 50, verbose: true }
+    });
+    const list = Array.isArray(data) ? data : [];
+
+    const mismatches = [];
+    for (const raw of list) {
+      const decoded = decodeStreamItem(raw);
+      if (!decoded) {
+        mismatches.push({
+          txid: raw.txid,
+          type: null,
+          entityId: null,
+          onChainHash: null,
+          reason: 'Undecodable payload'
+        });
+        continue;
+      }
+      if (!decoded.payload_hash || !/^[0-9a-f]{64}$/i.test(decoded.payload_hash)) {
+        mismatches.push({
+          txid: raw.txid,
+          type: decoded.type || null,
+          entityId: decoded.entity_id ?? null,
+          onChainHash: decoded.payload_hash || null,
+          reason: 'Missing or malformed payload_hash'
+        });
+      }
+    }
+
+    scanResult.value = { scanned: list.length, mismatches };
+    showSnackbar(
+      mismatches.length === 0
+        ? `Scan complete. ${list.length} item(s) OK.`
+        : `Scan complete. ${mismatches.length} issue(s) found.`,
+      mismatches.length === 0 ? 'success' : 'warning'
+    );
+  } catch (e) {
     showSnackbar('Scan failed', 'error');
   } finally {
     scanning.value = false;
   }
 };
 
-const repairChain = async () => {
-  if (!confirm('This will rebuild the entire blockchain chain. Continue?')) return;
-  
-  try {
-    await api.post('/blockchain/repair', { recordType: 'testing' });
-    await api.post('/blockchain/repair', { recordType: 'treatment' });
-    showSnackbar('Blockchain chain repaired successfully');
-    await scanForTampering();
-    await loadBlockchainStats();
-  } catch (error) {
-    showSnackbar('Repair failed', 'error');
-  }
-};
-
-const showSnackbar = (message, color = 'success') => {
-  snackbar.value = {
-    show: true,
-    message,
-    color
-  };
-};
-
-onMounted(() => {
-  loadBlockchainStats();
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+onMounted(async () => {
+  await loadStatus();
+  await loadRecentItems();
 });
 </script>
