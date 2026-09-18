@@ -2,40 +2,132 @@
 <template>
   <v-form ref="form" v-model="valid">
     <v-row>
+      <!-- Patient Selection -->
       <v-col cols="12" md="6">
-        <v-autocomplete
-          v-model="formData.patient_id"
-          v-model:search="patientSearch"
-          :items="patientOptions"
-          label="Patient"
-          prepend-inner-icon="mdi-account-search"
-          :loading="searchLoading"
-          :rules="[v => !!v || 'Patient is required']"
-          required
-          variant="outlined"
+        <!-- Selected Patient Display -->
+        <v-card
+          v-if="selectedPatient"
+          variant="tonal"
+          color="primary"
+          class="pa-3"
           density="comfortable"
-          clearable
-          item-title="label"
-          item-value="id"
-          return-object
-          :disabled="isEdit"
         >
-          <template #item="{ props, item }">
-            <v-list-item v-bind="props">
-              <template #title>
-                <span>{{ item.raw.label }}</span>
-              </template>
-            </v-list-item>
-          </template>
-          <template #selection="{ item }">
-            <span>{{ item.raw.label }}</span>
-          </template>
-          <template #no-data>
-            <v-list-item>
-              <v-list-item-title>No patients found</v-list-item-title>
-            </v-list-item>
-          </template>
-        </v-autocomplete>
+          <div class="d-flex align-center">
+            <v-avatar size="40" color="primary" variant="flat" class="mr-3">
+              <span class="text-body-1 font-weight-medium">
+                {{ (selectedPatient.first_name?.[0] || '?') }}{{ (selectedPatient.last_name?.[0] || '?') }}
+              </span>
+            </v-avatar>
+            <div class="flex-grow-1">
+              <div class="text-caption text-medium-emphasis">Selected Patient</div>
+              <div class="font-weight-medium">
+                {{ selectedPatient.first_name }} {{ selectedPatient.last_name }}
+              </div>
+              <div class="text-caption">
+                <v-icon size="x-small" class="mr-1">mdi-card-account-details</v-icon>
+                {{ selectedPatient.patient_facility_code }}
+                <span v-if="selectedPatient.contact_number">
+                  • {{ selectedPatient.contact_number }}
+                </span>
+                <v-chip
+                  v-if="selectedPatient.status"
+                  size="x-small"
+                  :color="selectedPatient.status === 'testing' ? 'info' : 'success'"
+                  class="ml-2"
+                >
+                  {{ selectedPatient.status }}
+                </v-chip>
+              </div>
+            </div>
+            <v-btn
+              icon="mdi-close"
+              size="small"
+              variant="text"
+              :disabled="isEdit"
+              @click="clearPatient"
+            ></v-btn>
+          </div>
+        </v-card>
+
+        <!-- Patient Search (when no patient selected) -->
+        <div v-else>
+          <v-text-field
+            v-model="searchQuery"
+            label="Search Patient"
+            placeholder="Type facility code, name, or contact number..."
+            prepend-inner-icon="mdi-account-search"
+            variant="outlined"
+            density="comfortable"
+            clearable
+            :loading="searchLoading"
+            :disabled="isEdit"
+            :rules="[() => !!selectedPatient || 'Patient is required']"
+            required
+            @update:model-value="onSearchInput"
+            @keydown.enter.prevent="performSearch"
+          >
+            <template #append>
+              <v-progress-circular
+                v-if="searchLoading"
+                indeterminate
+                size="20"
+              ></v-progress-circular>
+            </template>
+          </v-text-field>
+
+          <!-- Search Results -->
+          <v-card
+            v-if="searchResults.length > 0"
+            variant="outlined"
+            class="mt-2"
+            max-height="300"
+            style="overflow-y: auto;"
+          >
+            <v-list density="compact">
+              <v-list-item
+                v-for="p in searchResults"
+                :key="p.id"
+                @click="selectPatient(p)"
+              >
+                <template #prepend>
+                  <v-avatar size="32" color="primary" variant="tonal">
+                    <span class="text-caption">
+                      {{ (p.first_name?.[0] || '?') }}{{ (p.last_name?.[0] || '?') }}
+                    </span>
+                  </v-avatar>
+                </template>
+                <v-list-item-title>
+                  {{ p.first_name }} {{ p.last_name }}
+                </v-list-item-title>
+                <v-list-item-subtitle>
+                  {{ p.patient_facility_code }}
+                  <span v-if="p.contact_number"> • {{ p.contact_number }}</span>
+                  <v-chip
+                    v-if="p.status"
+                    size="x-small"
+                    :color="p.status === 'testing' ? 'info' : 'success'"
+                    class="ml-2"
+                  >
+                    {{ p.status }}
+                  </v-chip>
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+          </v-card>
+
+          <!-- No Results -->
+          <v-card
+            v-else-if="searchQuery.length >= 2 && !searchLoading && hasSearched"
+            variant="tonal"
+            color="grey-lighten-3"
+            class="mt-2 pa-3"
+          >
+            <div class="text-caption text-center text-medium-emphasis">
+              <v-icon size="small" class="mr-1">mdi-account-question</v-icon>
+              No patients found. Try searching by facility code.
+            </div>
+          </v-card>
+        </div>
       </v-col>
 
       <!-- Transaction Type Selection -->
@@ -60,8 +152,8 @@
                 <span>{{ item.raw.name }}</span>
               </template>
               <template #subtitle>
-                <v-chip 
-                  size="x-small" 
+                <v-chip
+                  size="x-small"
                   :color="item.raw.office === 'testing' ? 'info' : 'primary'"
                   class="mr-1"
                 >
@@ -75,8 +167,8 @@
           </template>
           <template #selection="{ item }">
             <span>{{ item.raw.name }}</span>
-            <v-chip 
-              size="x-small" 
+            <v-chip
+              size="x-small"
               :color="item.raw.office === 'testing' ? 'info' : 'primary'"
               class="ml-2"
             >
@@ -84,14 +176,14 @@
             </v-chip>
           </template>
         </v-select>
-        
+
         <!-- Display selected transaction type details -->
         <div v-if="selectedTransactionType" class="mt-1">
           <v-row no-gutters>
             <v-col cols="6">
               <span class="text-caption text-medium-emphasis">Office:</span>
-              <v-chip 
-                size="x-small" 
+              <v-chip
+                size="x-small"
                 :color="selectedTransactionType.office === 'testing' ? 'info' : 'primary'"
                 text-color="white"
                 class="ml-1"
@@ -109,6 +201,7 @@
         </div>
       </v-col>
 
+      <!-- Appointment Date -->
       <v-col cols="12" md="6">
         <v-menu
           v-model="dateMenu"
@@ -141,7 +234,7 @@
             :allowed-dates="allowedDates"
           ></v-date-picker>
         </v-menu>
-        
+
         <!-- Date availability info -->
         <div v-if="dateAvailabilityInfo" class="mt-1">
           <v-chip
@@ -154,12 +247,16 @@
               - {{ dateAvailabilityInfo.slotsCount }} slots available
             </span>
           </v-chip>
-          <span v-if="!dateAvailabilityInfo.available && dateAvailabilityInfo.reason" class="text-caption text-error ml-1">
+          <span
+            v-if="!dateAvailabilityInfo.available && dateAvailabilityInfo.reason"
+            class="text-caption text-error ml-1"
+          >
             {{ dateAvailabilityInfo.reason }}
           </span>
         </div>
       </v-col>
 
+      <!-- Time Slot -->
       <v-col cols="12" md="6">
         <v-select
           v-model="formData.time_slot"
@@ -226,23 +323,33 @@
             </v-chip>
           </template>
         </v-select>
-        
+
         <!-- Slot loading and status info -->
         <div v-if="slotsLoading" class="text-caption text-grey mt-1">
           <v-progress-circular indeterminate size="16" class="mr-1"></v-progress-circular>
           Loading available slots...
         </div>
-        <div v-else-if="availableSlots.length === 0 && formData.appointment_date" class="text-caption text-error mt-1">
+        <div
+          v-else-if="availableSlots.length === 0 && formData.appointment_date"
+          class="text-caption text-error mt-1"
+        >
           No time slots available for this date
         </div>
-        <div v-else-if="availableSlots.filter(s => s.available).length === 0 && availableSlots.length > 0" class="text-caption text-warning mt-1">
+        <div
+          v-else-if="availableSlots.filter(s => s.available).length === 0 && availableSlots.length > 0"
+          class="text-caption text-warning mt-1"
+        >
           All slots are booked for this date
         </div>
-        <div v-else-if="formData.time_slot && !slotsLoading" class="text-caption text-success mt-1">
+        <div
+          v-else-if="formData.time_slot && !slotsLoading"
+          class="text-caption text-success mt-1"
+        >
           Selected: {{ formatTimeSlot(formData.time_slot) }}
         </div>
       </v-col>
 
+      <!-- Notes -->
       <v-col cols="12">
         <v-textarea
           v-model="formData.notes"
@@ -258,11 +365,11 @@
     <v-row>
       <v-col cols="12" class="text-right">
         <v-btn color="error" @click="cancel" variant="outlined">Cancel</v-btn>
-        <v-btn 
-          color="primary" 
-          @click="submit" 
-          :loading="submitting" 
-          :disabled="!valid || !formData.time_slot" 
+        <v-btn
+          color="primary"
+          @click="submit"
+          :loading="submitting"
+          :disabled="!valid || !formData.time_slot || !selectedPatient"
           class="ml-2"
         >
           <v-icon start>{{ isEdit ? 'mdi-pencil' : 'mdi-plus' }}</v-icon>
@@ -315,13 +422,18 @@ export default {
     const searchLoading = ref(false)
     const dateMenu = ref(false)
     const slotsLoading = ref(false)
-    const patientOptions = ref([])
-    const patientSearch = ref('')
     const selectedDate = ref('')
     const isInitialized = ref(false)
     const transactionTypes = ref([])
     const dateAvailabilityInfo = ref(null)
     const slotsData = ref([])
+
+    // Patient search state
+    const searchQuery = ref('')
+    const searchResults = ref([])
+    const selectedPatient = ref(null)
+    const hasSearched = ref(false)
+    const searchDebounceTimer = ref(null)
 
     const localSnackbar = ref({
       show: false,
@@ -332,21 +444,19 @@ export default {
     const isEdit = computed(() => props.mode === 'edit' && !!props.appointment?.id)
     const isStaff = computed(() => authStore.userRole === 'staff')
 
-    // FIXED: Format date to YYYY-MM-DD
+    // Format date to YYYY-MM-DD
     const formatDateToYYYYMMDD = (date) => {
       if (!date) return null
-      
-      // If it's already a string in YYYY-MM-DD format
+
       if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return date
       }
-      
-      // If it's a Date object or parsable string
+
       const d = new Date(date)
       if (isNaN(d.getTime())) {
         return null
       }
-      
+
       const year = d.getFullYear()
       const month = String(d.getMonth() + 1).padStart(2, '0')
       const day = String(d.getDate()).padStart(2, '0')
@@ -362,7 +472,7 @@ export default {
     }
 
     const minDate = computed(() => getTodayDate())
-    
+
     const maxDate = computed(() => {
       const now = new Date()
       now.setDate(now.getDate() + 30)
@@ -421,7 +531,7 @@ export default {
 
     const availableSlots = computed(() => {
       if (!slotsData.value || !slotsData.value.length) return []
-      
+
       return slotsData.value.map(slot => ({
         time: slot.time,
         display_title: formatTimeSlot(slot.time),
@@ -431,6 +541,85 @@ export default {
         disabled: !slot.available
       }))
     })
+
+    // ============================================================
+    // PATIENT SEARCH (HMAC / facility-code friendly)
+    // ============================================================
+
+    const onSearchInput = (value) => {
+      hasSearched.value = false
+
+      if (searchDebounceTimer.value) {
+        clearTimeout(searchDebounceTimer.value)
+      }
+
+      if (!value || value.length < 2) {
+        searchResults.value = []
+        return
+      }
+
+      searchDebounceTimer.value = setTimeout(() => {
+        performSearch()
+      }, 400)
+    }
+
+    const performSearch = async () => {
+      const query = searchQuery.value?.trim()
+      if (!query || query.length < 2) {
+        searchResults.value = []
+        return
+      }
+
+      searchLoading.value = true
+      hasSearched.value = false
+
+      try {
+        console.log('Searching patients with:', query)
+        const response = await patientService.searchPatients(query)
+
+        // Handle different response shapes
+        let results = []
+        if (Array.isArray(response)) {
+          results = response
+        } else if (response?.data && Array.isArray(response.data)) {
+          results = response.data
+        } else if (response?.patients && Array.isArray(response.patients)) {
+          results = response.patients
+        }
+
+        searchResults.value = results.slice(0, 15)
+        console.log('Search results:', searchResults.value)
+      } catch (error) {
+        console.error('Patient search failed:', error)
+        showSnackbar('Failed to search patients', 'error')
+        searchResults.value = []
+      } finally {
+        searchLoading.value = false
+        hasSearched.value = true
+      }
+    }
+
+    const selectPatient = (patient) => {
+      selectedPatient.value = patient
+      formData.patient_id = patient.id
+      searchQuery.value = ''
+      searchResults.value = []
+      hasSearched.value = false
+      console.log('Patient selected:', patient)
+    }
+
+    const clearPatient = () => {
+      if (isEdit.value) return
+      selectedPatient.value = null
+      formData.patient_id = null
+      searchQuery.value = ''
+      searchResults.value = []
+      hasSearched.value = false
+    }
+
+    // ============================================================
+    // TRANSACTION TYPES
+    // ============================================================
 
     const loadTransactionTypes = async () => {
       try {
@@ -447,38 +636,38 @@ export default {
       } catch (error) {
         console.error('Failed to load transaction types:', error)
         transactionTypes.value = [
-          { 
-            id: 1, 
-            name: 'General Checkup', 
-            office: 'testing', 
+          {
+            id: 1,
+            name: 'General Checkup',
+            office: 'testing',
             estimated_duration_minutes: 30,
             description: 'General medical consultation'
           },
-          { 
-            id: 2, 
-            name: 'Dental Cleaning', 
-            office: 'treatment', 
+          {
+            id: 2,
+            name: 'Dental Cleaning',
+            office: 'treatment',
             estimated_duration_minutes: 45,
             description: 'Professional teeth cleaning'
           },
-          { 
-            id: 3, 
-            name: 'X-Ray', 
-            office: 'testing', 
+          {
+            id: 3,
+            name: 'X-Ray',
+            office: 'testing',
             estimated_duration_minutes: 20,
             description: 'Diagnostic imaging'
           },
-          { 
-            id: 4, 
-            name: 'Surgery Consultation', 
-            office: 'treatment', 
+          {
+            id: 4,
+            name: 'Surgery Consultation',
+            office: 'treatment',
             estimated_duration_minutes: 60,
             description: 'Pre-surgery consultation'
           },
-          { 
-            id: 5, 
-            name: 'Laboratory Test', 
-            office: 'testing', 
+          {
+            id: 5,
+            name: 'Laboratory Test',
+            office: 'testing',
             estimated_duration_minutes: 15,
             description: 'Blood work and lab tests'
           }
@@ -486,43 +675,13 @@ export default {
       }
     }
 
-    watch(patientSearch, async (search) => {
-      if (!search || search.length < 2) {
-        patientOptions.value = []
-        return
-      }
-      
-      searchLoading.value = true
-      try {
-        const response = await patientService.searchPatients(search)
-        if (Array.isArray(response)) {
-          patientOptions.value = response.map(p => ({
-            id: p.id,
-            label: `${p.first_name} ${p.last_name} - ${p.contact_number} (${p.status})`,
-            patient: p
-          }))
-        } else if (response && response.data && Array.isArray(response.data)) {
-          patientOptions.value = response.data.map(p => ({
-            id: p.id,
-            label: `${p.first_name} ${p.last_name} - ${p.contact_number} (${p.status})`,
-            patient: p
-          }))
-        }
-      } catch (error) {
-        console.error('Search failed:', error)
-        showSnackbar('Failed to search patients', 'error')
-      } finally {
-        searchLoading.value = false
-      }
-    })
-
     const onTransactionTypeChange = async () => {
       formData.appointment_date = ''
       formData.time_slot = ''
       selectedDate.value = ''
       slotsData.value = []
       dateAvailabilityInfo.value = null
-      
+
       if (formData.transaction_type_id) {
         const selected = selectedTransactionType.value
         if (selected) {
@@ -532,7 +691,10 @@ export default {
       }
     }
 
-    // FIXED: loadAvailableSlots with proper date format
+    // ============================================================
+    // SLOT LOADING
+    // ============================================================
+
     const loadAvailableSlots = async () => {
       if (!selectedDate.value || !formData.office) {
         slotsData.value = []
@@ -542,9 +704,8 @@ export default {
       }
 
       slotsLoading.value = true
-      
+
       try {
-        // Ensure date is in YYYY-MM-DD format
         const dateStr = formatDateToYYYYMMDD(selectedDate.value)
         if (!dateStr) {
           console.error('Invalid date format:', selectedDate.value)
@@ -558,28 +719,30 @@ export default {
           slotsLoading.value = false
           return
         }
-        
+
         console.log(`Loading available slots for ${dateStr} in ${formData.office}`)
         const result = await appointmentService.getAvailableSlots(
           dateStr,
           formData.office,
           null
         )
-        
+
         console.log('Available slots result:', result)
-        
+
         if (result && result.slots) {
           slotsData.value = result.slots
-          
+
           dateAvailabilityInfo.value = {
             available: result.available || false,
             slotsCount: result.count || 0,
             totalSlots: result.allSlots ? result.allSlots.length : result.slots.length,
             reason: result.message || null
           }
-          
+
           if (isEdit.value && props.appointment?.time_slot) {
-            const slotExists = slotsData.value.some(s => s.time === props.appointment.time_slot && s.available)
+            const slotExists = slotsData.value.some(
+              s => s.time === props.appointment.time_slot && s.available
+            )
             if (slotExists) {
               formData.time_slot = props.appointment.time_slot
             } else {
@@ -618,12 +781,10 @@ export default {
       }
     }
 
-    // FIXED: onDateSelected with proper date formatting
     const onDateSelected = async (value) => {
       console.log('Date selected (raw):', value)
       dateMenu.value = false
       if (value) {
-        // Ensure date is in YYYY-MM-DD format
         const formattedDate = formatDateToYYYYMMDD(value)
         if (formattedDate) {
           selectedDate.value = formattedDate
@@ -643,22 +804,25 @@ export default {
       return dateStr >= getTodayDate()
     }
 
+    // ============================================================
+    // SUBMIT
+    // ============================================================
+
     const submit = async () => {
       if (!form.value.validate()) return
-      
+
+      if (!selectedPatient.value) {
+        showSnackbar('Please select a patient', 'error')
+        return
+      }
+
       const selectedSlot = slotsData.value.find(s => s.time === formData.time_slot)
       if (selectedSlot && !selectedSlot.available) {
         showSnackbar('Selected time slot is not available', 'error')
         return
       }
 
-      let patientId
-      if (formData.patient_id && typeof formData.patient_id === 'object') {
-        patientId = formData.patient_id.id
-      } else {
-        patientId = Number(formData.patient_id)
-      }
-
+      const patientId = Number(selectedPatient.value.id)
       if (!patientId || isNaN(patientId)) {
         showSnackbar('Please select a valid patient', 'error')
         return
@@ -669,7 +833,6 @@ export default {
         return
       }
 
-      // Ensure date is in correct format
       const appointmentDate = formatDateToYYYYMMDD(selectedDate.value)
       if (!appointmentDate) {
         showSnackbar('Invalid appointment date', 'error')
@@ -693,7 +856,7 @@ export default {
         if (isEdit.value) {
           const hasDateChanged = props.appointment?.appointment_date !== appointmentDate
           const hasTimeChanged = props.appointment?.time_slot !== formData.time_slot
-          
+
           if (hasDateChanged || hasTimeChanged) {
             result = await appointmentService.rescheduleAppointment(
               props.appointment.id,
@@ -714,14 +877,14 @@ export default {
           isEdit.value ? 'Appointment updated successfully!' : 'Appointment created successfully!',
           'success'
         )
-        
+
         setTimeout(() => {
           emit('success', result)
         }, 1000)
-        
       } catch (error) {
         console.error('Failed to save appointment:', error)
-        const errorMessage = error.response?.data?.error || error.message || 'Failed to save appointment'
+        const errorMessage =
+          error.response?.data?.error || error.message || 'Failed to save appointment'
         showSnackbar(errorMessage, 'error')
       } finally {
         submitting.value = false
@@ -736,33 +899,32 @@ export default {
       localSnackbar.value = { show: true, message, color }
     }
 
-    // FIXED: Initialize form
+    // ============================================================
+    // INITIALIZATION
+    // ============================================================
+
     const initializeForm = async () => {
       await loadTransactionTypes()
-      
+
       const today = getTodayDate()
-      
+
       if (!isEdit.value) {
         selectedDate.value = today
         formData.appointment_date = today
-        
+
         if (props.patientId) {
           try {
             const patient = await patientService.getPatient(props.patientId)
             if (patient) {
-              const patientOption = {
-                id: patient.id,
-                label: `${patient.first_name} ${patient.last_name} - ${patient.contact_number} (${patient.status})`,
-                patient: patient
-              }
-              formData.patient_id = patientOption
-              patientOptions.value = [patientOption]
+              selectedPatient.value = patient
+              formData.patient_id = patient.id
+              console.log('Pre-loaded patient:', patient)
             }
           } catch (error) {
             console.error('Failed to load patient:', error)
           }
         }
-        
+
         isInitialized.value = true
         await nextTick()
         setTimeout(async () => {
@@ -775,18 +937,17 @@ export default {
       if (isEdit.value && props.appointment) {
         try {
           console.log('Loading appointment data for edit:', props.appointment)
-          
+
           if (props.appointment.transaction_type_id) {
             formData.transaction_type_id = props.appointment.transaction_type_id
           }
-          
+
           if (props.appointment.office) {
             formData.office = props.appointment.office
           } else if (selectedTransactionType.value) {
             formData.office = selectedTransactionType.value.office
           }
-          
-          // FIXED: Format date properly
+
           if (props.appointment.appointment_date) {
             const formattedDate = formatDateToYYYYMMDD(props.appointment.appointment_date)
             if (formattedDate) {
@@ -799,12 +960,12 @@ export default {
               formData.appointment_date = today
             }
           }
-          
+
           formData.time_slot = props.appointment.time_slot || ''
           formData.notes = props.appointment.notes || ''
 
           let patientData = props.appointment.Patient
-          
+
           if (!patientData && props.appointment.patient_id) {
             try {
               console.log('Fetching patient data for ID:', props.appointment.patient_id)
@@ -813,31 +974,29 @@ export default {
               console.error('Failed to load patient:', error)
             }
           }
-          
+
           if (patientData) {
             console.log('Patient data loaded:', patientData)
-            const patientOption = {
-              id: patientData.id,
-              label: `${patientData.first_name} ${patientData.last_name} - ${patientData.contact_number} (${patientData.status})`,
-              patient: patientData
-            }
-            patientOptions.value = [patientOption]
-            formData.patient_id = patientOption
+            selectedPatient.value = patientData
+            formData.patient_id = patientData.id
           }
-          
+
           isInitialized.value = true
-          
+
           await nextTick()
           setTimeout(async () => {
             await loadAvailableSlots()
           }, 500)
-          
         } catch (error) {
           console.error('Failed to load appointment data:', error)
           showSnackbar('Failed to load appointment data', 'error')
         }
       }
     }
+
+    // ============================================================
+    // WATCHERS
+    // ============================================================
 
     watch(() => formData.transaction_type_id, async (newVal, oldVal) => {
       if (newVal && newVal !== oldVal && isInitialized.value) {
@@ -858,31 +1017,46 @@ export default {
     })
 
     return {
+      // Refs
       form,
       valid,
       submitting,
       searchLoading,
       dateMenu,
       slotsLoading,
+
+      // Computed
       isEdit,
       isStaff,
       minDate,
       maxDate,
-      formData,
-      selectedDate,
       displayDate,
-      patientSearch,
-      patientOptions,
-      transactionTypes,
       selectedTransactionType,
       availableSlots,
+
+      // Data
+      formData,
+      selectedDate,
+      transactionTypes,
       slotsData,
       dateAvailabilityInfo,
       localSnackbar,
+
+      // Patient search
+      searchQuery,
+      searchResults,
+      selectedPatient,
+      hasSearched,
+
+      // Methods
       allowedDates,
       formatTimeSlot,
       onTransactionTypeChange,
       onDateSelected,
+      onSearchInput,
+      performSearch,
+      selectPatient,
+      clearPatient,
       submit,
       cancel,
       showSnackbar,
@@ -900,5 +1074,14 @@ export default {
 
 .v-date-picker {
   width: 100%;
+}
+
+/* Ensure search results card scrolls smoothly */
+.v-card[style*="overflow-y"]::-webkit-scrollbar {
+  width: 6px;
+}
+.v-card[style*="overflow-y"]::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
 }
 </style>

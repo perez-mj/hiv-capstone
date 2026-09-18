@@ -346,203 +346,218 @@ class QueueService {
   }
 
   /**
- * Call next patient in queue
- */
-async callNext(office, date, transaction = null) {
-  try {
-    const queue = await db.Queue.findOne({
-      where: {
-        office,
-        date
-      },
-      transaction
-    });
+   * Call next patient in queue
+   */
+  async callNext(office, date, transaction = null) {
+    try {
+      const queue = await db.Queue.findOne({
+        where: {
+          office,
+          date
+        },
+        transaction
+      });
 
-    if (!queue) {
-      throw new Error('No queue found for this date');
-    }
-
-    // FIRST: Complete the current serving patient (if any)
-    const currentServing = await db.QueueEntry.findOne({
-      where: {
-        queue_id: queue.id,
-        status: 'in-progress'
-      },
-      include: [
-        {
-          model: db.Appointment,
-          as: 'Appointment',
-          attributes: ['id']
-        }
-      ],
-      transaction
-    });
-
-    if (currentServing) {
-      // Mark queue entry as completed
-      await currentServing.update({
-        status: 'completed',
-        completed_at: new Date()
-      }, { transaction });
-
-      // Update queue stats
-      await queue.increment('completed_count', { by: 1, transaction });
-
-      // Update the appointment status to "completed"
-      if (currentServing.Appointment) {
-        await db.Appointment.update(
-          { status: 'completed' },
-          { 
-            where: { id: currentServing.Appointment.id },
-            transaction 
-          }
-        );
-        console.log(`Appointment ${currentServing.Appointment.id} marked as completed`);
+      if (!queue) {
+        throw new Error('No queue found for this date');
       }
 
-      // Update average wait time
-      if (currentServing.called_at) {
-        const waitTime = Math.floor((new Date() - new Date(currentServing.called_at)) / 60000);
-        const totalWait = queue.total_wait_time_minutes || 0;
-        const totalCompleted = (queue.completed_count || 0);
-        const newTotalWait = totalWait + waitTime;
-        const avgWait = Math.round(newTotalWait / totalCompleted);
-        
+      // FIRST: Complete the current serving patient (if any)
+      const currentServing = await db.QueueEntry.findOne({
+        where: {
+          queue_id: queue.id,
+          status: 'in-progress'
+        },
+        include: [
+          {
+            model: db.Appointment,
+            as: 'Appointment',
+            attributes: ['id']
+          }
+        ],
+        transaction
+      });
+
+      if (currentServing) {
+        // Mark queue entry as completed
+        await currentServing.update({
+          status: 'completed',
+          completed_at: new Date()
+        }, { transaction });
+
+        // Compute the NEW completed count locally (do NOT rely on the stale
+        // in-memory queue.completed_count after increment()).
+        const newCompletedCount = (queue.completed_count || 0) + 1;
+
+        // Keep the local instance in sync for the rest of this method.
+        queue.completed_count = newCompletedCount;
+
+        // Update the appointment status to "completed"
+        if (currentServing.Appointment) {
+          await db.Appointment.update(
+            { status: 'completed' },
+            {
+              where: { id: currentServing.Appointment.id },
+              transaction
+            }
+          );
+          console.log(`Appointment ${currentServing.Appointment.id} marked as completed`);
+        }
+
+        // Update average wait time
+        let newTotalWait = queue.total_wait_time_minutes || 0;
+
+        if (currentServing.called_at) {
+          const waitTime = Math.floor(
+            (new Date() - new Date(currentServing.called_at)) / 60000
+          );
+          newTotalWait = newTotalWait + waitTime;
+        }
+
+        let avgWait = newCompletedCount > 0
+          ? Math.round(newTotalWait / newCompletedCount)
+          : 0;
+
+        // Guard against Infinity / NaN ever reaching MySQL
+        if (!Number.isFinite(avgWait)) {
+          avgWait = 0;
+        }
+
         await queue.update({
+          completed_count: newCompletedCount,
           total_wait_time_minutes: newTotalWait,
           average_wait_time_minutes: avgWait
         }, { transaction });
       }
-    }
 
-    // THEN: Find the next waiting patient
-    const nextEntry = await db.QueueEntry.findOne({
-      where: {
-        queue_id: queue.id,
-        status: 'waiting'
-      },
-      order: [['position', 'ASC']],
-      include: [
-        {
-          model: db.Patient,
-          as: 'Patient',
-          attributes: ['id', 'first_name', 'last_name']
+      // THEN: Find the next waiting patient
+      const nextEntry = await db.QueueEntry.findOne({
+        where: {
+          queue_id: queue.id,
+          status: 'waiting'
         },
-        {
-          model: db.Appointment,
-          as: 'Appointment',
-          attributes: ['id']
-        }
-      ],
-      transaction
-    });
+        order: [['position', 'ASC']],
+        include: [
+          {
+            model: db.Patient,
+            as: 'Patient',
+            attributes: ['id', 'first_name', 'last_name']
+          },
+          {
+            model: db.Appointment,
+            as: 'Appointment',
+            attributes: ['id']
+          }
+        ],
+        transaction
+      });
 
-    if (!nextEntry) {
+      if (!nextEntry) {
+        return {
+          success: false,
+          message: 'No patients waiting in queue'
+        };
+      }
+
+      // Update entry status to in-progress
+      await nextEntry.update({
+        status: 'in-progress',
+        called_at: new Date()
+      }, { transaction });
+
+      // Update queue current number
+      await queue.update({
+        current_number: nextEntry.position
+      }, { transaction });
+
+      // Update the appointment status to "in-progress" (optional)
+      if (nextEntry.Appointment) {
+        await db.Appointment.update(
+          { status: 'in-progress' },
+          {
+            where: { id: nextEntry.Appointment.id },
+            transaction
+          }
+        );
+      }
+
       return {
-        success: false,
-        message: 'No patients waiting in queue'
+        success: true,
+        queueEntry: nextEntry.toJSON()
       };
+    } catch (error) {
+      console.error('Error calling next:', error);
+      throw error;
     }
-
-    // Update entry status to in-progress
-    await nextEntry.update({
-      status: 'in-progress',
-      called_at: new Date()
-    }, { transaction });
-
-    // Update queue current number
-    await queue.update({
-      current_number: nextEntry.position
-    }, { transaction });
-
-    // Update the appointment status to "in-progress" (optional)
-    if (nextEntry.Appointment) {
-      await db.Appointment.update(
-        { status: 'in-progress' },
-        { 
-          where: { id: nextEntry.Appointment.id },
-          transaction 
-        }
-      );
-    }
-
-    return {
-      success: true,
-      queueEntry: nextEntry.toJSON()
-    };
-  } catch (error) {
-    console.error('Error calling next:', error);
-    throw error;
   }
-}
 
-/**
- * Skip current patient
- */
-async skipCurrent(office, date, reason = 'Skipped by staff', transaction = null) {
-  try {
-    const queue = await db.Queue.findOne({
-      where: {
-        office,
-        date
-      },
-      transaction
-    });
+  /**
+   * Skip current patient
+   */
+  async skipCurrent(office, date, reason = 'Skipped by staff', transaction = null) {
+    try {
+      const queue = await db.Queue.findOne({
+        where: {
+          office,
+          date
+        },
+        transaction
+      });
 
-    if (!queue) {
-      throw new Error('No queue found for this date');
-    }
+      if (!queue) {
+        throw new Error('No queue found for this date');
+      }
 
-    const currentEntry = await db.QueueEntry.findOne({
-      where: {
-        queue_id: queue.id,
-        status: 'in-progress'
-      },
-      include: [
-        {
-          model: db.Appointment,
-          as: 'Appointment',
-          attributes: ['id']
-        }
-      ],
-      transaction
-    });
+      const currentEntry = await db.QueueEntry.findOne({
+        where: {
+          queue_id: queue.id,
+          status: 'in-progress'
+        },
+        include: [
+          {
+            model: db.Appointment,
+            as: 'Appointment',
+            attributes: ['id']
+          }
+        ],
+        transaction
+      });
 
-    if (!currentEntry) {
+      if (!currentEntry) {
+        return {
+          success: false,
+          message: 'No patient currently being served'
+        };
+      }
+
+      await currentEntry.update({
+        status: 'skipped',
+        skip_reason: reason
+      }, { transaction });
+
+      // Update queue stats
+      await queue.increment('skipped_count', { by: 1, transaction });
+
+      // Update appointment status to "no-show" or "skipped"
+      if (currentEntry.Appointment) {
+        await db.Appointment.update(
+          { status: 'no-show' },
+          {
+            where: { id: currentEntry.Appointment.id },
+            transaction
+          }
+        );
+      }
+
       return {
-        success: false,
-        message: 'No patient currently being served'
+        success: true,
+        queueEntry: currentEntry.toJSON()
       };
+    } catch (error) {
+      console.error('Error skipping current:', error);
+      throw error;
     }
-
-    await currentEntry.update({
-      status: 'skipped',
-      skip_reason: reason
-    }, { transaction });
-
-    // Update queue stats
-    await queue.increment('skipped_count', { by: 1, transaction });
-
-    // Update appointment status to "no-show" or "skipped"
-    if (currentEntry.Appointment) {
-      await db.Appointment.update(
-        { status: 'no-show' },
-        { 
-          where: { id: currentEntry.Appointment.id },
-          transaction 
-        }
-      );
-    }
-
-    return {
-      success: true,
-      queueEntry: currentEntry.toJSON()
-    };
-  } catch (error) {
-    console.error('Error skipping current:', error);
-    throw error;
   }
-}
 
   /**
    * Reset queue (end of day)
@@ -629,22 +644,35 @@ async skipCurrent(office, date, reason = 'Skipped by staff', transaction = null)
         completed_at: new Date()
       }, { transaction });
 
-      // Update queue stats
-      await queue.increment('completed_count', { by: 1, transaction });
+      // Compute the NEW completed count locally. Do NOT rely on the stale
+      // in-memory queue.completed_count value after increment().
+      const newCompletedCount = (queue.completed_count || 0) + 1;
+      queue.completed_count = newCompletedCount;
 
       // Update average wait time
+      let newTotalWait = queue.total_wait_time_minutes || 0;
+
       if (currentEntry.called_at) {
-        const waitTime = Math.floor((new Date() - new Date(currentEntry.called_at)) / 60000);
-        const totalWait = queue.total_wait_time_minutes || 0;
-        const totalCompleted = (queue.completed_count || 0) + 1;
-        const newTotalWait = totalWait + waitTime;
-        const avgWait = Math.round(newTotalWait / totalCompleted);
-        
-        await queue.update({
-          total_wait_time_minutes: newTotalWait,
-          average_wait_time_minutes: avgWait
-        }, { transaction });
+        const waitTime = Math.floor(
+          (new Date() - new Date(currentEntry.called_at)) / 60000
+        );
+        newTotalWait = newTotalWait + waitTime;
       }
+
+      let avgWait = newCompletedCount > 0
+        ? Math.round(newTotalWait / newCompletedCount)
+        : 0;
+
+      // Guard against Infinity / NaN ever reaching MySQL
+      if (!Number.isFinite(avgWait)) {
+        avgWait = 0;
+      }
+
+      await queue.update({
+        completed_count: newCompletedCount,
+        total_wait_time_minutes: newTotalWait,
+        average_wait_time_minutes: avgWait
+      }, { transaction });
 
       return {
         success: true,
