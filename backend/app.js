@@ -35,6 +35,9 @@ app.use('/api/treatment', require('./routes/treatment'));
 app.use('/api/blockchain', require('./routes/blockchain'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/kiosk', require('./routes/kiosk'));
+
+
+app.use('/api/locations', require('./routes/location'));
 // app.use('/api/reports', require('./routes/reports'));
 
 // Health check

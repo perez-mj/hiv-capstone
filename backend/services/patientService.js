@@ -135,20 +135,31 @@ class PatientService {
   }
 
   async getPatientStats(actorId = null, req = null) {
-    const total = await db.Patient.count();
-    const active = await db.Patient.count({ where: { status: 'active' } });
-    const inactive = await db.Patient.count({ where: { status: 'inactive' } });
+    // NOTE: status and purpose are encrypted; filter via their *_hash columns.
+    const [
+      total,
+      active,
+      inactive,
+      testing,
+      treatment
+    ] = await Promise.all([
+      db.Patient.count(),
+      db.Patient.count({ where: { status_hash: hmac('active') } }),
+      db.Patient.count({ where: { status_hash: hmac('inactive') } }),
+      db.Patient.count({ where: { purpose_hash: hmac('testing') } }),
+      db.Patient.count({ where: { purpose_hash: hmac('treatment') } })
+    ]);
 
     audit.write({
       userId: actorId,
       action: 'STATS',
       entityType: 'Patient',
-      metadata: { total, active, inactive },
+      metadata: { total, active, inactive, testing, treatment },
       ipAddress: req?.ip,
       userAgent: req?.get?.('User-Agent')
     });
 
-    return { total, active, inactive };
+    return { total, active, inactive, testing, treatment };
   }
 
   // ---------- CREATE ----------
@@ -318,7 +329,8 @@ class PatientService {
         old_code: oldCode,
         new_code: newCode,
         patient_facility_code: newCode,
-        status_ct: patient.getDataValue('status'),
+        purpose: patient.purpose,
+        status: patient.status,
         updated_at: patient.updated_at
       },
       userId,

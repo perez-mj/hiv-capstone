@@ -38,6 +38,12 @@ db.TreatmentEncounter = require('./TreatmentEncounter')(sequelize);
 db.Queue = require('./Queue')(sequelize);
 db.QueueEntry = require('./QueueEntry')(sequelize);
 
+
+db.Region = require('./Region')(sequelize);
+db.Province = require('./Province')(sequelize);
+db.CityMunicipality = require('./CityMunicipality')(sequelize);
+db.Barangay = require('./Barangay')(sequelize);
+
 // Define associations after all models are loaded
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {

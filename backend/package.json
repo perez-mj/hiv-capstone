@@ -2,12 +2,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-
-    
     "mc:init": "node scripts/multichain.js init",
     "mc:init:force": "node scripts/multichain.js init --force",
-    "mc:stream:create":    "node scripts/multichain.js stream:create",
-    "mc:stream:status":    "node scripts/multichain.js stream:status",
+    "mc:stream:create": "node scripts/multichain.js stream:create",
+    "mc:stream:status": "node scripts/multichain.js stream:status",
     "mc:stream:subscribe": "node scripts/multichain.js stream:subscribe",
     "mc:start": "node scripts/multichain.js start",
     "mc:stop": "node scripts/multichain.js stop",
@@ -16,9 +14,8 @@
     "mc:logs": "node scripts/multichain.js logs",
     "mc:doctor": "node scripts/multichain.js doctor",
     "mc:cli": "node scripts/multichain.js cli",
-
-
     "dev:init": "node scripts/initDb.js",
+    "dev:seed": "node scripts/seedDev.js",
     "db:drop": "node scripts/dropDb.js",
     "db:status": " node scripts/dbStatus.js",
     "migrate": "sequelize-cli db:migrate",
@@ -26,7 +23,9 @@
     "migrate:undo": "sequelize-cli db:migrate:undo",
     "migrate:undo:all": "sequelize-cli db:migrate:undo:all",
     "migrate:prod": "sequelize-cli db:migrate --env production",
-    "seed:prod": "sequelize-cli db:seed --seed 20260101000001-prod-essentials.js --env production"
+    "seed:prod": "sequelize-cli db:seed --seed 20260101000001-prod-essentials.js --env production",
+
+    "seed:locations": "node scripts/import-psgc.js"
   },
   "dependencies": {
     "axios": "^1.19.0",
@@ -42,7 +41,8 @@
     "multer": "^2.1.1",
     "mysql2": "^3.23.1",
     "sequelize": "^6.37.8",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",

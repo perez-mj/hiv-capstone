@@ -12,7 +12,9 @@
           <v-card-text>
             <v-form ref="form" v-model="valid">
               <!-- ==================== PERSONAL INFO ==================== -->
-              <div class="text-subtitle-1 font-weight-bold mb-3">Personal Information</div>
+              <div class="text-subtitle-1 font-weight-bold mb-3">
+                Personal Information
+              </div>
               <v-row>
                 <v-col cols="12" md="4">
                   <v-text-field
@@ -21,14 +23,14 @@
                     required
                     :rules="[v => !!v || 'First name is required']"
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
                 <v-col cols="12" md="4">
                   <v-text-field
                     v-model="patient.middle_name"
                     label="Middle Name"
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
                 <v-col cols="12" md="4">
                   <v-text-field
@@ -37,16 +39,26 @@
                     required
                     :rules="[v => !!v || 'Last name is required']"
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
 
-                <v-col cols="12" md="6">
+                <v-col cols="12" md="4">
+                  <v-text-field
+                    v-model="patient.suffix"
+                    label="Suffix"
+                    hint="Jr., Sr., III, etc."
+                    persistent-hint
+                    outlined
+                  />
+                </v-col>
+
+                <v-col cols="12" md="4">
                   <v-menu
                     v-model="dateMenu"
                     :close-on-content-click="false"
                     transition="scale-transition"
                   >
-                    <template v-slot:activator="{ props }">
+                    <template #activator="{ props }">
                       <v-text-field
                         v-model="patient.birth_date"
                         label="Date of Birth *"
@@ -56,17 +68,17 @@
                         :rules="[v => !!v || 'Date of birth is required']"
                         v-bind="props"
                         outlined
-                      ></v-text-field>
+                      />
                     </template>
                     <v-date-picker
                       v-model="patient.birth_date"
-                      @update:model-value="dateMenu = false"
                       :max="today"
-                    ></v-date-picker>
+                      @update:model-value="dateMenu = false"
+                    />
                   </v-menu>
                 </v-col>
 
-                <v-col cols="12" md="6">
+                <v-col cols="12" md="4">
                   <v-select
                     v-model="patient.gender"
                     :items="genderOptions"
@@ -76,7 +88,7 @@
                     required
                     :rules="[v => !!v || 'Gender is required']"
                     outlined
-                  ></v-select>
+                  />
                 </v-col>
 
                 <v-col cols="12" md="6">
@@ -91,35 +103,106 @@
                     hint="Must be unique — used as patient identifier"
                     persistent-hint
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
 
                 <v-col cols="12" md="6">
                   <v-select
                     v-model="patient.status"
-                    :items="['testing', 'treatment']"
+                    :items="statusOptions"
                     label="Status"
                     readonly
                     outlined
                     hint="New patients start in Testing status"
                     persistent-hint
-                  ></v-select>
-                </v-col>
-
-                <v-col cols="12">
-                  <v-textarea
-                    v-model="patient.address"
-                    label="Address"
-                    rows="2"
-                    outlined
-                  ></v-textarea>
+                  />
                 </v-col>
               </v-row>
 
-              <v-divider class="my-4"></v-divider>
+              <v-divider class="my-4" />
+
+              <!-- ==================== STRUCTURED ADDRESS ==================== -->
+              <div class="text-subtitle-1 font-weight-bold mb-3">
+                Address
+              </div>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="selectedRegionId"
+                    :items="regions"
+                    item-title="name"
+                    item-value="id"
+                    label="Region *"
+                    :loading="loadingRegions"
+                    :rules="[v => !!v || 'Region is required']"
+                    outlined
+                    @update:model-value="onRegionChange"
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="patient.province_id"
+                    :items="provinces"
+                    item-title="name"
+                    item-value="id"
+                    label="Province"
+                    :loading="loadingProvinces"
+                    :disabled="!selectedRegionId || provinces.length === 0"
+                    clearable
+                    outlined
+                    :hint="provinces.length === 0 && selectedRegionId
+                      ? 'No provinces for this region (e.g. NCR)'
+                      : ''"
+                    persistent-hint
+                    @update:model-value="onProvinceChange"
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="patient.city_municipality_id"
+                    :items="cities"
+                    item-title="name"
+                    item-value="id"
+                    label="City / Municipality *"
+                    :loading="loadingCities"
+                    :disabled="!selectedRegionId"
+                    :rules="[v => !!v || 'City / Municipality is required']"
+                    outlined
+                    @update:model-value="onCityChange"
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="patient.barangay_id"
+                    :items="barangays"
+                    item-title="name"
+                    item-value="id"
+                    label="Barangay *"
+                    :loading="loadingBarangays"
+                    :disabled="!patient.city_municipality_id"
+                    :rules="[v => !!v || 'Barangay is required']"
+                    outlined
+                  />
+                </v-col>
+
+                <v-col cols="12">
+                  <v-text-field
+                    v-model="patient.sitio_street"
+                    label="House No. / Street / Purok / Sitio"
+                    outlined
+                  />
+                </v-col>
+              </v-row>
+
+              <v-divider class="my-4" />
 
               <!-- ==================== ENROLLMENT ==================== -->
-              <div class="text-subtitle-1 font-weight-bold mb-3">Enrollment Information</div>
+              <div class="text-subtitle-1 font-weight-bold mb-3">
+                Enrollment Information
+              </div>
               <v-row>
                 <v-col cols="12" md="6">
                   <v-text-field
@@ -130,65 +213,33 @@
                     outlined
                     hint="Auto-set to today's date by the server"
                     persistent-hint
-                  ></v-text-field>
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="patient.purpose"
+                    label="Purpose"
+                    outlined
+                    hint="e.g. testing, treatment"
+                    persistent-hint
+                  />
                 </v-col>
               </v-row>
 
-              <v-divider class="my-4"></v-divider>
-
-              <!-- ==================== GUARDIAN ==================== -->
-              <div class="text-subtitle-1 font-weight-bold mb-3">
-                Guardian Information <span class="text-caption">(for minors under 18)</span>
-              </div>
-              <v-row>
-                <v-col cols="12" md="6">
-                  <v-text-field
-                    v-model="patient.guardian_name"
-                    label="Guardian Name"
-                    outlined
-                  ></v-text-field>
-                </v-col>
-                <v-col cols="12" md="6">
-                  <v-text-field
-                    v-model="patient.guardian_contact"
-                    label="Guardian Contact"
-                    outlined
-                  ></v-text-field>
-                </v-col>
-              </v-row>
-
-              <v-divider class="my-4"></v-divider>
-
-              <!-- ==================== EMERGENCY ==================== -->
-              <div class="text-subtitle-1 font-weight-bold mb-3">Emergency Contact</div>
-              <v-row>
-                <v-col cols="12" md="6">
-                  <v-text-field
-                    v-model="patient.emergency_contact"
-                    label="Emergency Contact Name"
-                    outlined
-                  ></v-text-field>
-                </v-col>
-                <v-col cols="12" md="6">
-                  <v-text-field
-                    v-model="patient.emergency_phone"
-                    label="Emergency Contact Phone"
-                    outlined
-                  ></v-text-field>
-                </v-col>
-              </v-row>
-
-              <v-divider class="my-4"></v-divider>
+              <v-divider class="my-4" />
 
               <!-- ==================== PORTAL ACCESS ==================== -->
-              <div class="text-subtitle-1 font-weight-bold mb-3">Portal Access</div>
+              <div class="text-subtitle-1 font-weight-bold mb-3">
+                Portal Access
+              </div>
               <v-checkbox
                 v-model="createPortalAccount"
                 label="Create patient portal account"
                 color="primary"
                 hint="Requires a unique username, email, and password of at least 8 characters"
                 persistent-hint
-              ></v-checkbox>
+              />
 
               <v-row v-if="createPortalAccount">
                 <v-col cols="12" md="6">
@@ -202,7 +253,7 @@
                       v => /^[a-zA-Z0-9_.-]+$/.test(v) || 'Only letters, numbers, _ . - allowed'
                     ]"
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
 
                 <v-col cols="12" md="6">
@@ -218,7 +269,7 @@
                     hint="Used for portal login and notifications"
                     persistent-hint
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
 
                 <v-col cols="12" md="6">
@@ -232,7 +283,7 @@
                       v => v.length >= 8 || 'Minimum 8 characters'
                     ]"
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
 
                 <v-col cols="12" md="6">
@@ -246,19 +297,21 @@
                       v => v === portalCredentials.password || 'Passwords do not match'
                     ]"
                     outlined
-                  ></v-text-field>
+                  />
                 </v-col>
               </v-row>
 
               <v-row>
                 <v-col cols="12" class="text-right">
-                  <v-btn color="error" variant="text" @click="cancel">Cancel</v-btn>
+                  <v-btn color="error" variant="text" @click="cancel">
+                    Cancel
+                  </v-btn>
                   <v-btn
                     color="primary"
-                    @click="submit"
                     :loading="submitting"
                     :disabled="!valid"
                     class="ml-2"
+                    @click="submit"
                   >
                     <v-icon left>mdi-check</v-icon>
                     Save Patient
@@ -278,9 +331,10 @@
 </template>
 
 <script>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import patientService from '@/services/patientService'
+import locationService from '@/services/locationService'
 
 export default {
   name: 'PatientCreate',
@@ -295,20 +349,23 @@ export default {
     const today = new Date().toISOString().split('T')[0]
 
     // Patient fields — match the Patient model exactly.
-    // NOTE: no `email` here — email belongs to the User (portal account).
+    // NOTE: no `address`, `guardian_*`, `emergency_*` — those don't exist
+    // in the model. Address is structured: province_id, city_municipality_id,
+    // barangay_id, sitio_street.
     const patient = reactive({
       first_name: '',
       middle_name: '',
       last_name: '',
+      suffix: '',
       birth_date: '',
       gender: '',
       contact_number: '',
-      address: '',
-      status: 'testing',
-      guardian_name: '',
-      guardian_contact: '',
-      emergency_contact: '',
-      emergency_phone: ''
+      sitio_street: '',
+      barangay_id: null,
+      city_municipality_id: null,
+      province_id: null,
+      purpose: 'testing',
+      status: 'testing'
     })
 
     // Portal (User) fields — only sent when createPortalAccount is true
@@ -319,6 +376,17 @@ export default {
       confirmPassword: ''
     })
 
+    // Location cascading state
+    const regions = ref([])
+    const provinces = ref([])
+    const cities = ref([])
+    const barangays = ref([])
+    const selectedRegionId = ref(null)
+    const loadingRegions = ref(false)
+    const loadingProvinces = ref(false)
+    const loadingCities = ref(false)
+    const loadingBarangays = ref(false)
+
     const snackbar = ref({ show: false, message: '', color: 'success' })
 
     const genderOptions = [
@@ -326,6 +394,8 @@ export default {
       { title: 'Female', value: 'female' },
       { title: 'Other', value: 'other' }
     ]
+
+    const statusOptions = ['testing', 'treatment']
 
     // Clear portal credentials when the checkbox is unchecked
     watch(createPortalAccount, (enabled) => {
@@ -337,6 +407,102 @@ export default {
       }
     })
 
+    // ---------------- LOCATION LOADERS ----------------
+    const loadRegions = async () => {
+      loadingRegions.value = true
+      try {
+        regions.value = await locationService.getRegions()
+      } catch (e) {
+        showSnackbar('Failed to load regions', 'error')
+      } finally {
+        loadingRegions.value = false
+      }
+    }
+
+    const onRegionChange = async (regionId) => {
+      // Reset downstream selections
+      patient.province_id = null
+      patient.city_municipality_id = null
+      patient.barangay_id = null
+      provinces.value = []
+      cities.value = []
+      barangays.value = []
+
+      if (!regionId) return
+
+      // Load provinces for this region
+      loadingProvinces.value = true
+      try {
+        provinces.value = await locationService.getProvinces(regionId)
+      } catch (e) {
+        provinces.value = []
+      } finally {
+        loadingProvinces.value = false
+      }
+
+      // Also load cities directly under the region — needed for NCR
+      // (region with no provinces). We always load them so the user
+      // can pick a city even when there is no province.
+      loadingCities.value = true
+      try {
+        cities.value = await locationService.getCitiesByRegion(regionId)
+      } catch (e) {
+        cities.value = []
+      } finally {
+        loadingCities.value = false
+      }
+    }
+
+    const onProvinceChange = async (provinceId) => {
+      patient.city_municipality_id = null
+      patient.barangay_id = null
+      cities.value = []
+      barangays.value = []
+
+      if (!provinceId) {
+        // Fall back to cities directly under the region (NCR case)
+        if (selectedRegionId.value) {
+          loadingCities.value = true
+          try {
+            cities.value = await locationService.getCitiesByRegion(
+              selectedRegionId.value
+            )
+          } catch (e) {
+            cities.value = []
+          } finally {
+            loadingCities.value = false
+          }
+        }
+        return
+      }
+
+      loadingCities.value = true
+      try {
+        cities.value = await locationService.getCitiesByProvince(provinceId)
+      } catch (e) {
+        cities.value = []
+      } finally {
+        loadingCities.value = false
+      }
+    }
+
+    const onCityChange = async (cityId) => {
+      patient.barangay_id = null
+      barangays.value = []
+
+      if (!cityId) return
+
+      loadingBarangays.value = true
+      try {
+        barangays.value = await locationService.getBarangays(cityId)
+      } catch (e) {
+        barangays.value = []
+      } finally {
+        loadingBarangays.value = false
+      }
+    }
+
+    // ---------------- SUBMIT ----------------
     const submit = async () => {
       if (!form.value.validate()) return
 
@@ -368,7 +534,10 @@ export default {
       snackbar.value = { show: true, message, color }
     }
 
+    onMounted(loadRegions)
+
     return {
+      // form state
       form,
       valid,
       submitting,
@@ -377,10 +546,25 @@ export default {
       portalCredentials,
       createPortalAccount,
       genderOptions,
+      statusOptions,
       today,
       submit,
       cancel,
-      snackbar
+      snackbar,
+
+      // location
+      regions,
+      provinces,
+      cities,
+      barangays,
+      selectedRegionId,
+      loadingRegions,
+      loadingProvinces,
+      loadingCities,
+      loadingBarangays,
+      onRegionChange,
+      onProvinceChange,
+      onCityChange
     }
   }
 }

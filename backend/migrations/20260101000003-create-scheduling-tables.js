@@ -1,3 +1,4 @@
+// backend/migrations/20260101000003-create-scheduling-tables.js
 'use strict';
 
 module.exports = {

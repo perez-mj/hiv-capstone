@@ -357,7 +357,7 @@ class DatabaseInitializer {
 
   async createRefreshTokens() {
     console.log('\nCreating refresh tokens for users...');
-    
+
     const users = await db.User.findAll({
       where: { is_active: true }
     });
@@ -365,19 +365,19 @@ class DatabaseInitializer {
     let createdCount = 0;
     for (const user of users) {
       const numTokens = Math.floor(Math.random() * 2) + 1;
-      
+
       for (let i = 0; i < numTokens; i++) {
         const token = this.generateRefreshToken();
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 7);
-        
+
         const refreshToken = await db.RefreshToken.create({
           token: token,
           user_id: user.id,
           expires_at: expiresAt,
           revoked: i === 1 ? true : false,
           ip_address: `192.168.1.${Math.floor(Math.random() * 255)}`,
-          user_agent: i === 0 
+          user_agent: i === 0
             ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             : 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15'
         });
@@ -393,10 +393,13 @@ class DatabaseInitializer {
 
   async createPatients() {
     console.log('\nCreating patients...');
-    
+
     const today = new Date();
     const currentYear = today.getFullYear();
-    
+
+    // NOTE: `status` is now lifecycle only ('active' | 'inactive').
+    //       `purpose` holds the testing/treatment distinction that drives
+    //       the facility code prefix and the year source.
     const patients = [
       {
         first_name: 'Juan',
@@ -406,7 +409,8 @@ class DatabaseInitializer {
         gender: 'Male',
         contact_number: '09171234567',
         address: '123 Roxas Blvd, Manila',
-        status: 'treatment',
+        status: 'active',
+        purpose: 'treatment',
         emergency_contact: 'Maria Dela Cruz',
         emergency_phone: '09171234568',
         enrollment_date: `${currentYear - 2}-01-15`,
@@ -426,7 +430,8 @@ class DatabaseInitializer {
         gender: 'Female',
         contact_number: '09179876543',
         address: '456 Katipunan Ave, Quezon City',
-        status: 'testing',
+        status: 'active',
+        purpose: 'testing',
         emergency_contact: 'Jose Santos',
         emergency_phone: '09179876544',
         enrollment_date: `${currentYear}-01-10`,
@@ -446,7 +451,8 @@ class DatabaseInitializer {
         gender: 'Male',
         contact_number: '09175678901',
         address: '789 Osmeña Blvd, Cebu City',
-        status: 'treatment',
+        status: 'active',
+        purpose: 'treatment',
         emergency_contact: 'Ana Reyes',
         emergency_phone: '09175678987',
         enrollment_date: `${currentYear - 3}-06-20`,
@@ -466,7 +472,8 @@ class DatabaseInitializer {
         gender: 'Female',
         contact_number: '09172345678',
         address: '321 F. Torres St, Davao City',
-        status: 'testing',
+        status: 'active',
+        purpose: 'testing',
         emergency_contact: 'Roberto Gonzales',
         emergency_phone: '09172345679',
         enrollment_date: `${currentYear}-03-05`,
@@ -486,7 +493,8 @@ class DatabaseInitializer {
         gender: 'Male',
         contact_number: '09173456789',
         address: '555 MacArthur Highway, Pampanga',
-        status: 'treatment',
+        status: 'active',
+        purpose: 'treatment',
         emergency_contact: 'Susan Fernandez',
         emergency_phone: '09173456790',
         enrollment_date: `${currentYear - 1}-08-10`,
@@ -506,7 +514,8 @@ class DatabaseInitializer {
         gender: 'Female',
         contact_number: '09174567890',
         address: '888 Rizal St, Laguna',
-        status: 'testing',
+        status: 'active',
+        purpose: 'testing',
         emergency_contact: 'Ramon Villanueva',
         emergency_phone: '09174567891',
         guardian_name: 'Ramon Villanueva (Father)',
@@ -528,7 +537,8 @@ class DatabaseInitializer {
         gender: 'Male',
         contact_number: '09187141520',
         address: '123 Mabini St, Batangas',
-        status: 'treatment',
+        status: 'active',
+        purpose: 'treatment',
         emergency_contact: 'Linda Aquino',
         emergency_phone: '09175678902',
         enrollment_date: `${currentYear - 4}-04-10`,
@@ -548,7 +558,8 @@ class DatabaseInitializer {
         gender: 'Female',
         contact_number: '09176789012',
         address: '456 Laurel St, Cavite',
-        status: 'treatment',
+        status: 'active',
+        purpose: 'treatment',
         emergency_contact: 'Pedro Ramirez',
         emergency_phone: '09176789013',
         enrollment_date: `${currentYear - 1}-11-20`,
@@ -565,7 +576,7 @@ class DatabaseInitializer {
     let createdCount = 0;
     for (const patientData of patients) {
       const existingPatient = await db.Patient.findOne({
-        where: { contact_number: patientData.contact_number }
+        where: { contact_number_hash: require('../utils/crypto').hmac(patientData.contact_number) }
       });
 
       if (!existingPatient) {
@@ -581,7 +592,7 @@ class DatabaseInitializer {
           first_name: patientData.first_name,
           middle_name: patientData.middle_name || '',
           last_name: patientData.last_name,
-          status: patientData.status,
+          purpose: patientData.purpose,
           enrollment_date: patientData.enrollment_date,
           treatment_transition_date: patientData.treatment_transition_date
         });
@@ -596,6 +607,7 @@ class DatabaseInitializer {
           contact_number: patientData.contact_number,
           address: patientData.address,
           status: patientData.status,
+          purpose: patientData.purpose,
           patient_facility_code: patientCode,
           emergency_contact: patientData.emergency_contact,
           emergency_phone: patientData.emergency_phone,
@@ -607,9 +619,9 @@ class DatabaseInitializer {
 
         this.createdRecords.patients.push(patient);
         createdCount++;
-        
+
         console.log(`  ✓ Created patient: ${patientData.first_name} ${patientData.last_name}`);
-        console.log(`    → Facility Code: ${patient.patient_facility_code} (${patientData.status})`);
+        console.log(`    → Facility Code: ${patient.patient_facility_code} (${patientData.purpose})`);
       }
     }
     console.log(`✓ Created ${createdCount} patients`);
@@ -617,12 +629,12 @@ class DatabaseInitializer {
 
   async createTransactionTypes() {
     console.log('\nCreating transaction types...');
-    
+
     // Initialize the array if it doesn't exist
     if (!this.createdRecords.transactionTypes) {
       this.createdRecords.transactionTypes = [];
     }
-    
+
     const transactionTypes = [
       {
         name: 'Testing',
@@ -665,7 +677,7 @@ class DatabaseInitializer {
           where: { name: typeData.name },
           defaults: typeData
         });
-        
+
         if (created) {
           this.createdRecords.transactionTypes.push(type);
           createdCount++;
@@ -677,9 +689,9 @@ class DatabaseInitializer {
         console.log(`  ✗ Failed to create transaction type: ${typeData.name}`, error.message);
       }
     }
-    
+
     console.log(`✓ Created ${createdCount} transaction types`);
-    
+
     // Verify they were saved
     try {
       const count = await db.TransactionType.count();
@@ -691,26 +703,26 @@ class DatabaseInitializer {
 
   async createAppointments() {
     console.log('\nCreating appointments...');
-    
+
     // Initialize the array if it doesn't exist
     if (!this.createdRecords.appointments) {
       this.createdRecords.appointments = [];
     }
-    
+
     // Get all patients
     const patients = await db.Patient.findAll();
     if (patients.length === 0) {
       console.log('  ⚠️ No patients found. Please seed patients first.');
       return;
     }
-    
+
     // Get all transaction types
     const transactionTypes = await db.TransactionType.findAll();
     if (transactionTypes.length === 0) {
       console.log('  ⚠️ No transaction types found. Please seed transaction types first.');
       return;
     }
-    
+
     console.log(`  Found ${patients.length} patients and ${transactionTypes.length} transaction types`);
 
     const today = new Date();
@@ -726,18 +738,18 @@ class DatabaseInitializer {
 
     // Available time slots
     const timeSlots = [
-      '09:00:00', 
-      '09:30:00', 
-      '10:00:00', 
-      '10:30:00', 
+      '09:00:00',
+      '09:30:00',
+      '10:00:00',
+      '10:30:00',
       '11:00:00',
-      '11:30:00', 
-      '13:00:00', 
-      '13:30:00', 
-      '14:00:00', 
-      '14:30:00', 
-      '15:00:00', 
-      '15:30:00', 
+      '11:30:00',
+      '13:00:00',
+      '13:30:00',
+      '14:00:00',
+      '14:30:00',
+      '15:00:00',
+      '15:30:00',
       '16:00:00'
     ];
 
@@ -745,12 +757,13 @@ class DatabaseInitializer {
     let skippedCount = 0;
 
     for (const patient of patients) {
-      // Determine office based on patient status
-      const office = patient.status === 'treatment' ? 'treatment' : 'testing';
-      
+      // Determine office based on patient PURPOSE (testing vs treatment),
+      // not lifecycle status (active vs inactive).
+      const office = patient.purpose === 'treatment' ? 'treatment' : 'testing';
+
       // Get appropriate transaction types for this office
       const typesForOffice = transactionTypes.filter(t => t.office === office);
-      
+
       if (typesForOffice.length === 0) {
         console.log(`  ⚠️ No transaction types for office: ${office} (Patient: ${patient.first_name} ${patient.last_name})`);
         skippedCount++;
@@ -759,30 +772,30 @@ class DatabaseInitializer {
 
       // Each patient gets 1-3 appointments
       const numAppointments = Math.floor(Math.random() * 3) + 1;
-      
+
       // Track used time slots to avoid duplicates for the same patient on the same day
       const usedSlots = new Set();
 
       for (let j = 0; j < numAppointments; j++) {
         // Pick random date from the available dates
         const date = dates[Math.floor(Math.random() * dates.length)];
-        
+
         // Pick a random time slot that hasn't been used for this patient on this date
         let timeSlot;
         let attempts = 0;
         let foundSlot = false;
-        
+
         while (!foundSlot && attempts < 20) {
           timeSlot = timeSlots[Math.floor(Math.random() * timeSlots.length)];
           const slotKey = `${date.toISOString().split('T')[0]}_${timeSlot}`;
-          
+
           if (!usedSlots.has(slotKey)) {
             usedSlots.add(slotKey);
             foundSlot = true;
           }
           attempts++;
         }
-        
+
         if (!foundSlot) {
           console.log(`  ⚠️ Could not find unique time slot for ${patient.first_name} ${patient.last_name}`);
           continue;
@@ -790,7 +803,7 @@ class DatabaseInitializer {
 
         // Pick a random transaction type
         const transactionType = typesForOffice[Math.floor(Math.random() * typesForOffice.length)];
-        
+
         if (!transactionType || !transactionType.id) {
           console.log(`  ⚠️ Invalid transaction type for patient ${patient.first_name} ${patient.last_name}`);
           skippedCount++;
@@ -808,14 +821,17 @@ class DatabaseInitializer {
 
         if (!existingAppointment) {
           try {
-            // Determine status based on date
+            // Determine status based on date.
+            // NOTE: 'queued' is intentionally NEVER assigned during seeding.
+            //       Queue state is created by the runtime check-in flow, not seeds.
             let status = 'pending';
             if (date < today) {
               status = Math.random() > 0.3 ? 'completed' : 'cancelled';
             } else if (date.getTime() === today.getTime()) {
-              status = Math.random() > 0.5 ? 'pending' : 'queued';
+              // Same-day appointments: pending or completed (no 'queued')
+              status = Math.random() > 0.5 ? 'pending' : 'completed';
             }
-            
+
             // Create the appointment
             const appointment = await db.Appointment.create({
               patient_id: patient.id,
@@ -825,15 +841,15 @@ class DatabaseInitializer {
               time_slot: timeSlot,
               status: status,
               notes: `Seeded appointment for ${patient.first_name} ${patient.last_name}`,
-              queued_at: status === 'queued' ? new Date() : null,
+              queued_at: null, // never set during seeding
               completed_at: status === 'completed' ? new Date(date.getTime() + 3600000) : null
             });
 
             this.createdRecords.appointments.push(appointment);
             createdCount++;
-            
+
             console.log(`  ✓ Created appointment: ${patient.first_name} ${patient.last_name} - ${office} - ${date.toISOString().split('T')[0]} ${timeSlot}`);
-            
+
           } catch (error) {
             console.log(`  ✗ Failed to create appointment for ${patient.first_name} ${patient.last_name}:`, error.message);
             skippedCount++;
@@ -846,7 +862,7 @@ class DatabaseInitializer {
     }
 
     console.log(`✓ Created ${createdCount} appointments (${skippedCount} skipped)`);
-    
+
     // Verification
     try {
       const count = await db.Appointment.count();
@@ -858,7 +874,7 @@ class DatabaseInitializer {
 
   async createQueues() {
     console.log('\nCreating queues...');
-    
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -891,7 +907,7 @@ class DatabaseInitializer {
 
   async createAuditLogs() {
     console.log('\nCreating audit logs...');
-    
+
     const users = await db.User.findAll();
 
     const actions = ['CREATE', 'UPDATE', 'VIEW', 'LOGIN', 'LOGOUT', 'TOKEN_REFRESH', 'PASSWORD_CHANGE'];
@@ -955,7 +971,7 @@ class DatabaseInitializer {
     console.log(`     Password: Patient@123`);
 
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    
+
     const validCount = this.passwordValidationResults.filter(r => r.isValid).length;
     const totalCount = this.passwordValidationResults.length;
     const uncheckedCount = Object.keys(this.expectedCredentials).length - totalCount;

@@ -8,11 +8,15 @@
             <v-icon left>mdi-account</v-icon>
             {{ patient?.patient_facility_code || 'N/A' }}
             <v-spacer></v-spacer>
-            <v-btn color="primary" @click="editPatient" v-if="patient">
+            <v-btn v-if="patient" color="primary" @click="editPatient">
               <v-icon left>mdi-pencil</v-icon>
               Edit
             </v-btn>
-            <v-btn color="success" @click="startEncounter" v-if="patient && canStartEncounter">
+            <v-btn
+              v-if="patient && canStartEncounter"
+              color="success"
+              @click="startEncounter"
+            >
               <v-icon left>{{ encounterIcon }}</v-icon>
               Start {{ encounterLabel }}
             </v-btn>
@@ -21,100 +25,137 @@
 
           <v-card-text v-if="patient">
             <v-row>
-              <!-- Patient Information -->
+              <!-- ==================== PERSONAL INFO ==================== -->
               <v-col cols="12" md="6">
                 <v-card outlined class="pa-4">
-                  <div class="text-subtitle-1 font-weight-bold mb-3">Personal Information</div>
-                  <v-list dense>
+                  <div class="text-subtitle-1 font-weight-bold mb-3">
+                    Personal Information
+                  </div>
+                  <v-list density="compact">
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Full Name</v-list-item-title>
+                        <v-list-item-title class="text-caption text-grey">
+                          Full Name
+                        </v-list-item-title>
                         <v-list-item-subtitle>
-                          {{ patient.first_name }} {{ patient.middle_name }} {{ patient.last_name }}
+                          {{ fullName }}
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider></v-divider>
+                    <v-divider />
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Facility Code</v-list-item-title>
+                        <v-list-item-title class="text-caption text-grey">
+                          Facility Code
+                        </v-list-item-title>
                         <v-list-item-subtitle>
-                          <v-chip color="primary" small>{{ patient.patient_facility_code }}</v-chip>
+                          <v-chip color="primary" size="small">
+                            {{ patient.patient_facility_code }}
+                          </v-chip>
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider></v-divider>
+                    <v-divider />
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Date of Birth</v-list-item-title>
+                        <v-list-item-title class="text-caption text-grey">
+                          Date of Birth
+                        </v-list-item-title>
                         <v-list-item-subtitle>
                           {{ formatDate(patient.birth_date) }}
                           ({{ calculateAge(patient.birth_date) }} years)
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider></v-divider>
+                    <v-divider />
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Gender</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.gender }}</v-list-item-subtitle>
+                        <v-list-item-title class="text-caption text-grey">
+                          Gender
+                        </v-list-item-title>
+                        <v-list-item-subtitle>
+                          {{ patient.gender || 'N/A' }}
+                        </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider></v-divider>
+                    <v-divider />
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Contact Number</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.contact_number }}</v-list-item-subtitle>
+                        <v-list-item-title class="text-caption text-grey">
+                          Contact Number
+                        </v-list-item-title>
+                        <v-list-item-subtitle>
+                          {{ patient.contact_number || 'N/A' }}
+                        </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider></v-divider>
+                    <v-divider />
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Address</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.address || 'N/A' }}</v-list-item-subtitle>
+                        <v-list-item-title class="text-caption text-grey">
+                          Address
+                        </v-list-item-title>
+                        <v-list-item-subtitle>
+                          {{ formattedAddress }}
+                        </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
                   </v-list>
                 </v-card>
               </v-col>
 
-              <!-- Status & Emergency -->
+              <!-- ==================== STATUS & ENROLLMENT ==================== -->
               <v-col cols="12" md="6">
                 <v-card outlined class="pa-4 mb-4">
-                  <div class="text-subtitle-1 font-weight-bold mb-3">Status</div>
-                  <v-chip :color="patient.status === 'treatment' ? 'success' : 'info'" large>
+                  <div class="text-subtitle-1 font-weight-bold mb-3">
+                    Status
+                  </div>
+                  <v-chip
+                    :color="patient.status === 'treatment' ? 'success' : 'info'"
+                    size="large"
+                  >
                     {{ patient.status }}
                   </v-chip>
                   <div class="mt-2">
-                    <v-chip color="primary" small v-if="patient.user_id">
-                      <v-icon left small>mdi-account</v-icon>
+                    <v-chip v-if="patient.user_id" color="primary" size="small">
+                      <v-icon left size="small">mdi-account</v-icon>
                       Has Portal Access
                     </v-chip>
-                    <v-chip color="grey" small v-else>
+                    <v-chip v-else color="grey" size="small">
                       No Portal Access
                     </v-chip>
                   </div>
                 </v-card>
 
                 <!-- Enrollment Information -->
-                <v-card outlined class="pa-4 mb-4">
-                  <div class="text-subtitle-1 font-weight-bold mb-3">Enrollment Information</div>
-                  <v-list dense>
+                <v-card outlined class="pa-4">
+                  <div class="text-subtitle-1 font-weight-bold mb-3">
+                    Enrollment Information
+                  </div>
+                  <v-list density="compact">
                     <v-list-item>
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Enrollment Date</v-list-item-title>
+                        <v-list-item-title class="text-caption text-grey">
+                          Enrollment Date
+                        </v-list-item-title>
                         <v-list-item-subtitle>
-                          <v-icon small color="primary" class="mr-1">mdi-calendar-plus</v-icon>
+                          <v-icon small color="primary" class="mr-1">
+                            mdi-calendar-plus
+                          </v-icon>
                           {{ formatDate(patient.enrollment_date) }}
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                    <v-divider v-if="patient.treatment_transition_date"></v-divider>
+                    <v-divider v-if="patient.treatment_transition_date" />
                     <v-list-item v-if="patient.treatment_transition_date">
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Treatment Transition Date</v-list-item-title>
+                        <v-list-item-title class="text-caption text-grey">
+                          Treatment Transition Date
+                        </v-list-item-title>
                         <v-list-item-subtitle>
-                          <v-icon small color="success" class="mr-1">mdi-calendar-check</v-icon>
+                          <v-icon small color="success" class="mr-1">
+                            mdi-calendar-check
+                          </v-icon>
                           {{ formatDate(patient.treatment_transition_date) }}
                           <span class="text-caption text-grey ml-2">
                             (Moved to treatment)
@@ -122,32 +163,14 @@
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
-                  </v-list>
-                </v-card>
-
-                <!-- Emergency Contact -->
-                <v-card outlined class="pa-4">
-                  <div class="text-subtitle-1 font-weight-bold mb-3">Emergency Contact</div>
-                  <v-list dense>
-                    <v-list-item>
+                    <v-divider v-if="patient.purpose" />
+                    <v-list-item v-if="patient.purpose">
                       <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Name</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.emergency_contact || 'N/A' }}</v-list-item-subtitle>
-                      </v-list-item-content>
-                    </v-list-item>
-                    <v-divider></v-divider>
-                    <v-list-item>
-                      <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Phone</v-list-item-title>
-                        <v-list-item-subtitle>{{ patient.emergency_phone || 'N/A' }}</v-list-item-subtitle>
-                      </v-list-item-content>
-                    </v-list-item>
-                    <v-divider v-if="patient.guardian_name"></v-divider>
-                    <v-list-item v-if="patient.guardian_name">
-                      <v-list-item-content>
-                        <v-list-item-title class="text-caption text-grey">Guardian</v-list-item-title>
+                        <v-list-item-title class="text-caption text-grey">
+                          Purpose
+                        </v-list-item-title>
                         <v-list-item-subtitle>
-                          {{ patient.guardian_name }} ({{ patient.guardian_contact }})
+                          {{ patient.purpose }}
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
@@ -302,7 +325,9 @@
                       </template>
 
                       <template #item.ts="{ item }">
-                        <span class="text-caption">{{ formatDateTime(item.ts) }}</span>
+                        <span class="text-caption">
+                          {{ formatDateTime(item.ts) }}
+                        </span>
                       </template>
 
                       <template #item.confirmations="{ item }">
@@ -325,7 +350,9 @@
                           <v-icon left size="14">{{ item._state.icon }}</v-icon>
                           {{ item._state.label }}
                         </v-chip>
-                        <span v-else class="text-caption text-medium-emphasis">—</span>
+                        <span v-else class="text-caption text-medium-emphasis">
+                          —
+                        </span>
                       </template>
 
                       <template #item.actions="{ item }">
@@ -348,7 +375,7 @@
                  END Blockchain Verification panel
                  ============================================================ -->
 
-            <!-- History Tabs -->
+            <!-- ==================== HISTORY TABS ==================== -->
             <v-row>
               <v-col cols="12">
                 <v-card outlined>
@@ -377,21 +404,29 @@
                           :loading="loadingHistory"
                           items-per-page="10"
                         >
-                          <template v-slot:item.hiv_test="{ item }">
+                          <template #item.hiv_test="{ item }">
                             <v-chip
-                              :color="item.hiv_test?.result === 'positive' ? 'error' :
-                                      item.hiv_test?.result === 'negative' ? 'success' : 'warning'"
-                              small
+                              :color="item.hiv_test?.result === 'positive'
+                                ? 'error'
+                                : item.hiv_test?.result === 'negative'
+                                  ? 'success'
+                                  : 'warning'"
+                              size="small"
                             >
                               {{ item.hiv_test?.result || 'N/A' }}
                             </v-chip>
                           </template>
-                          <template v-slot:item.created_at="{ item }">
+                          <template #item.created_at="{ item }">
                             {{ formatDate(item.created_at) }}
                           </template>
-                          <template v-slot:item.actions="{ item }">
-                            <v-btn icon small color="primary" @click="viewTestingEncounter(item)">
-                              <v-icon small>mdi-eye</v-icon>
+                          <template #item.actions="{ item }">
+                            <v-btn
+                              icon
+                              size="small"
+                              color="primary"
+                              @click="viewTestingEncounter(item)"
+                            >
+                              <v-icon size="small">mdi-eye</v-icon>
                             </v-btn>
                           </template>
                         </v-data-table>
@@ -407,7 +442,7 @@
                           :loading="loadingHistory"
                           items-per-page="10"
                         >
-                          <template v-slot:item.art_prescription="{ item }">
+                          <template #item.art_prescription="{ item }">
                             <div v-if="item.art_prescription">
                               {{ item.art_prescription.medication_name || 'N/A' }}
                               <span class="text-caption text-grey">
@@ -416,12 +451,17 @@
                             </div>
                             <span v-else>N/A</span>
                           </template>
-                          <template v-slot:item.created_at="{ item }">
+                          <template #item.created_at="{ item }">
                             {{ formatDate(item.created_at) }}
                           </template>
-                          <template v-slot:item.actions="{ item }">
-                            <v-btn icon small color="primary" @click="viewTreatmentEncounter(item)">
-                              <v-icon small>mdi-eye</v-icon>
+                          <template #item.actions="{ item }">
+                            <v-btn
+                              icon
+                              size="small"
+                              color="primary"
+                              @click="viewTreatmentEncounter(item)"
+                            >
+                              <v-icon size="small">mdi-eye</v-icon>
                             </v-btn>
                           </template>
                         </v-data-table>
@@ -437,11 +477,11 @@
                           :loading="loadingHistory"
                           items-per-page="10"
                         >
-                          <template v-slot:item.time_slot="{ item }">
+                          <template #item.time_slot="{ item }">
                             {{ formatTimeSlot(item.time_slot) }}
                           </template>
-                          <template v-slot:item.status="{ item }">
-                            <v-chip :color="getStatusColor(item.status)" small>
+                          <template #item.status="{ item }">
+                            <v-chip :color="getStatusColor(item.status)" size="small">
                               {{ item.status }}
                             </v-chip>
                           </template>
@@ -462,7 +502,7 @@
       </v-col>
     </v-row>
 
-    <!-- Testing Encounter Dialog -->
+    <!-- ==================== TESTING ENCOUNTER DIALOG ==================== -->
     <v-dialog v-model="testingDialog" max-width="800px">
       <v-card>
         <v-card-title>
@@ -473,33 +513,53 @@
           </v-btn>
         </v-card-title>
         <v-divider></v-divider>
-        <v-card-text class="pt-4" v-if="selectedTesting">
+        <v-card-text v-if="selectedTesting" class="pt-4">
           <v-row>
             <v-col cols="12" md="6">
-              <div class="text-subtitle-2 font-weight-bold">Pre-test Counseling</div>
-              <div class="text-caption">Conducted: {{ selectedTesting.pretest_counseling?.conducted ? 'Yes' : 'No' }}</div>
-              <div class="text-caption">Notes: {{ selectedTesting.pretest_counseling?.notes || 'N/A' }}</div>
+              <div class="text-subtitle-2 font-weight-bold">
+                Pre-test Counseling
+              </div>
+              <div class="text-caption">
+                Conducted:
+                {{ selectedTesting.pretest_counseling?.conducted ? 'Yes' : 'No' }}
+              </div>
+              <div class="text-caption">
+                Notes: {{ selectedTesting.pretest_counseling?.notes || 'N/A' }}
+              </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="text-subtitle-2 font-weight-bold">HIV Test</div>
-              <div class="text-caption">Result: {{ selectedTesting.hiv_test?.result || 'N/A' }}</div>
-              <div class="text-caption">Kit Lot: {{ selectedTesting.hiv_test?.kit_lot_number || 'N/A' }}</div>
-              <div class="text-caption">Test Date: {{ selectedTesting.hiv_test?.test_date || 'N/A' }}</div>
+              <div class="text-caption">
+                Result: {{ selectedTesting.hiv_test?.result || 'N/A' }}
+              </div>
+              <div class="text-caption">
+                Kit Lot: {{ selectedTesting.hiv_test?.kit_lot_number || 'N/A' }}
+              </div>
+              <div class="text-caption">
+                Test Date: {{ selectedTesting.hiv_test?.test_date || 'N/A' }}
+              </div>
             </v-col>
           </v-row>
-          <v-divider class="my-3"></v-divider>
+          <v-divider class="my-3" />
           <v-row>
             <v-col cols="12">
-              <div class="text-subtitle-2 font-weight-bold">Post-test Counseling</div>
-              <div class="text-caption">Conducted: {{ selectedTesting.posttest_counseling?.conducted ? 'Yes' : 'No' }}</div>
-              <div class="text-caption">Notes: {{ selectedTesting.posttest_counseling?.notes || 'N/A' }}</div>
+              <div class="text-subtitle-2 font-weight-bold">
+                Post-test Counseling
+              </div>
+              <div class="text-caption">
+                Conducted:
+                {{ selectedTesting.posttest_counseling?.conducted ? 'Yes' : 'No' }}
+              </div>
+              <div class="text-caption">
+                Notes: {{ selectedTesting.posttest_counseling?.notes || 'N/A' }}
+              </div>
             </v-col>
           </v-row>
         </v-card-text>
       </v-card>
     </v-dialog>
 
-    <!-- Treatment Encounter Dialog -->
+    <!-- ==================== TREATMENT ENCOUNTER DIALOG ==================== -->
     <v-dialog v-model="treatmentDialog" max-width="800px">
       <v-card>
         <v-card-title>
@@ -510,18 +570,20 @@
           </v-btn>
         </v-card-title>
         <v-divider></v-divider>
-        <v-card-text class="pt-4" v-if="selectedTreatment">
+        <v-card-text v-if="selectedTreatment" class="pt-4">
           <v-row>
             <v-col cols="12" md="6">
               <div class="text-subtitle-2 font-weight-bold">Consultation</div>
-              <div class="text-caption">{{ selectedTreatment.consultation_notes?.subjective || 'N/A' }}</div>
+              <div class="text-caption">
+                {{ selectedTreatment.consultation_notes?.subjective || 'N/A' }}
+              </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="text-subtitle-2 font-weight-bold">Prescription</div>
-              <div class="text-caption" v-if="selectedTreatment.art_prescription">
+              <div v-if="selectedTreatment.art_prescription" class="text-caption">
                 {{ selectedTreatment.art_prescription.medication_name }}
                 {{ selectedTreatment.art_prescription.dosage }}
-                <br>
+                <br />
                 <span class="text-caption text-grey">
                   Refill: {{ selectedTreatment.art_prescription.refill_date || 'N/A' }}
                 </span>
@@ -529,12 +591,19 @@
               <div v-else class="text-caption">No prescription</div>
             </v-col>
           </v-row>
-          <v-divider class="my-3"></v-divider>
+          <v-divider class="my-3" />
           <v-row>
             <v-col cols="12">
               <div class="text-subtitle-2 font-weight-bold">Lab Results</div>
-              <div v-if="selectedTreatment.lab_results && selectedTreatment.lab_results.length">
-                <v-chip v-for="lab in selectedTreatment.lab_results" :key="lab.type" small class="mr-2">
+              <div
+                v-if="selectedTreatment.lab_results && selectedTreatment.lab_results.length"
+              >
+                <v-chip
+                  v-for="lab in selectedTreatment.lab_results"
+                  :key="lab.type"
+                  size="small"
+                  class="mr-2"
+                >
                   {{ lab.type }}: {{ lab.value }}
                 </v-chip>
               </div>
@@ -556,6 +625,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import patientService from '@/services/patientService'
 import appointmentService from '@/services/appointmentService'
+import locationService from '@/services/locationService'
 import api from '@/plugins/axios'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -566,6 +636,9 @@ export default {
     const route = useRoute()
     const authStore = useAuthStore()
 
+    // -------------------------------------------------------------------
+    // Core state
+    // -------------------------------------------------------------------
     const patient = ref(null)
     const loading = ref(false)
     const loadingHistory = ref(false)
@@ -578,13 +651,21 @@ export default {
     const selectedTesting = ref(null)
     const selectedTreatment = ref(null)
 
+    // Resolved location names for the address display
+    const addressNames = ref({
+      region: null,
+      province: null,
+      city: null,
+      barangay: null
+    })
+
     // -------------------------------------------------------------------
     // Blockchain verification state
     // -------------------------------------------------------------------
-    const chainRecords = ref([])        // normalized rows for the table
+    const chainRecords = ref([])
     const loadingChain = ref(false)
     const verifyingAll = ref(false)
-    const chainVerifyResult = ref(null) // aggregate result of the last verify
+    const chainVerifyResult = ref(null)
 
     const snackbar = ref({
       show: false,
@@ -596,7 +677,7 @@ export default {
     // Table headers
     // -------------------------------------------------------------------
     const testingHeaders = [
-      { title: 'Date', key: 'createdAt' },
+      { title: 'Date', key: 'created_at' },
       { title: 'Pre-test', key: 'pretest_counseling.conducted', align: 'center' },
       { title: 'Result', key: 'hiv_test', align: 'center' },
       { title: 'Post-test', key: 'posttest_counseling.conducted', align: 'center' },
@@ -630,6 +711,29 @@ export default {
     // -------------------------------------------------------------------
     // Computeds
     // -------------------------------------------------------------------
+    const fullName = computed(() => {
+      if (!patient.value) return 'N/A'
+      const parts = [
+        patient.value.first_name,
+        patient.value.middle_name,
+        patient.value.last_name,
+        patient.value.suffix
+      ].filter(Boolean)
+      return parts.join(' ') || 'N/A'
+    })
+
+    const formattedAddress = computed(() => {
+      if (!patient.value) return 'N/A'
+      const parts = [
+        patient.value.sitio_street,
+        addressNames.value.barangay,
+        addressNames.value.city,
+        addressNames.value.province,
+        addressNames.value.region
+      ].filter(Boolean)
+      return parts.length ? parts.join(', ') : 'N/A'
+    })
+
     const canStartEncounter = computed(() => {
       if (!patient.value) return false
       const office = authStore.userOffice
@@ -670,8 +774,7 @@ export default {
       if (!patientId) return
       loading.value = true
       try {
-        const data = await patientService.getPatient(patientId)
-        patient.value = data
+        patient.value = await patientService.getPatient(patientId)
       } catch (error) {
         showSnackbar('Failed to load patient: ' + error.message, 'error')
       } finally {
@@ -688,28 +791,90 @@ export default {
         testingHistory.value = history.testing || []
         treatmentHistory.value = history.treatment || []
 
-        const appointmentData = await appointmentService.getAppointmentsByPatient(patientId)
+        const appointmentData =
+          await appointmentService.getAppointmentsByPatient(patientId)
         appointments.value = appointmentData || []
       } catch (error) {
         console.error('Failed to load history:', error)
-        showSnackbar('Failed to load patient history: ' + error.message, 'error')
+        showSnackbar(
+          'Failed to load patient history: ' + error.message,
+          'error'
+        )
       } finally {
         loadingHistory.value = false
       }
     }
 
     // -------------------------------------------------------------------
-    // Blockchain loading
+    // Address name resolution
     // -------------------------------------------------------------------
     /**
-     * Load every on-chain anchor that references this patient.
+     * The Patient row only stores foreign keys (province_id,
+     * city_municipality_id, barangay_id). To render a human-readable
+     * address we resolve those IDs against the /api/locations endpoints.
      *
-     * We pull a generous slice of recent items from /blockchain/items and
-     * keep only items whose entity_id matches the patient. This handles
-     * patient.* events and (once encounter services are anchored) will
-     * also pick up testing.'treatment.' once those anchor with the same
-     * entity_id scheme.
+     * The location API doesn't expose direct "get by id" lookups, so we
+     * walk the hierarchy: regions -> provinces -> cities -> barangays.
+     * We cache nothing here — one patient detail view is cheap.
      */
+    const loadAddressNames = async () => {
+      if (!patient.value) return
+
+      const { barangay_id, city_municipality_id, province_id } = patient.value
+      if (!barangay_id && !city_municipality_id && !province_id) return
+
+      try {
+        const regions = await locationService.getRegions()
+
+        // 1) Resolve province -> region name
+        if (province_id) {
+          for (const r of regions) {
+            const provs = await locationService.getProvinces(r.id)
+            const match = provs.find((p) => p.id === province_id)
+            if (match) {
+              addressNames.value.region = r.name
+              addressNames.value.province = match.name
+              break
+            }
+          }
+        }
+
+        // 2) Resolve city (via province if we have one, else via region)
+        if (city_municipality_id) {
+          if (province_id) {
+            const cities = await locationService.getCitiesByProvince(province_id)
+            const city = cities.find((c) => c.id === city_municipality_id)
+            if (city) addressNames.value.city = city.name
+          } else {
+            // NCR-style: city is directly under a region
+            for (const r of regions) {
+              const cities = await locationService.getCitiesByRegion(r.id)
+              const city = cities.find((c) => c.id === city_municipality_id)
+              if (city) {
+                addressNames.value.region = r.name
+                addressNames.value.city = city.name
+                break
+              }
+            }
+          }
+        }
+
+        // 3) Resolve barangay
+        if (barangay_id && city_municipality_id) {
+          const barangays = await locationService.getBarangays(
+            city_municipality_id
+          )
+          const brgy = barangays.find((b) => b.id === barangay_id)
+          if (brgy) addressNames.value.barangay = brgy.name
+        }
+      } catch (e) {
+        console.warn('Failed to resolve address names:', e)
+      }
+    }
+
+    // -------------------------------------------------------------------
+    // Blockchain loading
+    // -------------------------------------------------------------------
     const loadChainRecords = async () => {
       const patientId = patient.value?.id
       if (!patientId) return
@@ -723,9 +888,9 @@ export default {
 
         chainRecords.value = list
           .map(decodeStreamItem)
-          .filter(x => x && x.record)
-          .filter(x => String(x.record.entity_id) === String(patientId))
-          .map(x => ({
+          .filter((x) => x && x.record)
+          .filter((x) => String(x.record.entity_id) === String(patientId))
+          .map((x) => ({
             txid: x.txid,
             key: x.key,
             type: x.record.type,
@@ -751,18 +916,6 @@ export default {
     // -------------------------------------------------------------------
     // Verification — patient-scoped
     // -------------------------------------------------------------------
-    /**
-     * Ask the backend to recompute the patient's canonical hash from the
-     * current DB row and compare it to the newest on-chain anchor.
-     *
-     * Backend endpoint: GET /blockchain/verify/patient/:patientId
-     * Response shape:
-     *   {
-     *     patientId, found, matches,
-     *     onChainHash, recomputedHash,
-     *     txid, record, reason
-     *   }
-     */
     const verifyPatient = async () => {
       const patientId = patient.value?.id
       if (!patientId) return null
@@ -770,12 +923,11 @@ export default {
       const { data } = await api.get(`/blockchain/verify/patient/${patientId}`)
       chainVerifyResult.value = data
 
-      // Mark only the txid that was actually compared; leave other rows neutral.
-      chainRecords.value.forEach(row => {
+      chainRecords.value.forEach((row) => {
         if (row.txid === data.txid) {
           row._state = data.matches
             ? { label: 'Verified', color: 'success', icon: 'mdi-shield-check' }
-            : { label: 'TAMPERED', color: 'error',   icon: 'mdi-shield-alert' }
+            : { label: 'TAMPERED', color: 'error', icon: 'mdi-shield-alert' }
         } else {
           row._state = null
         }
@@ -784,7 +936,6 @@ export default {
       return data
     }
 
-    /** Verify All button — one network call for the whole patient. */
     const verifyAllRecords = async () => {
       verifyingAll.value = true
       try {
@@ -800,17 +951,15 @@ export default {
           data.matches ? 'success' : 'error'
         )
       } catch (e) {
-        showSnackbar('Verification failed: ' + (e?.response?.data?.error || e.message), 'error')
+        showSnackbar(
+          'Verification failed: ' + (e?.response?.data?.error || e.message),
+          'error'
+        )
       } finally {
         verifyingAll.value = false
       }
     }
 
-    /**
-     * Per-row "Inspect" — just calls the same patient-scoped verify so the
-     * panel state stays consistent. A single anchor cannot be meaningfully
-     * verified in isolation because we need the current DB row.
-     */
     const verifySingleAnchor = async (row) => {
       row._verifying = true
       try {
@@ -840,7 +989,9 @@ export default {
         if (typeof Buffer !== 'undefined') {
           record = JSON.parse(Buffer.from(hex, 'hex').toString('utf8'))
         } else {
-          const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b, 16)))
+          const bytes = new Uint8Array(
+            hex.match(/.{1,2}/g).map((b) => parseInt(b, 16))
+          )
           record = JSON.parse(new TextDecoder('utf-8').decode(bytes))
         }
       } catch {
@@ -957,9 +1108,16 @@ export default {
       snackbar.value = { show: true, message, color }
     }
 
+    // -------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------
     onMounted(async () => {
       await loadPatient()
-      await Promise.all([loadHistory(), loadChainRecords()])
+      await Promise.all([
+        loadHistory(),
+        loadChainRecords(),
+        loadAddressNames()
+      ])
       // Auto-verify on load so the panel reflects reality without a click.
       if (chainRecords.value.length) {
         try {
@@ -983,6 +1141,11 @@ export default {
       treatmentDialog,
       selectedTesting,
       selectedTreatment,
+
+      // computed display helpers
+      fullName,
+      formattedAddress,
+      addressNames,
 
       // headers
       testingHeaders,
