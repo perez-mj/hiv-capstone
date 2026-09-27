@@ -4,21 +4,23 @@ const patientService = require('../services/patientService');
 
 class PatientController {
   async list(req, res) {
-    try {
-      const { page = 1, limit = 20, search = '' } = req.query;
-      const result = await patientService.getPatients({
-        page: parseInt(page),
-        limit: parseInt(limit),
-        search,
-        actorId: req.user.id,
-        req
-      });
-      res.json(result);
-    } catch (error) {
-      console.error('Error fetching patients:', error);
-      res.status(500).json({ error: error.message });
-    }
+  try {
+    const { page = 1, limit = 20, search = '', purpose, year } = req.query;
+    const result = await patientService.getPatients({
+      page: parseInt(page),
+      limit: parseInt(limit),
+      search,
+      purpose,   // ✅
+      year,      // ✅
+      actorId: req.user.id,
+      req
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching patients:', error);
+    res.status(500).json({ error: error.message });
   }
+}
 
   async search(req, res) {
     try {

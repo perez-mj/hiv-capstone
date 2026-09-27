@@ -15,13 +15,13 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       // Staff & Admin Dashboard
-            {
+      {
         path: '',
         redirect: (to) => {
           const authStore = useAuthStore();
           const role = authStore.userRole;
           const office = authStore.userOffice;
-          
+
           if (role === 'admin') {
             return '/admin';
           } else if (role === 'staff' && office) {
@@ -145,12 +145,6 @@ const routes = [
         meta: { roles: ['admin'] }
       },
       {
-        path: 'admin/settings',
-        name: 'SystemSettings',
-        component: () => import('@/views/admin/SettingsView.vue'),
-        meta: { roles: ['admin'] }
-      },
-      {
         path: 'admin/audit-logs',
         name: 'AuditLogs',
         component: () => import('@/views/admin/AuditLogsView.vue'),
@@ -169,15 +163,20 @@ const routes = [
         meta: { roles: ['admin'] }
       },
       {
+        path: 'admin/settings',
+        name: 'AdminSettings',
+        component: () => import('@/views/admin/SettingsView.vue'),
+        meta: { roles: ['admin'] }
+      },
+      // Redirects for old routes (backward compatible)
+      {
         path: 'admin/transaction-types',
-        name: 'TransactionTypes',
-        component: () => import('@/views/admin/TransactionTypesView.vue'),
+        redirect: { name: 'AdminSettings', query: { tab: 'transaction-types' } },
         meta: { roles: ['admin'] }
       },
       {
         path: 'admin/appointment-settings',
-        name: 'AppointmentSettings',
-        component: () => import('@/views/admin/AppointmentSettingsView.vue'),
+        redirect: { name: 'AdminSettings', query: { tab: 'appointments' } },
         meta: { roles: ['admin'] }
       }
     ]
@@ -247,18 +246,18 @@ const router = createRouter({
 // FIXED: Navigation guard without deprecated next() callback
 router.beforeEach(async (to) => {
   const authStore = useAuthStore();
-  
+
   console.log('=== ROUTE GUARD ===');
   console.log('Path:', to.path);
   console.log('Requires Auth:', to.meta.requiresAuth !== false);
-  
+
   // If auth hasn't been checked yet, wait for it
   if (!authStore.isAuthChecked) {
     console.log('Auth not checked yet, checking...');
     await authStore.checkAuth();
     console.log('Auth check completed:', authStore.isAuthenticated);
   }
-  
+
   const requiresAuth = to.meta.requiresAuth !== false;
   const isAuthenticated = authStore.isAuthenticated;
 
@@ -272,7 +271,7 @@ router.beforeEach(async (to) => {
   if (to.path === '/login' && isAuthenticated) {
     const role = authStore.userRole;
     const office = authStore.userOffice;
-    
+
     if (role === 'admin') return '/admin';
     if (role === 'staff' && office) return `/${office}/queue`;
     if (role === 'patient') return '/patient/dashboard';
@@ -283,10 +282,10 @@ router.beforeEach(async (to) => {
   if (to.meta.roles) {
     const userRole = authStore.userRole;
     console.log('Role check:', { userRole, required: to.meta.roles });
-    
+
     if (!to.meta.roles.includes(userRole)) {
       console.warn('Access denied for role:', userRole);
-      
+
       if (userRole === 'admin') return '/admin';
       if (userRole === 'staff') {
         const office = authStore.userOffice;
@@ -301,12 +300,12 @@ router.beforeEach(async (to) => {
   if (to.meta.office) {
     const userRole = authStore.userRole;
     const userOffice = authStore.userOffice;
-    
+
     // Admin can access any office
     if (userRole === 'admin') {
       return true;
     }
-    
+
     // Staff must have matching office
     if (userRole === 'staff' && userOffice) {
       if (!to.meta.office.includes(userOffice)) {

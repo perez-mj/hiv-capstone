@@ -5,14 +5,14 @@ const transactionTypeController = require('../controllers/transactionTypeControl
 const auth = require('../middleware/auth');
 const { roleCheck } = require('../middleware/roleCheck');
 
-// Public routes (for patients to view available transaction types)
+// Public routes
 router.get('/', transactionTypeController.getAllTransactionTypes);
 router.get('/:id', transactionTypeController.getTransactionTypeById);
 
-// Protected routes (staff/admin only)
-router.post('/',auth, roleCheck('staff', 'admin'), transactionTypeController.createTransactionType);
+// Protected routes
+router.post('/', auth, roleCheck('staff', 'admin'), transactionTypeController.createTransactionType);
 router.put('/:id', auth, roleCheck('staff', 'admin'), transactionTypeController.updateTransactionType);
-router.delete('/:id', auth, roleCheck('admin'), transactionTypeController.deleteTransactionType);
 router.patch('/:id/toggle-active', auth, roleCheck('staff', 'admin'), transactionTypeController.toggleTransactionTypeActive);
+router.delete('/:id', auth, roleCheck('admin'), transactionTypeController.deleteTransactionType);
 
 module.exports = router;

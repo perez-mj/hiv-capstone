@@ -428,63 +428,41 @@
     </div>
 
     <!-- Power Off Confirmation Dialog -->
-    <v-dialog v-model="showPowerOffDialog" max-width="400" persistent>
-      <v-card>
-        <v-card-title class="text-h5 pa-4" style="background-color: rgb(var(--v-theme-error)); color: white;">
-          <v-icon color="white" class="mr-2">mdi-power-standby</v-icon>
-          Shutdown System
-        </v-card-title>
-        
-        <v-card-text class="pa-6">
-          <div class="text-body-1 mb-4">
-            Are you sure you want to shut down the kiosk system?
-            This will turn off the Orange Pi.
-          </div>
-          
-          <v-alert
-            v-if="shutdownError"
-            type="error"
-            variant="tonal"
-            class="mb-4"
-            closable
-            @click:close="shutdownError = ''"
-          >
-            {{ shutdownError }}
-          </v-alert>
+    <ConfirmDialog
+      v-model="showPowerOffDialog"
+      title="Shutdown System"
+      confirm-text="Shut Down"
+      color="error"
+      icon="mdi-power-standby"
+      :loading="isShuttingDown"
+      @confirm="shutdownSystem"
+      @cancel="closePowerOffDialog"
+    >
+      <div class="text-body-1 mb-4">
+        Are you sure you want to shut down the kiosk system?
+        This will turn off the Orange Pi.
+      </div>
 
-          <v-alert
-            v-if="shutdownSuccess"
-            type="success"
-            variant="tonal"
-            class="mb-4"
-          >
-            {{ shutdownSuccess }}
-          </v-alert>
-          
-          <div class="d-flex justify-space-between">
-            <v-btn
-              variant="text"
-              size="large"
-              @click="closePowerOffDialog"
-              prepend-icon="mdi-cancel"
-              :disabled="isShuttingDown"
-            >
-              Cancel
-            </v-btn>
-            <v-btn
-              color="error"
-              size="large"
-              :loading="isShuttingDown"
-              @click="shutdownSystem"
-              prepend-icon="mdi-power"
-              :disabled="isShuttingDown"
-            >
-              {{ isShuttingDown ? 'Shutting Down...' : 'Shut Down' }}
-            </v-btn>
-          </div>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+      <v-alert
+        v-if="shutdownError"
+        type="error"
+        variant="tonal"
+        class="mb-4 text-left"
+        closable
+        @click:close="shutdownError = ''"
+      >
+        {{ shutdownError }}
+      </v-alert>
+
+      <v-alert
+        v-if="shutdownSuccess"
+        type="success"
+        variant="tonal"
+        class="mb-4 text-left"
+      >
+        {{ shutdownSuccess }}
+      </v-alert>
+    </ConfirmDialog>
 
     <!-- Shutdown in progress overlay -->
     <v-overlay 
@@ -512,6 +490,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import VirtualKeyboard from '@/components/common/VirtualKeyboard.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useKioskStore } from '@/stores/kioskStore'
 import { storeToRefs } from 'pinia'
 import printerService from '@/services/printerService'

@@ -185,82 +185,28 @@ router.post('/users/:id/deactivate', async (req, res) => {
   }
 });
 
+
+const settingController = require('../controllers/systemSettingController');
 // System settings
-router.get('/settings', async (req, res) => {
-  try {
-    const settings = await db.SystemSetting.findAll();
-    const settingsMap = {};
-    settings.forEach(setting => {
-      settingsMap[setting.key] = setting.getTypedValue();
-    });
-    res.json(settingsMap);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/settings/', settingController.getAll);                       // GET    /api/system-settings
+router.post('/settings/', settingController.create);                      // POST   /api/system-settings
 
-router.post('/settings', async (req, res) => {
-  try {
-    const { key, value, description, data_type } = req.body;
-    
-    const existing = await db.SystemSetting.findOne({ where: { key } });
-    if (existing) {
-      return res.status(400).json({ error: 'Setting already exists' });
-    }
-    
-    const setting = await db.SystemSetting.create({
-      key,
-      value: String(value),
-      description,
-      data_type: data_type || 'string'
-    });
-    
-    await db.AuditLog.create({
-      user_id: req.user.id,
-      action: 'CREATE',
-      entity_type: 'SystemSetting',
-      entity_id: setting.id,
-      new_data: { key, value, description, data_type },
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent')
-    });
-    
-    res.status(201).json(setting);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// ─── Special / aggregate routes (must come before /:id) ───────────
+router.get('/settings/object', settingController.getSettingsObject);      // GET    /api/system-settings/object
+router.get('/settings/categorized', settingController.getCategorized);    // GET    /api/system-settings/categorized
+router.get('/settings/category/:category', settingController.getByCategory); // GET /api/system-settings/category/:category
 
-router.put('/settings/:key', async (req, res) => {
-  try {
-    const { key } = req.params;
-    const { value } = req.body;
-    
-    const setting = await db.SystemSetting.findOne({ where: { key } });
-    if (!setting) {
-      return res.status(404).json({ error: 'Setting not found' });
-    }
-    
-    const oldValue = setting.value;
-    setting.value = String(value);
-    await setting.save();
-    
-    await db.AuditLog.create({
-      user_id: req.user.id,
-      action: 'UPDATE',
-      entity_type: 'SystemSetting',
-      entity_id: setting.id,
-      old_data: { [key]: oldValue },
-      new_data: { [key]: value },
-      ip_address: req.ip,
-      user_agent: req.get('User-Agent')
-    });
-    
-    res.json({ message: 'Setting updated successfully', value: setting.getTypedValue() });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.patch('/settings/bulk', settingController.updateMany);             // PATCH  /api/system-settings/bulk
+
+// ─── Key-based routes ─────────────────────────────────────────────
+router.get('/settings/key/:key', settingController.getByKey);             // GET    /api/system-settings/key/:key
+router.put('/settings/key/:key', settingController.updateByKey);          // PUT    /api/system-settings/key/:key
+router.delete('/settings/key/:key', settingController.deleteByKey);       // DELETE /api/system-settings/key/:key
+
+// ─── ID-based routes (must come last) ─────────────────────────────
+router.get('/settings/:id', settingController.getById);                   // GET    /api/system-settings/:id
+router.put('/settings/:id', settingController.update);                    // PUT    /api/system-settings/:id
+router.delete('/settings/:id', settingController.delete);                 // DELETE /api/system-settings/:id
 
 // Audit logs
 router.get('/audit-logs', async (req, res) => {

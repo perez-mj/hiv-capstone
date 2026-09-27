@@ -9,31 +9,46 @@ const { hmac } = require('../utils/crypto');
 class PatientService {
 
   // ---------- READ ----------
-  async getPatients({ page = 1, limit = 20, search = '', includeUser = true, actorId = null, req = null }) {
-    const offset = (page - 1) * limit;
-    const where = {};
-    if (search) {
-      // NOTE: with encryption, name search is exact-only via hash columns.
-      // patient_facility_code stays plaintext and supports LIKE.
-      where[Op.or] = [
-        { patient_facility_code: { [Op.like]: `%${search}%` } },
-        { first_name_hash: hmac(search) },
-        { last_name_hash: hmac(search) },
-        { contact_number_hash: hmac(search) }
-      ];
-    }
+  async getPatients({
+  page = 1, limit = 20, search = '',
+  purpose = null, year = null,        // ✅ NEW
+  includeUser = true, actorId = null, req = null
+}) {
+  const offset = (page - 1) * limit;
+  const where = {};
 
-    const include = [];
-    if (includeUser) {
-      include.push({ model: db.User, as: 'User', attributes: ['id', 'username', 'email'] });
-    }
+  if (search) {
+    where[Op.or] = [
+      { patient_facility_code: { [Op.like]: `%${search}%` } },
+      { first_name_hash: hmac(search) },
+      { last_name_hash: hmac(search) },
+      { contact_number_hash: hmac(search) }
+    ];
+  }
 
-    const { count, rows } = await db.Patient.findAndCountAll({
-      where, include, limit, offset,
-      order: [['created_at', 'DESC']]
-    });
+  // ✅ purpose is encrypted → filter via hash
+  if (purpose) {
+    where.purpose_hash = hmac(purpose);
+  }
 
-    audit.write({
+  // ✅ enrollment_date is plaintext DATEONLY → range filter
+  if (year) {
+    where.enrollment_date = {
+      [Op.gte]: `${year}-01-01`,
+      [Op.lte]: `${year}-12-31`
+    };
+  }
+
+  const include = includeUser
+    ? [{ model: db.User, as: 'User', attributes: ['id', 'username', 'email'] }]
+    : [];
+
+  const { count, rows } = await db.Patient.findAndCountAll({
+    where, include, limit, offset,
+    order: [['created_at', 'DESC']]
+  });
+
+  audit.write({
       userId: actorId,
       action: 'LIST',
       entityType: 'Patient',
@@ -41,9 +56,8 @@ class PatientService {
       ipAddress: req?.ip,
       userAgent: req?.get?.('User-Agent')
     });
-
-    return { items: rows, total: count, page, totalPages: Math.ceil(count / limit) };
-  }
+  return { items: rows, total: count, page, totalPages: Math.ceil(count / limit) };
+}
 
   async searchPatients(query, limit = 10, actorId = null, req = null) {
     const rows = await db.Patient.findAll({
@@ -389,6 +403,8 @@ class PatientService {
     });
     return results;
   }
+
+  // TODO: add an importPatients() method for bulk CSV import, with validation and audit logging
 }
 
 module.exports = new PatientService();

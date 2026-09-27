@@ -25,11 +25,7 @@ module.exports = {
 
     await queryInterface.bulkInsert('system_settings', [
       { key: 'blockchain_enabled', value: 'false', data_type: 'boolean', category: 'security', created_at: now, updated_at: now },
-      { key: 'max_login_attempts', value: '5', data_type: 'number', category: 'security', created_at: now, updated_at: now },
       { key: 'clinic_name', value: process.env.CLINIC_NAME || 'HIV Care Center', data_type: 'string', category: 'appearance', created_at: now, updated_at: now },
-      { key: 'timezone', value: 'Asia/Manila', data_type: 'string', category: 'appearance', created_at: now, updated_at: now },
-      { key: 'default_art_refill_days', value: '30', data_type: 'number', category: 'clinical', created_at: now, updated_at: now },
-      { key: 'default_next_appointment_days', value: '90', data_type: 'number', category: 'clinical', created_at: now, updated_at: now },
     ]);
 
     await queryInterface.bulkInsert('appointment_settings', [{

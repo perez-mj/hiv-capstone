@@ -56,11 +56,7 @@ class DevSeeder {
 
     const systemSettings = [
       { key: 'blockchain_enabled', value: 'false', data_type: 'boolean', category: 'security', description: 'MultiChain logging' },
-      { key: 'max_login_attempts', value: '5', data_type: 'number', category: 'security', description: 'Login attempt limit' },
       { key: 'clinic_name', value: process.env.CLINIC_NAME || 'Dev HIV Care Center', data_type: 'string', category: 'appearance', description: 'Clinic display name' },
-      { key: 'timezone', value: 'Asia/Manila', data_type: 'string', category: 'appearance', description: 'Timezone' },
-      { key: 'default_art_refill_days', value: '30', data_type: 'number', category: 'clinical', description: 'ART refill interval' },
-      { key: 'default_next_appointment_days', value: '90', data_type: 'number', category: 'clinical', description: 'Follow-up interval' }
     ];
 
     for (const s of systemSettings) {
@@ -116,7 +112,7 @@ class DevSeeder {
         defaults: {
           username: u.username,
           email: u.email,
-          password_hash: await bcrypt.hash(u.password, 10),
+          password_hash: u.password,
           role: u.role,
           office: u.office,
           is_active: true

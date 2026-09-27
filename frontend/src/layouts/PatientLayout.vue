@@ -67,7 +67,7 @@
           icon
           variant="text"
           :color="theme.current.value.colors.error"
-          @click="logout"
+          @click="showLogoutDialog = true"
           size="small"
         >
           <v-icon size="20">mdi-logout</v-icon>
@@ -168,7 +168,7 @@
           </v-list-item>
           
           <v-list-item 
-            @click="logout"
+            @click="showLogoutDialog = true"
             rounded="lg"
             density="comfortable"
           >
@@ -195,6 +195,19 @@
         <router-view />
       </v-container>
     </v-main>
+
+    <!-- Logout Confirmation Dialog -->
+    <ConfirmDialog
+      v-model="showLogoutDialog"
+      title="Confirm Logout"
+      confirm-text="Logout"
+      color="error"
+      icon="mdi-logout"
+      :loading="logoutLoading"
+      @confirm="confirmLogout"
+    >
+      Are you sure you want to logout?
+    </ConfirmDialog>
   </v-app>
 </template>
 
@@ -203,12 +216,17 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/authStore';
 import { useTheme } from 'vuetify';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const theme = useTheme();
 const drawer = ref(null);
+
+// Logout state
+const showLogoutDialog = ref(false);
+const logoutLoading = ref(false);
 
 // Responsive breakpoint
 const isMobile = ref(window.innerWidth < 960);
@@ -278,9 +296,17 @@ const toggleTheme = () => {
   localStorage.setItem('theme', newTheme);
 };
 
-const logout = () => {
-  authStore.logout();
-  router.push('/login');
+const confirmLogout = async () => {
+  logoutLoading.value = true;
+  try {
+    await authStore.logout();
+    router.push('/login');
+  } catch (error) {
+    console.error('Logout failed:', error);
+  } finally {
+    logoutLoading.value = false;
+    showLogoutDialog.value = false;
+  }
 };
 </script>
 

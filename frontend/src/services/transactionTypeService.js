@@ -2,15 +2,24 @@
 import api from '@/plugins/axios'
 
 export default {
-  async getTransactionTypes(office = null) {
+  // ─────────────────────────────────────────────
+  // Read
+  // ─────────────────────────────────────────────
+  async getTransactionTypes(office = null, params = {}) {
     try {
-      const url = office ? `/transaction-types?office=${office}` : '/transaction-types'
-      const response = await api.get(url)
+      const query = { ...params }
+      if (office) query.office = office
+      const response = await api.get('/transaction-types', { params: query })
       return response.data
     } catch (error) {
       console.error('Get transaction types error:', error)
       throw error
     }
+  },
+
+  // Alias used by the settings tab
+  async getAll(params = {}) {
+    return this.getTransactionTypes(null, params)
   },
 
   async getTransactionType(id) {
@@ -23,6 +32,9 @@ export default {
     }
   },
 
+  // ─────────────────────────────────────────────
+  // Write
+  // ─────────────────────────────────────────────
   async createTransactionType(data) {
     try {
       const response = await api.post('/transaction-types', data)
@@ -31,6 +43,11 @@ export default {
       console.error('Create transaction type error:', error)
       throw error
     }
+  },
+
+  // Alias
+  async create(data) {
+    return this.createTransactionType(data)
   },
 
   async updateTransactionType(id, data) {
@@ -43,6 +60,26 @@ export default {
     }
   },
 
+  // Alias
+  async update(id, data) {
+    return this.updateTransactionType(id, data)
+  },
+
+  async toggleTransactionTypeActive(id) {
+    try {
+      const response = await api.patch(`/transaction-types/${id}/toggle-active`)
+      return response.data
+    } catch (error) {
+      console.error('Toggle transaction type error:', error)
+      throw error
+    }
+  },
+
+  // Alias
+  async toggleActive(id) {
+    return this.toggleTransactionTypeActive(id)
+  },
+
   async deleteTransactionType(id) {
     try {
       const response = await api.delete(`/transaction-types/${id}`)
@@ -51,5 +88,10 @@ export default {
       console.error('Delete transaction type error:', error)
       throw error
     }
-  }
+  },
+
+  // Alias
+  async delete(id) {
+    return this.deleteTransactionType(id)
+  },
 }

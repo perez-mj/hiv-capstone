@@ -5,12 +5,12 @@ export default {
   /**
    * List patients with pagination and search
    */
-  async getPatients(page = 1, limit = 20, search = '') {
-    const response = await api.get('/patients', {
-      params: { page, limit, search }
-    })
-    return response.data
-  },
+  async getPatients(page = 1, limit = 20, search = '', purpose = null, year = null) {
+  const response = await api.get('/patients', {
+    params: { page, limit, search, purpose, year }
+  })
+  return response.data
+},
 
   /**
    * Get a single patient by ID

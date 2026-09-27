@@ -52,7 +52,6 @@ module.exports = (sequelize) => {
     tableName: 'transaction_types',
     timestamps: true,
     underscored: true,
-    paranoid: true // Soft delete
   });
 
   TransactionType.associate = (models) => {

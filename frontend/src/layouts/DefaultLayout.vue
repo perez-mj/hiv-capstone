@@ -24,7 +24,7 @@
         <div class="d-flex align-center px-4 py-3">
           <img 
             src="@/assets/logo.svg" 
-            alt="HIV System Logo" 
+            alt="OMPH HIV Care Logo" 
             class="logo-icon mr-3"
           />
           <div class="brand-text">
@@ -227,28 +227,17 @@
     </v-main>
 
     <!-- Logout Confirmation Dialog -->
-    <v-dialog v-model="showLogoutDialog" max-width="400" persistent>
-      <v-card>
-        <v-card-title class="text-h5">
-          <v-icon color="error" start>mdi-logout</v-icon>
-          Confirm Logout
-        </v-card-title>
-
-        <v-card-text class="pt-4">
-          Are you sure you want to logout?
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn variant="text" @click="showLogoutDialog = false">
-            Cancel
-          </v-btn>
-          <v-btn color="error" variant="flat" @click="confirmLogout" :loading="logoutLoading">
-            Logout
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <ConfirmDialog
+      v-model="showLogoutDialog"
+      title="Confirm Logout"
+      confirm-text="Logout"
+      color="error"
+      icon="mdi-logout"
+      :loading="logoutLoading"
+      @confirm="confirmLogout"
+    >
+      Are you sure you want to logout?
+    </ConfirmDialog>
 
     <!-- Global Snackbar -->
     <GlobalSnackbar />
@@ -262,6 +251,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useSnackbar } from '@/plugins/snackbar'
 import { useTheme } from 'vuetify'
 import GlobalSnackbar from '@/components/common/GlobalSnackbar.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -345,10 +335,9 @@ const menuItems = computed(() => {
 const adminItems = [
   { title: 'Admin Dashboard', icon: 'mdi-chart-line', to: '/admin' },
   { title: 'User Management', icon: 'mdi-account-group', to: '/admin/users' },
-  // { title: 'System Settings', icon: 'mdi-cog', to: '/admin/settings' },
+  { title: 'System Settings', icon: 'mdi-cog', to: '/admin/settings' },
   { title: 'Audit Logs', icon: 'mdi-history', to: '/admin/audit-logs' },
-  { title: 'Blockchain', icon: 'mdi-shield-key', to: '/admin/blockchain' },
-  // { title: 'Backup & Restore', icon: 'mdi-backup-restore', to: '/admin/backup' },
+  { title: 'Blockchain', icon: 'mdi-shield-key', to: '/admin/blockchain' }
 ]
 
 // Methods
