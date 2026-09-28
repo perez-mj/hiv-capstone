@@ -2,31 +2,31 @@
 const db = require('../models');
 const queueService = require('./queueService');
 const patientCodeService = require('./patientCodeService');
+const { hmac } = require('../utils/crypto');
 const { Op } = require('sequelize');
 
 class KioskService {
 
   /**
-   * Check in patient with appointment
-   * Complete workflow: Find patient -> Find appointment -> Create queue entry
+   * Find patient by phone using the HMAC hash (encrypted column can't be queried).
    */
-  async checkInPatient(phone) {
-    // Normalize phone number
-    phone = phone.trim();
+  async _findPatientByPhone(phone) {
+    const phoneHash = hmac(phone.trim());
+    return db.Patient.findOne({ where: { contact_number_hash: phoneHash } });
+  }
 
-    // Today's date
+  /**
+   * Check in patient with appointment
+   */
+  async joinQueueWithAppointment(phone) {
+    phone = phone.trim();
     const today = new Date().toISOString().split('T')[0];
 
-    // Find patient
-    const patient = await db.Patient.findOne({
-      where: { contact_number: phone }
-    });
-
+    const patient = await this._findPatientByPhone(phone);
     if (!patient) {
       throw new Error('Patient not found. Please register first.');
     }
 
-    // Find today's pending appointment
     const appointment = await db.Appointment.findOne({
       where: {
         patient_id: patient.id,
@@ -40,42 +40,28 @@ class KioskService {
       throw new Error('No pending appointment found for today.');
     }
 
-    // Check if patient already queued
     const existingQueue = await db.QueueEntry.findOne({
       where: {
         patient_id: patient.id,
-        status: {
-          [Op.in]: ['waiting', 'in-progress']
-        }
+        status: { [Op.in]: ['waiting', 'in-progress'] }
       },
-      include: [
-        {
-          model: db.Queue,
-          as: 'Queue',
-          where: {
-            office: appointment.office,
-            date: today
-          }
-        }
-      ]
+      include: [{
+        model: db.Queue,
+        as: 'Queue',
+        where: { office: appointment.office, date: today }
+      }]
     });
 
     if (existingQueue) {
       throw new Error('Patient is already in queue.');
     }
 
-    // Use transaction for all operations
     return await db.sequelize.transaction(async (transaction) => {
-      // Ensure appointment has transaction_type_id
       let transactionTypeId = appointment.transaction_type_id;
-      
+
       if (!transactionTypeId) {
-        // Find or create a default transaction type for this office
         let transactionType = await db.TransactionType.findOne({
-          where: { 
-            office: appointment.office,
-            is_active: true
-          },
+          where: { office: appointment.office, is_active: true },
           transaction
         });
 
@@ -87,16 +73,11 @@ class KioskService {
             is_active: true
           }, { transaction });
         }
-        
+
         transactionTypeId = transactionType.id;
-        
-        // Update appointment with transaction_type_id
-        await appointment.update({
-          transaction_type_id: transactionTypeId
-        }, { transaction });
+        await appointment.update({ transaction_type_id: transactionTypeId }, { transaction });
       }
 
-      // Add to queue using transaction-safe queue service
       const result = await queueService.addToQueue(
         appointment.office,
         today,
@@ -105,15 +86,10 @@ class KioskService {
         transactionTypeId,
         transaction
       );
-      const queueEntry = result.queueEntry; 
+      const queueEntry = result.queueEntry;
 
-      // Get waiting position for display
-      const waitingCount = await queueService.getWaitingCount(
-        appointment.office,
-        today
-      );
+      const waitingCount = await queueService.getWaitingCount(appointment.office, today);
 
-      // Update appointment with queue number
       await appointment.update({
         queue_number: queueEntry.queue_number,
         status: 'queued'
@@ -145,126 +121,100 @@ class KioskService {
   }
 
   /**
-   * Register walk-in patient (creates queue entry directly - NO appointment)
+   * Register walk-in patient
    */
   async registerWalkIn(patientData, office = 'testing') {
-    // Validate required fields
     const requiredFields = ['first_name', 'last_name', 'gender', 'contact_number'];
     for (const field of requiredFields) {
-      if (!patientData[field]) {
-        throw new Error(`${field} is required.`);
-      }
+      if (!patientData[field]) throw new Error(`${field} is required.`);
     }
 
-    // Check if patient already exists by contact number
-    const existingPatient = await db.Patient.findOne({
-      where: { contact_number: patientData.contact_number }
-    });
+    const existingPatient = await this._findPatientByPhone(patientData.contact_number);
 
-    let patient;
-
-    // If patient exists, use existing patient
     if (existingPatient) {
-      patient = existingPatient;
-      
-      // Check if existing patient already has a facility code
+      let patient = existingPatient;
+
       if (!patient.patient_facility_code) {
-        // Generate one for existing patient without code
-        const facilityCode = await this.generateCodeForPatient(patientData);
-        await patient.update({
-          patient_facility_code: facilityCode
-        });
+        const facilityCode = await this._safeGenerateCode(patientData);
+        await patient.update({ patient_facility_code: facilityCode });
       }
-      
-      // Add to queue directly
-      return await db.sequelize.transaction(async (transaction) => {
-        return await this._createWalkInQueueEntry(patient, patientData, office, transaction);
-      });
-    } else {
-      // Create new patient
-      return await db.sequelize.transaction(async (transaction) => {
-        // Generate facility code with proper counter
-        let facilityCode;
-        try {
-          facilityCode = await patientCodeService.generateFacilityCode({
-            first_name: patientData.first_name,
-            middle_name: patientData.middle_name || '',
-            last_name: patientData.last_name,
-            status: 'testing',
-            enrollment_date: new Date().toISOString().split('T')[0],
-            treatment_transition_date: null
-          });
-        } catch (error) {
-          console.error('Error generating facility code:', error);
-          // Fallback code generation
-          const timestamp = Date.now().toString().slice(-6);
-          const initials = `${patientData.first_name.charAt(0)}${patientData.last_name.charAt(0)}`.toUpperCase();
-          facilityCode = `P${new Date().getFullYear().toString().slice(-2)}-${initials}${timestamp}`;
-        }
 
-        // Create patient with a temporary birth_date
-        const tempBirthDate = '1900-01-01';
-        
-        patient = await db.Patient.create({
-          first_name: patientData.first_name,
-          last_name: patientData.last_name,
-          gender: patientData.gender,
-          contact_number: patientData.contact_number,
-          address: patientData.address || null,
-          guardian_name: patientData.guardian_name || null,
-          guardian_contact: patientData.guardian_contact || null,
-          status: 'testing',
-          patient_facility_code: facilityCode,
-          enrollment_date: new Date().toISOString().split('T')[0],
-          birth_date: tempBirthDate
-        }, { transaction });
-
-        return await this._createWalkInQueueEntry(patient, patientData, office, transaction);
+      return await db.sequelize.transaction(async (transaction) => {
+        return this._createWalkInQueueEntry(patient, patientData, office, transaction);
       });
     }
+
+    return await db.sequelize.transaction(async (transaction) => {
+      const facilityCode = await this._safeGenerateCode(patientData);
+
+      const patient = await db.Patient.create({
+        first_name: patientData.first_name,
+        last_name: patientData.last_name,
+        middle_name: patientData.middle_name || '',
+        gender: patientData.gender,
+        contact_number: patientData.contact_number,
+        address: patientData.address || null,
+        guardian_name: patientData.guardian_name || null,
+        guardian_contact: patientData.guardian_contact || null,
+        status: 'testing',
+        patient_facility_code: facilityCode,
+        enrollment_date: new Date().toISOString().split('T')[0],
+        birth_date: '1900-01-01'
+      }, { transaction });
+
+      return this._createWalkInQueueEntry(patient, patientData, office, transaction);
+    });
   }
 
   /**
-   * Helper method to create walk-in queue entry directly (NO appointment)
-   * @private
+   * Safe facility-code generator with collision-resistant fallback.
    */
+  async _safeGenerateCode(patientData) {
+    try {
+      return await patientCodeService.generateFacilityCode({
+        first_name: patientData.first_name,
+        middle_name: patientData.middle_name || '',
+        last_name: patientData.last_name,
+        status: 'testing',
+        enrollment_date: new Date().toISOString().split('T')[0],
+        treatment_transition_date: null
+      });
+    } catch (error) {
+      console.error('Error generating facility code:', error);
+      const timestamp = Date.now().toString().slice(-6);
+      const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const initials =
+        `${patientData.first_name.charAt(0)}${patientData.last_name.charAt(0)}`.toUpperCase();
+      return `P${new Date().getFullYear().toString().slice(-2)}-${initials}${timestamp}${rand}`;
+    }
+  }
+
   async _createWalkInQueueEntry(patient, patientData, office, transaction) {
-    // Determine transaction type
     let transactionTypeId = patientData.transaction_type_id;
 
-    // If no transaction type provided, get the default for the office
     if (!transactionTypeId) {
       const transactionType = await this.getOrCreateDefaultTransactionType(office, transaction);
       transactionTypeId = transactionType.id;
     } else {
-      // Verify the transaction type exists
       const transactionType = await db.TransactionType.findByPk(transactionTypeId, { transaction });
-      if (!transactionType) {
-        throw new Error(`Transaction type ${transactionTypeId} not found`);
-      }
-      // If the transaction type is for a different office, use the default
+      if (!transactionType) throw new Error(`Transaction type ${transactionTypeId} not found`);
       if (transactionType.office !== office) {
-        console.warn(`Transaction type ${transactionTypeId} is for ${transactionType.office}, but office is ${office}. Using default.`);
         const defaultType = await this.getOrCreateDefaultTransactionType(office, transaction);
         transactionTypeId = defaultType.id;
       }
     }
 
-    // Today's date
     const today = new Date().toISOString().split('T')[0];
 
-    // Add directly to queue (NO appointment)
     const result = await queueService.addToQueue(
       office,
       today,
       patient.id,
-      null, // ← No appointment ID for walk-ins
+      null,
       transactionTypeId,
       transaction
     );
     const queueEntry = result.queueEntry;
-
-    // Get waiting position
     const waitingCount = await queueService.getWaitingCount(office, today);
 
     return {
@@ -274,11 +224,11 @@ class KioskService {
         name: `${patient.first_name} ${patient.last_name}`,
         facility_code: patient.patient_facility_code
       },
-      // No appointment data for walk-ins
       ticket: {
         queue_number: queueEntry.queue_number,
-        office: office,
+        office,
         patient_name: `${patient.first_name} ${patient.last_name}`,
+        patient_facility_code: patient.patient_facility_code,
         waiting_position: waitingCount,
         check_in_time: new Date().toLocaleTimeString(),
         is_walk_in: true
@@ -286,13 +236,10 @@ class KioskService {
     };
   }
 
-  /**
-   * Get or create a default transaction type for an office
-   */
   async getOrCreateDefaultTransactionType(office, transaction = null) {
     let transactionType = await db.TransactionType.findOne({
       where: {
-        office: office,
+        office,
         is_active: true,
         name: { [Op.like]: `%${office === 'testing' ? 'Testing' : 'Treatment'}%` }
       },
@@ -300,21 +247,16 @@ class KioskService {
     });
 
     if (!transactionType) {
-      // Try to get any active transaction type for this office
       transactionType = await db.TransactionType.findOne({
-        where: {
-          office: office,
-          is_active: true
-        },
+        where: { office, is_active: true },
         transaction
       });
     }
 
-    // If still none, create a default one
     if (!transactionType) {
       transactionType = await db.TransactionType.create({
         name: office === 'testing' ? 'Testing' : 'Treatment',
-        office: office,
+        office,
         estimated_duration_minutes: office === 'testing' ? 15 : 30,
         is_active: true,
         description: `Default ${office} transaction type`
@@ -325,53 +267,23 @@ class KioskService {
   }
 
   /**
-   * Generate a facility code for a patient with proper counter handling
-   * @param {Object} patientData - Patient data
-   * @returns {Promise<string>} - Generated facility code
-   */
-  async generateCodeForPatient(patientData) {
-    try {
-      // Try to generate code normally
-      const code = await patientCodeService.generateFacilityCode({
-        first_name: patientData.first_name,
-        middle_name: patientData.middle_name || '',
-        last_name: patientData.last_name,
-        status: 'testing',
-        enrollment_date: new Date().toISOString().split('T')[0],
-        treatment_transition_date: null
-      });
-      
-      return code;
-    } catch (error) {
-      console.error('Error generating facility code:', error);
-      
-      // Fallback: Generate with timestamp
-      const timestamp = Date.now().toString().slice(-6);
-      const initials = `${patientData.first_name.charAt(0)}${patientData.last_name.charAt(0)}`.toUpperCase();
-      return `P${new Date().getFullYear().toString().slice(-2)}-${initials}${timestamp}`;
-    }
-  }
-
-  /**
-   * Get display state for kiosk/public screen
-   * Returns queue information without patient names (privacy)
+   * Get display state for kiosk/public screen.
+   * PRIVACY: does NOT expose patient names, facility codes, or any PII.
    */
   async getDisplayState(office) {
     const today = new Date().toISOString().split('T')[0];
-    
     const queueState = await queueService.getQueueState(office, today);
 
-    // Remove patient names for public display
     const waitingList = queueState.waiting_list.map(entry => ({
       queue_number: entry.queue_number,
       position: entry.position
     }));
 
     return {
-      office: office,
-      current_serving: queueState.current_serving ? {
-        queue_number: queueState.current_serving.queue_number
-      } : null,
+      office,
+      current_serving: queueState.current_serving
+        ? { queue_number: queueState.current_serving.queue_number } // ❌ no name
+        : null,
       waiting_count: queueState.waiting_count,
       waiting_list: waitingList,
       stats: queueState.stats,
@@ -380,30 +292,14 @@ class KioskService {
   }
 
   /**
-   * Check if patient exists by phone number
-   * @param {string} phone - Patient's contact number
-   * @returns {Promise<Object>} Patient existence check result
+   * Patient existence check — uses hash lookup.
    */
   async patientExists(phone) {
-    // Normalize phone number
-    const normalizedPhone = phone.trim();
-    
-    const patient = await db.Patient.findOne({
-      where: { contact_number: normalizedPhone },
-      attributes: ['id', 'first_name', 'middle_name', 'last_name', 'gender', 'patient_facility_code', 'status']
-    });
-    
+    const patient = await this._findPatientByPhone(phone);
     if (patient) {
-      return {
-        exists: true,
-        patient: patient.toJSON()
-      };
+      return { exists: true, patient: patient.toJSON() };
     }
-    
-    return {
-      exists: false,
-      patient: null
-    };
+    return { exists: false, patient: null };
   }
 }
 

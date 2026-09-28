@@ -309,7 +309,7 @@ const yearOptions = computed(() => {
 
 const headers = [
   { title: 'Name', key: 'full_name', sortable: false }, // ✅ backend doesn't sort by name
-  { title: 'Facility Code', key: 'patient_facility_code', align: 'center', sortable: false, width: '160px' },
+  { title: 'PFC', key: 'patient_facility_code', align: 'center', sortable: false, width: '160px' },
   { title: 'Age', key: 'age', align: 'center', sortable: false, width: '100px' },
   { title: 'Gender', key: 'gender', align: 'center', sortable: false, width: '110px' },
   { title: 'Purpose', key: 'purpose', align: 'center', sortable: false, width: '130px' },

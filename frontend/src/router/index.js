@@ -199,7 +199,7 @@ const routes = [
         component: () => import('@/views/patient/AppointmentsView.vue'),
       },
       {
-        path: 'Visits',
+        path: 'visits',
         name: 'VisitHistory',
         component: () => import('@/views/patient/HistoryView.vue'),
       },
@@ -219,7 +219,7 @@ const routes = [
       {
         path: '',
         name: 'KioskCheckin',
-        component: () => import('@/views/kiosk/KioskCheckinView.vue'),
+        component: () => import('@/views/kiosk/KioskQueueView.vue'),
         meta: { requiresAuth: false }
       },
       {
