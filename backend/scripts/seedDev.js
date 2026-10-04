@@ -2,18 +2,10 @@
 require('dotenv').config();
 const db = require('../models');
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
 const { hmac } = require('../utils/crypto');
-const patientCodeService = require('../services/patientCodeService');
 
 /**
  * Dev seeder — safe to re-run.
- *
- * Differences from initDb.js:
- *   • Never drops tables (no sync({ force: true }))
- *   • Uses findOrCreate everywhere → idempotent
- *   • Fast: skips password validation, audit log spam, refresh tokens
- *   • Adds N random patients/appointments on each run (N from env)
  *
  * Usage:
  *   npm run seed:dev
@@ -30,7 +22,7 @@ class DevSeeder {
       transactionTypes: 0,
       settings: 0,
       appointmentSettings: 0,
-      queues: 0
+      queues: 0,
     };
   }
 
@@ -44,7 +36,7 @@ class DevSeeder {
   // -------------------------------------------------------------------
   async syncSchema() {
     this.log('\nSyncing schema (alter, no data loss)...');
-    await db.sequelize.sync({ alter: false }); // set alter:true only if you know it's safe
+    await db.sequelize.sync({ alter: false });
     this.ok('Schema in sync');
   }
 
@@ -62,7 +54,7 @@ class DevSeeder {
     for (const s of systemSettings) {
       const [, created] = await db.SystemSetting.findOrCreate({
         where: { key: s.key },
-        defaults: s
+        defaults: s,
       });
       if (created) this.stats.settings++;
     }
@@ -87,8 +79,8 @@ class DevSeeder {
         allow_online_booking: true,
         allow_online_cancellation: true,
         cancellation_deadline_hours: 24,
-        is_active: true
-      }
+        is_active: true,
+      },
     });
     if (apptCreated) this.stats.appointmentSettings++;
     this.ok(`${this.stats.appointmentSettings} new appointment settings`);
@@ -101,9 +93,9 @@ class DevSeeder {
     this.log('\nSeeding core users...');
 
     const users = [
-      { username: 'admin',  email: 'admin@dev.local',        password: 'Admin@123',  role: 'admin', office: null },
-      { username: 'nurse',  email: 'nurse@dev.local',        password: 'Nurse@123',  role: 'staff', office: 'testing' },
-      { username: 'pharma', email: 'pharma@dev.local',       password: 'Pharma@123', role: 'staff', office: 'treatment' }
+      { username: 'admin',  email: 'admin@dev.local',  password: 'Admin@123',  role: 'admin', office: null },
+      { username: 'nurse',  email: 'nurse@dev.local',  password: 'Nurse@123',  role: 'staff', office: 'testing' },
+      { username: 'pharma', email: 'pharma@dev.local', password: 'Pharma@123', role: 'staff', office: 'treatment' },
     ];
 
     for (const u of users) {
@@ -112,11 +104,11 @@ class DevSeeder {
         defaults: {
           username: u.username,
           email: u.email,
-          password_hash: u.password,
+          password_hash: u.password, // plain — hook hashes once
           role: u.role,
           office: u.office,
-          is_active: true
-        }
+          is_active: true,
+        },
       });
       if (created) {
         this.stats.users++;
@@ -135,15 +127,18 @@ class DevSeeder {
 
     const types = [
       { name: 'Testing',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
+      { name: 'Testing Result',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#a0e999', is_active: true },
+      { name: 'New - STI Consultation',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
+      { name: 'Old - STI Consultation',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
       { name: 'Consultation', office: 'treatment', estimated_duration_minutes: 45, color_code: '#FF9800', is_active: true },
       { name: 'Refill',       office: 'treatment', estimated_duration_minutes: 15, color_code: '#2196F3', is_active: true },
-      { name: 'Other',        office: 'treatment', estimated_duration_minutes: 20, color_code: '#9C27B0', is_active: true }
+      { name: 'Other',        office: 'treatment', estimated_duration_minutes: 20, color_code: '#9C27B0', is_active: true },
     ];
 
     for (const t of types) {
       const [, created] = await db.TransactionType.findOrCreate({
         where: { name: t.name },
-        defaults: t
+        defaults: t,
       });
       if (created) this.stats.transactionTypes++;
     }
@@ -151,10 +146,14 @@ class DevSeeder {
   }
 
   // -------------------------------------------------------------------
-  // PATIENTS
+  // RANDOM HELPERS
   // -------------------------------------------------------------------
   pickRandom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  maybe(value, probability = 0.5) {
+    return Math.random() < probability ? value : null;
   }
 
   randomPhone() {
@@ -172,26 +171,38 @@ class DevSeeder {
     return new Date(Date.UTC(year, month, day)).toISOString().split('T')[0];
   }
 
-  async findOrCreateLocation() {
-    // Pick any existing city — nice-to-have so addresses aren't all null
+  randomSitioStreet() {
+    const prefixes = ['Purok', 'Sitio', 'Blk', 'Phase'];
+    const streets  = ['Mabini', 'Rizal', 'Bonifacio', 'Del Pilar', 'Luna', 'Aguinaldo', 'Katipunan', 'Magsaysay'];
+    const n = 1 + Math.floor(Math.random() * 250);
+    return `${n} ${this.pickRandom(streets)} St., ${this.pickRandom(prefixes)} ${1 + Math.floor(Math.random() * 7)}`;
+  }
+
+  /**
+   * Returns a random existing location set from the PSGC tables.
+   * Safe when PSGC tables are empty — returns all nulls.
+   */
+  async findRandomLocation() {
     const city = await db.CityMunicipality.findOne({
-      order: db.sequelize.random()
+      order: db.sequelize.random(),
     });
-    if (!city) return { region_id: null, province_id: null, city_municipality_id: null };
+    if (!city) return { province_id: null, city_municipality_id: null, barangay_id: null };
 
     const brgy = await db.Barangay.findOne({
-      where: { cityMunicipalityId: city.id },
-      order: db.sequelize.random()
+      where: { city_municipality_id: city.id }, // snake_case — matches migration
+      order: db.sequelize.random(),
     });
 
     return {
-      region_id: city.regionId,
-      province_id: city.provinceId,
+      province_id: city.province_id ?? city.provinceId ?? null,
       city_municipality_id: city.id,
-      barangay_id: brgy ? brgy.id : null
+      barangay_id: brgy ? brgy.id : null,
     };
   }
 
+  // -------------------------------------------------------------------
+  // PATIENTS
+  // -------------------------------------------------------------------
   async seedDevPatients() {
     if (this.extraPatients <= 0) {
       this.info('DEV_EXTRA_PATIENTS=0 — skipping patient seeding');
@@ -200,18 +211,23 @@ class DevSeeder {
 
     this.log(`\nSeeding ${this.extraPatients} random dev patients...`);
 
-    const firstNames = ['Alex', 'Sam', 'Jamie', 'Taylor', 'Jordan', 'Casey', 'Morgan', 'Riley', 'Avery', 'Quinn', 'Drew', 'Skyler'];
-    const lastNames  = ['Cruz', 'Reyes', 'Santos', 'Garcia', 'Ramos', 'Torres', 'Flores', 'Rivera', 'Mendoza', 'Castillo'];
-    const genders    = ['Male', 'Female', 'Other'];
+    const firstNames  = ['Alex', 'Sam', 'Jamie', 'Taylor', 'Jordan', 'Casey', 'Morgan', 'Riley', 'Avery', 'Quinn', 'Drew', 'Skyler'];
+    const middleNames = ['Abad', 'Bautista', 'Castro', 'Domingo', 'Enriquez', 'Fernandez', 'Gonzales', 'Herrera', 'Ignacio', 'Jimenez'];
+    const lastNames   = ['Cruz', 'Reyes', 'Santos', 'Garcia', 'Ramos', 'Torres', 'Flores', 'Rivera', 'Mendoza', 'Castillo'];
+    const suffixes    = [null, null, null, 'Jr.', 'Sr.', 'III']; // mostly null
+    const genders     = ['Male', 'Female', 'Other'];
+    const purposes    = ['testing', 'treatment'];
 
     for (let i = 0; i < this.extraPatients; i++) {
-      const firstName = this.pickRandom(firstNames);
-      const lastName  = this.pickRandom(lastNames);
-      const contact   = this.randomPhone();
+      const firstName  = this.pickRandom(firstNames);
+      const middleName = this.pickRandom(middleNames);
+      const lastName   = this.pickRandom(lastNames);
+      const suffix     = this.pickRandom(suffixes);
+      const contact    = this.randomPhone();
 
       // Skip if contact already registered
       const exists = await db.Patient.findOne({
-        where: { contact_number_hash: hmac(contact) }
+        where: { contact_number_hash: hmac(contact) },
       });
       if (exists) {
         this.info(`Skip (duplicate contact): ${contact}`);
@@ -220,45 +236,72 @@ class DevSeeder {
 
       const username = `dev_${firstName.toLowerCase()}_${Date.now().toString().slice(-5)}_${i}`;
       const email    = `${username}@dev.local`;
-      const purpose  = Math.random() > 0.5 ? 'testing' : 'treatment';
+      const purpose  = this.pickRandom(purposes);
 
-      // Create portal user
+      // Create portal user — plain-text password, hook hashes once
       const user = await db.User.create({
         username,
         email,
-        password_hash: await bcrypt.hash('Patient@123', 10),
+        password_hash: 'Patient@123',
         role: 'patient',
-        is_active: true
+        is_active: true,
       });
 
-      const loc = await this.findOrCreateLocation();
+      // ---- CURRENT ADDRESS ----
+      const currentLoc = await this.findRandomLocation();
+
+      // ---- PERMANENT ADDRESS ----
+      // 60% of the time: same as current (flag = true, fields auto-synced)
+      // 40% of the time: independent permanent address
+      const sameAsCurrent = Math.random() < 0.6;
+      const permanentLoc  = sameAsCurrent ? currentLoc : await this.findRandomLocation();
+      const permanentStreet = this.randomSitioStreet();
 
       const enrollment = new Date();
       enrollment.setDate(enrollment.getDate() - Math.floor(Math.random() * 365));
 
       const patient = await db.Patient.create({
         user_id: user.id,
+
+        // --- identity ---
         first_name: firstName,
-        middle_name: '',
+        middle_name: middleName,
         last_name: lastName,
-        suffix: '',
+        suffix: suffix || '',
         birth_date: this.randomBirthDate(18, 65),
         gender: this.pickRandom(genders),
+
+        // --- contact ---
         contact_number: contact,
-        sitio_street: `${1 + Math.floor(Math.random() * 200)} Dev St.`,
-        barangay_id: loc.barangay_id,
-        city_municipality_id: loc.city_municipality_id,
-        province_id: loc.province_id,
+        email: this.maybe(`${username}.contact@dev.local`, 0.7),
+        facebook_messenger: this.maybe(`fb.com/${username}`, 0.4),
+
+        // --- current address ---
+        sitio_street: this.randomSitioStreet(),
+        barangay_id: currentLoc.barangay_id,
+        city_municipality_id: currentLoc.city_municipality_id,
+        province_id: currentLoc.province_id,
+
+        // --- permanent address ---
+        same_as_current_address: sameAsCurrent,
+        permanent_sitio_street: permanentStreet,
+        permanent_barangay_id: permanentLoc.barangay_id,
+        permanent_city_municipality_id: permanentLoc.city_municipality_id,
+        permanent_province_id: permanentLoc.province_id,
+
+        // --- meta ---
         status: 'active',
         purpose,
         enrollment_date: enrollment.toISOString().split('T')[0],
-        treatment_transition_date: purpose === 'treatment'
-          ? enrollment.toISOString().split('T')[0]
-          : null
+        treatment_transition_date:
+          purpose === 'treatment' ? enrollment.toISOString().split('T')[0] : null,
       });
 
       this.stats.patients++;
-      this.ok(`Patient: ${firstName} ${lastName} → ${patient.patient_facility_code}`);
+      this.ok(
+        `Patient: ${firstName} ${middleName.charAt(0)}. ${lastName}${suffix ? ' ' + suffix : ''} → ${patient.patient_facility_code}` +
+        ` [${sameAsCurrent ? 'same-as-current' : 'permanent≠current'}]`
+      );
     }
   }
 
@@ -273,8 +316,8 @@ class DevSeeder {
         model: db.User,
         as: 'User',
         where: { username: { [db.Sequelize.Op.like]: 'dev_%' } },
-        required: true
-      }]
+        required: true,
+      }],
     });
 
     if (!devPatients.length) {
@@ -302,7 +345,7 @@ class DevSeeder {
       const slot = this.pickRandom(timeSlots);
 
       const exists = await db.Appointment.findOne({
-        where: { patient_id: patient.id, appointment_date: date, time_slot: slot }
+        where: { patient_id: patient.id, appointment_date: date, time_slot: slot },
       });
       if (exists) continue;
 
@@ -314,7 +357,7 @@ class DevSeeder {
         time_slot: slot,
         status: date < new Date() ? 'completed' : 'pending',
         notes: 'Dev seed',
-        queued_at: null
+        queued_at: null,
       });
       this.stats.appointments++;
     }
@@ -326,7 +369,7 @@ class DevSeeder {
   // QUEUES
   // -------------------------------------------------------------------
   async seedQueues() {
-    this.log('\nSeeding today\'s queues...');
+    this.log("\nSeeding today's queues...");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -340,12 +383,62 @@ class DevSeeder {
           current_number: 0,
           completed_count: 0,
           skipped_count: 0,
-          noshow_count: 0
-        }
+          noshow_count: 0,
+        },
       });
       if (created) this.stats.queues++;
     }
     this.ok(`${this.stats.queues} queues`);
+  }
+
+  // -------------------------------------------------------------------
+  // VERIFY — assert every dev credential actually authenticates
+  // -------------------------------------------------------------------
+  async verifyPasswords() {
+    this.log('\nVerifying dev credentials against the database...');
+
+    const checks = [
+      { username: 'admin',  password: 'Admin@123'  },
+      { username: 'nurse',  password: 'Nurse@123'  },
+      { username: 'pharma', password: 'Pharma@123' },
+    ];
+
+    // Also verify one random dev patient (if any exist)
+    const devPatient = await db.User.findOne({
+      where: { username: { [db.Sequelize.Op.like]: 'dev_%' } },
+      order: [['id', 'DESC']],
+    });
+    if (devPatient) {
+      checks.push({ username: devPatient.username, password: 'Patient@123' });
+    }
+
+    let failed = 0;
+    for (const { username, password } of checks) {
+      const user = await db.User.findOne({ where: { username } });
+      if (!user) {
+        this.warn(`MISSING  ${username} — no DB row`);
+        failed++;
+        continue;
+      }
+
+      const ok = await bcrypt.compare(password, user.password_hash);
+      if (ok) {
+        this.ok(`PASS     ${username}`);
+      } else {
+        // Extra diagnostics — helps spot double-hashing
+        const looksLikeBcrypt = /^\$2[aby]\$\d{2}\$/.test(user.password_hash);
+        this.warn(
+          `FAIL     ${username} — hash prefix: ${user.password_hash.slice(0, 7)}… ` +
+          `(bcrypt=${looksLikeBcrypt})`
+        );
+        failed++;
+      }
+    }
+
+    if (failed > 0) {
+      throw new Error(`${failed} credential check(s) failed — see above`);
+    }
+    this.ok(`All ${checks.length} credentials verified`);
   }
 
   // -------------------------------------------------------------------
@@ -364,6 +457,9 @@ class DevSeeder {
       await this.seedDevPatients();
       await this.seedAppointmentsForDevPatients();
       await this.seedQueues();
+
+      // Fail loudly if any credential can't authenticate
+      await this.verifyPasswords();
 
       console.log('\n=========================================');
       console.log(' DEV SEED COMPLETE');

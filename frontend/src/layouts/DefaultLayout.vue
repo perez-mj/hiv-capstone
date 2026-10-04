@@ -2,16 +2,8 @@
 <template>
   <v-app>
     <!-- Navigation Drawer -->
-    <v-navigation-drawer 
-      v-model="drawer" 
-      app 
-      :permanent="!isMobile"
-      :temporary="isMobile"
-      :width="isMobile ? 280 : 280"
-      color="surface"
-      class="sidebar-custom"
-      :class="{ 'sidebar-mobile': isMobile }"
-    >
+    <v-navigation-drawer v-model="drawer" app :permanent="!isMobile" :temporary="isMobile" :width="isMobile ? 280 : 280"
+      color="surface" class="sidebar-custom" :class="{ 'sidebar-mobile': isMobile }">
       <!-- Mobile Close Button -->
       <div v-if="isMobile" class="d-flex justify-end pa-2">
         <v-btn icon variant="text" size="small" @click="drawer = false">
@@ -22,11 +14,7 @@
       <!-- Brand Section -->
       <div class="drawer-header">
         <div class="d-flex align-center px-4 py-3">
-          <img 
-            src="@/assets/logo.svg" 
-            alt="OMPH HIV Care Logo" 
-            class="logo-icon mr-3"
-          />
+          <img src="@/assets/logo.svg" alt="OMPH HIV Care Logo" class="logo-icon mr-3" />
           <div class="brand-text">
             <div class="text-h6 font-weight-bold" :style="{ color: $vuetify.theme.current.colors.primary }"
               style="line-height: 1.2;">
@@ -90,33 +78,35 @@
           <!-- Profile Details with Slide Animation -->
           <transition name="slide-details">
             <div v-if="showProfileDetails" class="profile-details">
-              
-                <!-- Admin Links (Hidden in sidebar, available here) -->
-                <template v-if="isAdmin">
-                  <v-divider class="my-2"></v-divider>
-                  <div class="px-3 mb-1">
-                    <span class="caption font-weight-bold text-uppercase"
-                      :style="{ color: $vuetify.theme.current.dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }">
-                      Administration
-                    </span>
-                  </div>
-                  
-                  <v-list-item v-for="item in adminItems" :key="item.to" :to="item.to" class="rounded-lg my-1" @click="closeDrawerOnMobile">
-                    <template v-slot:prepend>
-                      <v-icon size="20" color="primary">{{ item.icon }}</v-icon>
-                    </template>
-                    <v-list-item-title>{{ item.title }}</v-list-item-title>
-                  </v-list-item>
-                </template>
 
+              <!-- Admin Links (Hidden in sidebar, available here) -->
+              <template v-if="isAdmin">
                 <v-divider class="my-2"></v-divider>
-                
-                <v-list-item @click="showLogoutDialog = true" class="rounded-lg my-1" :style="{ color: $vuetify.theme.current.colors.error }">
+                <div class="px-3 mb-1">
+                  <span class="caption font-weight-bold text-uppercase"
+                    :style="{ color: $vuetify.theme.current.dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }">
+                    Administration
+                  </span>
+                </div>
+
+                <v-list-item v-for="item in adminItems" :key="item.to" :to="item.to" class="rounded-lg my-1"
+                  @click="closeDrawerOnMobile">
                   <template v-slot:prepend>
-                    <v-icon size="20" :color="$vuetify.theme.current.colors.error">mdi-logout</v-icon>
+                    <v-icon size="20" color="primary">{{ item.icon }}</v-icon>
                   </template>
-                  <v-list-item-title>Logout</v-list-item-title>
+                  <v-list-item-title>{{ item.title }}</v-list-item-title>
                 </v-list-item>
+              </template>
+
+              <v-divider class="my-2"></v-divider>
+
+              <v-list-item @click="showLogoutDialog = true" class="rounded-lg my-1"
+                :style="{ color: $vuetify.theme.current.colors.error }">
+                <template v-slot:prepend>
+                  <v-icon size="20" :color="$vuetify.theme.current.colors.error">mdi-logout</v-icon>
+                </template>
+                <v-list-item-title>Logout</v-list-item-title>
+              </v-list-item>
             </div>
           </transition>
         </div>
@@ -124,30 +114,15 @@
     </v-navigation-drawer>
 
     <!-- App Bar -->
-    <v-app-bar 
-      app 
-      color="surface"
-      elevation="0" 
-      class="app-bar"
-    >
+    <v-app-bar app color="surface" elevation="0" class="app-bar">
       <!-- Mobile Menu Toggle -->
-      <v-btn 
-        v-if="isMobile" 
-        icon 
-        variant="text" 
-        class="mr-2"
-        @click="drawer = !drawer"
-      >
+      <v-btn v-if="isMobile" icon variant="text" class="mr-2" @click="drawer = !drawer">
         <v-icon>mdi-menu</v-icon>
       </v-btn>
 
       <!-- Mobile Logo -->
       <div v-if="isMobile" class="d-flex align-center">
-        <img 
-          src="@/assets/logo.svg" 
-          alt="HIV System Logo" 
-          class="logo-icon-mobile mr-2"
-        />
+        <img src="@/assets/logo.svg" alt="HIV System Logo" class="logo-icon-mobile mr-2" />
         <span class="text-subtitle-1 font-weight-bold" :style="{ color: $vuetify.theme.current.colors.primary }">
           OMPH HIV
         </span>
@@ -227,15 +202,8 @@
     </v-main>
 
     <!-- Logout Confirmation Dialog -->
-    <ConfirmDialog
-      v-model="showLogoutDialog"
-      title="Confirm Logout"
-      confirm-text="Logout"
-      color="error"
-      icon="mdi-logout"
-      :loading="logoutLoading"
-      @confirm="confirmLogout"
-    >
+    <ConfirmDialog v-model="showLogoutDialog" title="Confirm Logout" confirm-text="Logout" color="error"
+      icon="mdi-logout" :loading="logoutLoading" @confirm="confirmLogout">
       Are you sure you want to logout?
     </ConfirmDialog>
 
@@ -272,7 +240,6 @@ const isMobile = computed(() => windowWidth.value < 960)
 const user = computed(() => authStore.user)
 const isAdmin = computed(() => authStore.isAdmin)
 const isStaff = computed(() => authStore.userRole === 'staff')
-const userOffice = computed(() => authStore.userOffice)
 
 const userInitials = computed(() => {
   if (user.value?.fullName) {
@@ -286,22 +253,18 @@ const userInitials = computed(() => {
   return user.value?.username?.charAt(0).toUpperCase() || 'U'
 })
 
-// Dynamic Menu Items - REMOVED DASHBOARD
+
 const menuItems = computed(() => {
   const items = []
-  
-  // Staff menu items
-  if (isStaff.value && userOffice.value) {
-    const officeName = userOffice.value.charAt(0).toUpperCase() + userOffice.value.slice(1)
+
+  // Staff menu items - show both offices for all staff
+  if (isStaff.value) {
     items.push(
-      { 
-        title: `${officeName} Queue`, 
-        icon: 'mdi-human-queue', 
-        to: `/${userOffice.value}/queue` 
-      },
+      { title: 'Testing Queue', icon: 'mdi-test-tube', to: '/testing/queue' },
+      { title: 'Treatment Queue', icon: 'mdi-hospital', to: '/treatment/queue' }
     )
   }
-  
+
   // Admin menu items
   if (isAdmin.value) {
     items.push(
@@ -309,7 +272,7 @@ const menuItems = computed(() => {
       { title: 'Treatment Queue', icon: 'mdi-hospital', to: '/treatment/queue' }
     )
   }
-  
+
   // Common items for staff and admin
   if (isStaff.value || isAdmin.value) {
     items.push(
@@ -317,7 +280,7 @@ const menuItems = computed(() => {
       { title: 'Appointments', icon: 'mdi-calendar', to: '/appointments' },
     )
   }
-  
+
   // Patient menu items
   if (authStore.userRole === 'patient') {
     items.push(
@@ -327,7 +290,7 @@ const menuItems = computed(() => {
       { title: 'Profile', icon: 'mdi-account', to: '/patient/profile' }
     )
   }
-  
+
   return items
 })
 
@@ -385,7 +348,7 @@ onMounted(() => {
   if (savedTheme) {
     theme.global.name.value = savedTheme
   }
-  
+
   drawer.value = !isMobile.value
   window.addEventListener('resize', handleResize)
 })
@@ -515,6 +478,7 @@ onUnmounted(() => {
     transform: translateY(-10px);
     max-height: 0;
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -528,6 +492,7 @@ onUnmounted(() => {
     transform: translateY(0);
     max-height: 500px;
   }
+
   to {
     opacity: 0;
     transform: translateY(-10px);
@@ -615,7 +580,7 @@ onUnmounted(() => {
     padding-left: 12px !important;
     padding-right: 12px !important;
   }
-  
+
   .profile-trigger .flex-grow-1 {
     min-width: 0;
   }

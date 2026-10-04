@@ -66,7 +66,7 @@ module.exports = {
       facebook_messenger: { type: S.TEXT, allowNull: true },
       facebook_messenger_hash: { type: S.STRING(64), allowNull: true },
 
-      // ---------- STRUCTURED ADDRESS ----------
+      // ---------- CURRENT ADDRESS ----------
       // House # / street / purok / sitio — the free-text part below barangay.
       // Encrypted like the rest of PII.
       sitio_street: { type: S.TEXT, allowNull: true },
@@ -89,6 +89,38 @@ module.exports = {
         onDelete: 'SET NULL',
       },
       province_id: {
+        type: S.INTEGER.UNSIGNED,
+        allowNull: true,
+        references: { model: 'provinces', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+      },
+
+      // ---------- PERMANENT ADDRESS ----------
+      // If same_as_current_address is true, the permanent_* fields are
+      // auto-populated from the current address by the model hook.
+      // A PSGC FK only matches "same as current" if all three FK ids match.
+      same_as_current_address: {
+        type: S.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      permanent_sitio_street: { type: S.TEXT, allowNull: true },
+      permanent_barangay_id: {
+        type: S.INTEGER.UNSIGNED,
+        allowNull: true,
+        references: { model: 'barangays', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+      },
+      permanent_city_municipality_id: {
+        type: S.INTEGER.UNSIGNED,
+        allowNull: true,
+        references: { model: 'cities_municipalities', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL',
+      },
+      permanent_province_id: {
         type: S.INTEGER.UNSIGNED,
         allowNull: true,
         references: { model: 'provinces', key: 'id' },
@@ -125,10 +157,15 @@ module.exports = {
     await queryInterface.addIndex('patients', ['status_hash']);
     await queryInterface.addIndex('patients', ['patient_facility_code'], { unique: true });
 
-    // Structured address indexes
+    // Current address indexes
     await queryInterface.addIndex('patients', ['province_id']);
     await queryInterface.addIndex('patients', ['city_municipality_id']);
     await queryInterface.addIndex('patients', ['barangay_id']);
+
+    // Permanent address indexes
+    await queryInterface.addIndex('patients', ['permanent_province_id']);
+    await queryInterface.addIndex('patients', ['permanent_city_municipality_id']);
+    await queryInterface.addIndex('patients', ['permanent_barangay_id']);
 
     // ---------- refresh_tokens ----------
     await queryInterface.createTable('refresh_tokens', {

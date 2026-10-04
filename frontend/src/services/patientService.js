@@ -3,17 +3,28 @@ import api from '@/plugins/axios'
 
 export default {
   /**
-   * List patients with pagination and search
+   * List patients with pagination and search.
+   *
+   * @param {number} page
+   * @param {number} limit
+   * @param {string} search
+   * @param {string|null} purpose - 'testing' | 'treatment' | null
+   * @param {number|string|null} year - filter by enrollment year
    */
   async getPatients(page = 1, limit = 20, search = '', purpose = null, year = null) {
-  const response = await api.get('/patients', {
-    params: { page, limit, search, purpose, year }
-  })
-  return response.data
-},
+    const response = await api.get('/patients', {
+      params: { page, limit, search, purpose, year }
+    })
+    return response.data
+  },
 
   /**
-   * Get a single patient by ID
+   * Get a single patient by ID.
+   * Response includes: current address (sitio_street, barangay_id,
+   * city_municipality_id, province_id) and permanent address
+   * (permanent_sitio_street, permanent_barangay_id,
+   * permanent_city_municipality_id, permanent_province_id,
+   * same_as_current_address).
    */
   async getPatient(id) {
     const response = await api.get(`/patients/${id}`)
@@ -21,7 +32,7 @@ export default {
   },
 
   /**
-   * Search patients by facility code (backend supports LIKE on code)
+   * Search patients by facility code (backend supports LIKE on code).
    */
   async searchPatients(query, limit = 10) {
     if (!query || query.length < 2) return []
@@ -33,7 +44,7 @@ export default {
   },
 
   /**
-   * Get own patient profile (patient role)
+   * Get own patient profile (patient role).
    */
   async getMyProfile() {
     const response = await api.get('/patients/me')
@@ -41,9 +52,14 @@ export default {
   },
 
   /**
-   * Create a new patient
+   * Create a new patient.
+   *
    * Payload may include portal account fields:
    *   create_portal_account, username, email, password
+   *
+   * Payload may also include permanent-address fields. If
+   * same_as_current_address is true, the backend hook mirrors the
+   * current address into the permanent_* columns automatically.
    */
   async createPatient(data) {
     const response = await api.post('/patients', data)
@@ -51,7 +67,11 @@ export default {
   },
 
   /**
-   * Update a patient
+   * Update a patient.
+   *
+   * For address-only updates (used by the patient self-service profile
+   * screen), prefer updateAddress() below — it strips the payload down
+   * to the fields the patient role is allowed to change.
    */
   async updatePatient(id, data) {
     const response = await api.put(`/patients/${id}`, data)
@@ -59,7 +79,44 @@ export default {
   },
 
   /**
-   * Delete a patient (soft by default, hard=true for admin)
+   * Address-only update. Sends only the current + permanent address
+   * fields (plus the same_as_current_address flag). Useful when a
+   * patient updates their own address from the portal — the backend
+   * updatePatient() whitelist allows exactly these keys for the
+   * 'patient' role.
+   */
+  async updateAddress(id, {
+    sitio_street,
+    barangay_id,
+    city_municipality_id,
+    province_id,
+    same_as_current_address,
+    permanent_sitio_street,
+    permanent_barangay_id,
+    permanent_city_municipality_id,
+    permanent_province_id
+  }) {
+    const payload = {
+      sitio_street,
+      barangay_id,
+      city_municipality_id,
+      province_id,
+      same_as_current_address,
+      permanent_sitio_street,
+      permanent_barangay_id,
+      permanent_city_municipality_id,
+      permanent_province_id
+    }
+    // Strip undefined so we don't overwrite fields the caller didn't set
+    Object.keys(payload).forEach((k) => {
+      if (payload[k] === undefined) delete payload[k]
+    })
+    const response = await api.put(`/patients/${id}`, payload)
+    return response.data
+  },
+
+  /**
+   * Delete a patient (soft by default, hard=true for admin).
    */
   async deletePatient(id, hard = false) {
     const response = await api.delete(`/patients/${id}`, {
@@ -69,7 +126,7 @@ export default {
   },
 
   /**
-   * Patient history (appointments, testing, treatment)
+   * Patient history (appointments, testing, treatment).
    */
   async getPatientHistory(id) {
     const response = await api.get(`/patients/${id}/history`)
@@ -77,7 +134,7 @@ export default {
   },
 
   /**
-   * Patient stats
+   * Patient stats.
    */
   async getStats() {
     const response = await api.get('/patients/stats')
@@ -85,7 +142,7 @@ export default {
   },
 
   /**
-   * Regenerate facility code (admin only)
+   * Regenerate facility code (admin only).
    */
   async regenerateCode(id) {
     const response = await api.post(`/patients/${id}/regenerate-code`)
@@ -93,7 +150,7 @@ export default {
   },
 
   /**
-   * Validate a facility code format
+   * Validate a facility code format.
    */
   async validateCode(code) {
     const response = await api.get(
@@ -103,7 +160,7 @@ export default {
   },
 
   /**
-   * Export patients as JSON or CSV
+   * Export patients as JSON or CSV.
    */
   async exportPatients(format = 'json', search = '') {
     const response = await api.get('/patients/export', {

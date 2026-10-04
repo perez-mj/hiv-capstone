@@ -55,7 +55,9 @@ module.exports = (sequelize) => {
     ]
   });
 
+  // -------------------------------------------------------------------
   // Instance method to validate password
+  // -------------------------------------------------------------------
   User.prototype.validatePassword = async function(password) {
     if (!password || !this.password_hash) {
       return false;
@@ -68,7 +70,9 @@ module.exports = (sequelize) => {
     }
   };
 
+  // -------------------------------------------------------------------
   // Static method to find by credentials
+  // -------------------------------------------------------------------
   User.findByCredentials = async function(username, password) {
     const user = await this.findOne({ where: { username } });
     if (!user) {
@@ -81,12 +85,25 @@ module.exports = (sequelize) => {
     return user;
   };
 
-  // Hooks
+  // -------------------------------------------------------------------
+  // HOOKS
+  //
+  // bcrypt hashes look like: $2a$10$..., $2b$10$..., $2y$10$...
+  // We skip re-hashing when the value is already a bcrypt hash, so
+  // seeders and factory scripts that pre-hash passwords don't get
+  // double-hashed (which silently breaks login).
+  // -------------------------------------------------------------------
+  const BCRYPT_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
   const hashPassword = async (user) => {
-    if (user.password_hash) {
-      const salt = await bcrypt.genSalt(10);
-      user.password_hash = await bcrypt.hash(user.password_hash, salt);
-    }
+    const value = user.password_hash;
+    if (!value) return;
+
+    // Already a bcrypt hash → don't double-hash
+    if (BCRYPT_RE.test(value)) return;
+
+    const salt = await bcrypt.genSalt(10);
+    user.password_hash = await bcrypt.hash(value, salt);
   };
 
   User.beforeCreate(hashPassword);
@@ -96,31 +113,34 @@ module.exports = (sequelize) => {
     }
   });
 
-User.associate = function(models) {
-  // User has one Patient
-  User.hasOne(models.Patient, {
-    foreignKey: 'user_id',
-    as: 'Patient'
-  });
-  
-  // User has many AuditLogs - ADD THIS
-  User.hasMany(models.AuditLog, {
-    foreignKey: 'user_id',
-    as: 'AuditLogs'
-  });
-  
-  // User has many TestingEncounters (as staff)
-  User.hasMany(models.TestingEncounter, {
-    foreignKey: 'staff_id',
-    as: 'TestingEncounters'
-  });
-  
-  // User has many TreatmentEncounters (as staff)
-  User.hasMany(models.TreatmentEncounter, {
-    foreignKey: 'staff_id',
-    as: 'TreatmentEncounters'
-  });
-};
+  // -------------------------------------------------------------------
+  // ASSOCIATIONS
+  // -------------------------------------------------------------------
+  User.associate = function(models) {
+    // User has one Patient
+    User.hasOne(models.Patient, {
+      foreignKey: 'user_id',
+      as: 'Patient'
+    });
+
+    // User has many AuditLogs
+    User.hasMany(models.AuditLog, {
+      foreignKey: 'user_id',
+      as: 'AuditLogs'
+    });
+
+    // User has many TestingEncounters (as staff)
+    User.hasMany(models.TestingEncounter, {
+      foreignKey: 'staff_id',
+      as: 'TestingEncounters'
+    });
+
+    // User has many TreatmentEncounters (as staff)
+    User.hasMany(models.TreatmentEncounter, {
+      foreignKey: 'staff_id',
+      as: 'TreatmentEncounters'
+    });
+  };
 
   return User;
 };

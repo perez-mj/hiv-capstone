@@ -93,10 +93,71 @@
                     <v-list-item>
                       <v-list-item-content>
                         <v-list-item-title class="text-caption text-grey">
-                          Address
+                          Email
                         </v-list-item-title>
                         <v-list-item-subtitle>
-                          {{ formattedAddress }}
+                          {{ patient.email || 'N/A' }}
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                    <v-divider />
+                    <v-list-item>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-caption text-grey">
+                          Facebook / Messenger
+                        </v-list-item-title>
+                        <v-list-item-subtitle>
+                          {{ patient.facebook_messenger || 'N/A' }}
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+                  </v-list>
+                </v-card>
+
+                <!-- ==================== ADDRESSES ==================== -->
+                <v-card outlined class="pa-4 mt-4">
+                  <div class="text-subtitle-1 font-weight-bold mb-3">
+                    Addresses
+                  </div>
+
+                  <!-- Current Address -->
+                  <v-list density="compact">
+                    <v-list-item>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-caption text-grey d-flex align-center">
+                          <v-icon small color="primary" class="mr-1">
+                            mdi-home
+                          </v-icon>
+                          Current Address
+                        </v-list-item-title>
+                        <v-list-item-subtitle class="mt-1">
+                          {{ formattedCurrentAddress }}
+                        </v-list-item-subtitle>
+                      </v-list-item-content>
+                    </v-list-item>
+
+                    <v-divider class="my-2" />
+
+                    <!-- Permanent Address -->
+                    <v-list-item>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-caption text-grey d-flex align-center">
+                          <v-icon small color="secondary" class="mr-1">
+                            mdi-home-account
+                          </v-icon>
+                          Permanent Address
+                          <v-chip
+                            v-if="patient.same_as_current_address"
+                            size="x-small"
+                            color="info"
+                            variant="tonal"
+                            class="ml-2"
+                          >
+                            Same as current
+                          </v-chip>
+                        </v-list-item-title>
+                        <v-list-item-subtitle class="mt-1">
+                          {{ formattedPermanentAddress }}
                         </v-list-item-subtitle>
                       </v-list-item-content>
                     </v-list-item>
@@ -651,8 +712,15 @@ export default {
     const selectedTesting = ref(null)
     const selectedTreatment = ref(null)
 
-    // Resolved location names for the address display
-    const addressNames = ref({
+    // Resolved location names — one block per address (current + permanent)
+    const currentAddressNames = ref({
+      region: null,
+      province: null,
+      city: null,
+      barangay: null
+    })
+
+    const permanentAddressNames = ref({
       region: null,
       province: null,
       city: null,
@@ -722,16 +790,37 @@ export default {
       return parts.join(' ') || 'N/A'
     })
 
-    const formattedAddress = computed(() => {
+    const joinAddressParts = (parts) => {
+      const clean = parts.filter(Boolean)
+      return clean.length ? clean.join(', ') : 'N/A'
+    }
+
+    const formattedCurrentAddress = computed(() => {
       if (!patient.value) return 'N/A'
-      const parts = [
+      return joinAddressParts([
         patient.value.sitio_street,
-        addressNames.value.barangay,
-        addressNames.value.city,
-        addressNames.value.province,
-        addressNames.value.region
-      ].filter(Boolean)
-      return parts.length ? parts.join(', ') : 'N/A'
+        currentAddressNames.value.barangay,
+        currentAddressNames.value.city,
+        currentAddressNames.value.province,
+        currentAddressNames.value.region
+      ])
+    })
+
+    const formattedPermanentAddress = computed(() => {
+      if (!patient.value) return 'N/A'
+      // If the flag is on, the DB mirrors the fields via the model hook;
+      // display the current address to avoid a second lookup and to make
+      // the relationship obvious to staff.
+      if (patient.value.same_as_current_address) {
+        return formattedCurrentAddress.value
+      }
+      return joinAddressParts([
+        patient.value.permanent_sitio_street,
+        permanentAddressNames.value.barangay,
+        permanentAddressNames.value.city,
+        permanentAddressNames.value.province,
+        permanentAddressNames.value.region
+      ])
     })
 
     const canStartEncounter = computed(() => {
@@ -809,20 +898,40 @@ export default {
     // Address name resolution
     // -------------------------------------------------------------------
     /**
-     * The Patient row only stores foreign keys (province_id,
-     * city_municipality_id, barangay_id). To render a human-readable
-     * address we resolve those IDs against the /api/locations endpoints.
+     * Resolves a set of PSGC ids to human-readable names.
      *
-     * The location API doesn't expose direct "get by id" lookups, so we
-     * walk the hierarchy: regions -> provinces -> cities -> barangays.
-     * We cache nothing here — one patient detail view is cheap.
+     * Prefers the direct /locations/{level}/:id endpoints via
+     * locationService.resolveAddress(). If those aren't deployed yet,
+     * falls back to walking the hierarchy from the regions endpoint.
      */
-    const loadAddressNames = async () => {
-      if (!patient.value) return
+    const resolveAddressNames = async ({ barangay_id, city_municipality_id, province_id }) => {
+      const empty = { region: null, province: null, city: null, barangay: null }
+      if (!barangay_id && !city_municipality_id && !province_id) return empty
 
-      const { barangay_id, city_municipality_id, province_id } = patient.value
-      if (!barangay_id && !city_municipality_id && !province_id) return
+      // ---- Fast path: direct ID lookups ----
+      if (typeof locationService.resolveAddress === 'function') {
+        try {
+          const resolved = await locationService.resolveAddress({
+            barangay_id,
+            city_municipality_id,
+            province_id
+          })
+          // If everything resolved, we're done
+          if (
+            (!province_id || resolved.province) &&
+            (!city_municipality_id || resolved.city) &&
+            (!barangay_id || resolved.barangay)
+          ) {
+            return resolved
+          }
+          // Otherwise fall through to the hierarchy walker below
+        } catch (e) {
+          // Swallow — direct endpoints may not exist yet
+        }
+      }
 
+      // ---- Fallback: walk the hierarchy ----
+      const out = { ...empty }
       try {
         const regions = await locationService.getRegions()
 
@@ -832,8 +941,8 @@ export default {
             const provs = await locationService.getProvinces(r.id)
             const match = provs.find((p) => p.id === province_id)
             if (match) {
-              addressNames.value.region = r.name
-              addressNames.value.province = match.name
+              out.region = r.name
+              out.province = match.name
               break
             }
           }
@@ -844,15 +953,15 @@ export default {
           if (province_id) {
             const cities = await locationService.getCitiesByProvince(province_id)
             const city = cities.find((c) => c.id === city_municipality_id)
-            if (city) addressNames.value.city = city.name
+            if (city) out.city = city.name
           } else {
             // NCR-style: city is directly under a region
             for (const r of regions) {
               const cities = await locationService.getCitiesByRegion(r.id)
               const city = cities.find((c) => c.id === city_municipality_id)
               if (city) {
-                addressNames.value.region = r.name
-                addressNames.value.city = city.name
+                out.region = r.name
+                out.city = city.name
                 break
               }
             }
@@ -861,11 +970,39 @@ export default {
 
         // 3) Resolve barangay
         if (barangay_id && city_municipality_id) {
-          const barangays = await locationService.getBarangays(
-            city_municipality_id
-          )
+          const barangays = await locationService.getBarangays(city_municipality_id)
           const brgy = barangays.find((b) => b.id === barangay_id)
-          if (brgy) addressNames.value.barangay = brgy.name
+          if (brgy) out.barangay = brgy.name
+        }
+      } catch (e) {
+        console.warn('Failed to resolve address names:', e)
+      }
+
+      return out
+    }
+
+    const loadAddressNames = async () => {
+      if (!patient.value) return
+      const p = patient.value
+
+      try {
+        // Current address
+        currentAddressNames.value = await resolveAddressNames({
+          barangay_id: p.barangay_id,
+          city_municipality_id: p.city_municipality_id,
+          province_id: p.province_id
+        })
+
+        // Permanent address — skip lookup entirely when the flag is on,
+        // since the display already mirrors the current address.
+        if (p.same_as_current_address) {
+          permanentAddressNames.value = { ...currentAddressNames.value }
+        } else {
+          permanentAddressNames.value = await resolveAddressNames({
+            barangay_id: p.permanent_barangay_id,
+            city_municipality_id: p.permanent_city_municipality_id,
+            province_id: p.permanent_province_id
+          })
         }
       } catch (e) {
         console.warn('Failed to resolve address names:', e)
@@ -1144,8 +1281,10 @@ export default {
 
       // computed display helpers
       fullName,
-      formattedAddress,
-      addressNames,
+      formattedCurrentAddress,
+      formattedPermanentAddress,
+      currentAddressNames,
+      permanentAddressNames,
 
       // headers
       testingHeaders,

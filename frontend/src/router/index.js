@@ -14,18 +14,19 @@ const routes = [
     component: () => import('@/layouts/DefaultLayout.vue'),
     meta: { requiresAuth: true },
     children: [
-      // Staff & Admin Dashboard
+      // Default redirect based on role
       {
         path: '',
-        redirect: (to) => {
+        redirect: () => {
           const authStore = useAuthStore();
           const role = authStore.userRole;
           const office = authStore.userOffice;
 
           if (role === 'admin') {
             return '/admin';
-          } else if (role === 'staff' && office) {
-            return `/${office}/queue`;
+          } else if (role === 'staff') {
+            // Land on assigned office queue by default (fallback to testing)
+            return office ? `/${office}/queue` : '/testing/queue';
           } else if (role === 'patient') {
             return '/patient/dashboard';
           }
@@ -33,18 +34,18 @@ const routes = [
         }
       },
 
-      // Staff - Testing Office
+      // Staff - Testing Office (accessible by all staff & admin)
       {
         path: 'testing/queue',
         name: 'TestingQueue',
         component: () => import('@/views/staff/testing/QueueView.vue'),
-        meta: { roles: ['staff', 'admin'], office: ['testing'] }
+        meta: { roles: ['staff', 'admin'] }
       },
       {
         path: 'testing/encounter/:patientId?',
         name: 'TestingEncounter',
         component: () => import('@/views/staff/testing/EncounterView.vue'),
-        meta: { roles: ['staff', 'admin'], office: ['testing'] }
+        meta: { roles: ['staff', 'admin'] }
       },
       {
         path: 'testing/history/:patientId',
@@ -53,18 +54,18 @@ const routes = [
         meta: { roles: ['staff', 'admin'] }
       },
 
-      // Staff - Treatment Office
+      // Staff - Treatment Office (accessible by all staff & admin)
       {
         path: 'treatment/queue',
         name: 'TreatmentQueue',
         component: () => import('@/views/staff/treatment/QueueView.vue'),
-        meta: { roles: ['staff', 'admin'], office: ['treatment'] }
+        meta: { roles: ['staff', 'admin'] }
       },
       {
         path: 'treatment/encounter/:patientId?',
         name: 'TreatmentEncounter',
         component: () => import('@/views/staff/treatment/EncounterView.vue'),
-        meta: { roles: ['staff', 'admin'], office: ['treatment'] }
+        meta: { roles: ['staff', 'admin'] }
       },
       {
         path: 'treatment/history/:patientId',
@@ -81,15 +82,15 @@ const routes = [
         meta: { roles: ['staff', 'admin'] }
       },
       {
-        path: 'patients/:id',
-        name: 'PatientDetail',
-        component: () => import('@/views/staff/patients/DetailView.vue'),
-        meta: { roles: ['staff', 'admin'] }
-      },
-      {
         path: 'patients/create',
         name: 'PatientCreate',
         component: () => import('@/views/staff/patients/CreateView.vue'),
+        meta: { roles: ['staff', 'admin'] }
+      },
+      {
+        path: 'patients/:id',
+        name: 'PatientDetail',
+        component: () => import('@/views/staff/patients/DetailView.vue'),
         meta: { roles: ['staff', 'admin'] }
       },
       {
@@ -119,15 +120,15 @@ const routes = [
         meta: { roles: ['staff', 'admin'] }
       },
       {
-        path: 'appointments/:id/edit',
-        name: 'AppointmentEdit',
-        component: () => import('@/views/staff/appointments/EditView.vue'),
-        meta: { roles: ['staff', 'admin'] }
-      },
-      {
         path: 'appointments/:id',
         name: 'AppointmentDetail',
         component: () => import('@/views/staff/appointments/DetailView.vue'),
+        meta: { roles: ['staff', 'admin'] }
+      },
+      {
+        path: 'appointments/:id/edit',
+        name: 'AppointmentEdit',
+        component: () => import('@/views/staff/appointments/EditView.vue'),
         meta: { roles: ['staff', 'admin'] }
       },
 
@@ -168,6 +169,7 @@ const routes = [
         component: () => import('@/views/admin/SettingsView.vue'),
         meta: { roles: ['admin'] }
       },
+
       // Redirects for old routes (backward compatible)
       {
         path: 'admin/transaction-types',
@@ -191,25 +193,26 @@ const routes = [
       {
         path: 'dashboard',
         name: 'PatientDashboard',
-        component: () => import('@/views/patient/DashboardView.vue'),
+        component: () => import('@/views/patient/DashboardView.vue')
       },
       {
         path: 'appointments',
         name: 'PatientAppointments',
-        component: () => import('@/views/patient/AppointmentsView.vue'),
+        component: () => import('@/views/patient/AppointmentsView.vue')
       },
       {
         path: 'visits',
         name: 'VisitHistory',
-        component: () => import('@/views/patient/HistoryView.vue'),
+        component: () => import('@/views/patient/HistoryView.vue')
       },
       {
         path: 'profile',
         name: 'PatientProfile',
-        component: () => import('@/views/patient/ProfileView.vue'),
+        component: () => import('@/views/patient/ProfileView.vue')
       }
     ]
   },
+
   // Kiosk routes (no auth required)
   {
     path: '/kiosk',
@@ -230,6 +233,7 @@ const routes = [
       }
     ]
   },
+
   // 404
   {
     path: '/:pathMatch(.*)*',
@@ -243,78 +247,50 @@ const router = createRouter({
   routes
 });
 
-// FIXED: Navigation guard without deprecated next() callback
+/**
+ * Get the default landing route for a user based on their role.
+ */
+function getDefaultRoute(authStore) {
+  const role = authStore.userRole;
+  const office = authStore.userOffice;
+
+  if (role === 'admin') return '/admin';
+  if (role === 'staff') return office ? `/${office}/queue` : '/testing/queue';
+  if (role === 'patient') return '/patient/dashboard';
+  return '/login';
+}
+
+// Navigation guard
 router.beforeEach(async (to) => {
   const authStore = useAuthStore();
 
-  console.log('=== ROUTE GUARD ===');
-  console.log('Path:', to.path);
-  console.log('Requires Auth:', to.meta.requiresAuth !== false);
-
-  // If auth hasn't been checked yet, wait for it
+  // Ensure auth has been checked before proceeding
   if (!authStore.isAuthChecked) {
-    console.log('Auth not checked yet, checking...');
     await authStore.checkAuth();
-    console.log('Auth check completed:', authStore.isAuthenticated);
   }
 
   const requiresAuth = to.meta.requiresAuth !== false;
   const isAuthenticated = authStore.isAuthenticated;
 
-  // If route requires auth and user is not authenticated
+  // Redirect unauthenticated users to login
   if (requiresAuth && !isAuthenticated) {
-    console.log('Not authenticated, redirecting to login');
     return '/login';
   }
 
-  // If going to login and already authenticated, redirect to appropriate page
+  // Redirect authenticated users away from login
   if (to.path === '/login' && isAuthenticated) {
-    const role = authStore.userRole;
-    const office = authStore.userOffice;
-
-    if (role === 'admin') return '/admin';
-    if (role === 'staff' && office) return `/${office}/queue`;
-    if (role === 'patient') return '/patient/dashboard';
-    return '/';
+    return getDefaultRoute(authStore);
   }
 
   // Role-based access control
   if (to.meta.roles) {
     const userRole = authStore.userRole;
-    console.log('Role check:', { userRole, required: to.meta.roles });
 
     if (!to.meta.roles.includes(userRole)) {
-      console.warn('Access denied for role:', userRole);
-
-      if (userRole === 'admin') return '/admin';
-      if (userRole === 'staff') {
-        const office = authStore.userOffice;
-        return office ? `/${office}/queue` : '/';
-      }
-      if (userRole === 'patient') return '/patient/dashboard';
-      return '/login';
+      console.warn(`Access denied for role "${userRole}" on route "${to.path}"`);
+      return getDefaultRoute(authStore);
     }
   }
-
-  // Office-based access control
-  if (to.meta.office) {
-    const userRole = authStore.userRole;
-    const userOffice = authStore.userOffice;
-
-    // Admin can access any office
-    if (userRole === 'admin') {
-      return true;
-    }
-
-    // Staff must have matching office
-    if (userRole === 'staff' && userOffice) {
-      if (!to.meta.office.includes(userOffice)) {
-        console.warn('Office mismatch:', { userOffice, required: to.meta.office });
-        return `/${userOffice}/queue`;
-      }
-    }
-  }
-
   return true;
 });
 

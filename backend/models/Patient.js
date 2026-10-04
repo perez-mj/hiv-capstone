@@ -4,6 +4,7 @@ const patientCodeService = require('../services/patientCodeService');
 const { encrypt, decrypt, hmac } = require('../utils/crypto');
 
 module.exports = (sequelize) => {
+  // ---------- SAFE HELPERS ----------
   const safeEncrypt = (value) =>
     value === undefined || value === null || value === ''
       ? null
@@ -18,6 +19,20 @@ module.exports = (sequelize) => {
     value === undefined || value === null || value === ''
       ? null
       : hmac(value);
+
+  // Builds a { field, field_hash } pair setter/getter for encrypted + searchable fields
+  const encryptedField = ({ allowNull = true, unique = false, index = true } = {}) => ({
+    type: DataTypes.TEXT,
+    allowNull,
+    set(value) {
+      this.setDataValue(this.constructor._encryptedFieldName(this), safeEncrypt(value));
+    },
+    get() {
+      return safeDecrypt(this.getDataValue(this.constructor._encryptedFieldName(this)));
+    },
+    // metadata used below
+    _encrypted: { allowNull, unique, index },
+  });
 
   const Patient = sequelize.define(
     'Patient',
@@ -139,7 +154,7 @@ module.exports = (sequelize) => {
       },
       facebook_messenger_hash: { type: DataTypes.STRING(64), allowNull: true, index: true },
 
-      // ---------- STRUCTURED ADDRESS ----------
+      // ---------- CURRENT ADDRESS ----------
       // Free-text portion below barangay: house # / street / purok / sitio.
       sitio_street: {
         type: DataTypes.TEXT,
@@ -164,6 +179,37 @@ module.exports = (sequelize) => {
         allowNull: true,
         references: { model: 'provinces', key: 'id' },
         field: 'province_id',
+      },
+
+      // ---------- PERMANENT ADDRESS ----------
+      same_as_current_address: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      permanent_sitio_street: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        set(value) { this.setDataValue('permanent_sitio_street', safeEncrypt(value)); },
+        get() { return safeDecrypt(this.getDataValue('permanent_sitio_street')); },
+      },
+      permanent_barangay_id: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true,
+        references: { model: 'barangays', key: 'id' },
+        field: 'permanent_barangay_id',
+      },
+      permanent_city_municipality_id: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true,
+        references: { model: 'cities_municipalities', key: 'id' },
+        field: 'permanent_city_municipality_id',
+      },
+      permanent_province_id: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true,
+        references: { model: 'provinces', key: 'id' },
+        field: 'permanent_province_id',
       },
 
       // ---------- PURPOSE ----------
@@ -214,6 +260,18 @@ module.exports = (sequelize) => {
   );
 
   // ---------- HOOKS ----------
+
+  // Sync permanent address from current address when the flag is set.
+  // Must run BEFORE the facility-code hook so downstream code sees the resolved values.
+  Patient.beforeValidate((patient) => {
+    if (patient.same_as_current_address) {
+      patient.permanent_sitio_street = patient.sitio_street;
+      patient.permanent_barangay_id = patient.barangay_id;
+      patient.permanent_city_municipality_id = patient.city_municipality_id;
+      patient.permanent_province_id = patient.province_id;
+    }
+  });
+
   Patient.beforeValidate(async (patient) => {
     if (!patient.enrollment_date) {
       patient.enrollment_date = new Date().toISOString().split('T')[0];
@@ -247,6 +305,14 @@ module.exports = (sequelize) => {
   });
 
   Patient.beforeUpdate(async (patient) => {
+    // Re-sync permanent = current when the flag is on
+    if (patient.same_as_current_address) {
+      patient.permanent_sitio_street = patient.sitio_street;
+      patient.permanent_barangay_id = patient.barangay_id;
+      patient.permanent_city_municipality_id = patient.city_municipality_id;
+      patient.permanent_province_id = patient.province_id;
+    }
+
     if (
       patient.changed('status') &&
       patient.status === 'treatment' &&
@@ -280,6 +346,28 @@ module.exports = (sequelize) => {
     const newCode = await patientCodeService.regenerateCode(this);
     this.patient_facility_code = newCode;
     return newCode;
+  };
+
+  /**
+   * Returns a plain object describing the patient's current and permanent address.
+   * Useful for display, printing, or export layers.
+   */
+  Patient.prototype.getAddresses = function () {
+    const current = {
+      sitio_street: this.sitio_street,
+      barangay_id: this.barangay_id,
+      city_municipality_id: this.city_municipality_id,
+      province_id: this.province_id,
+    };
+    const permanent = this.same_as_current_address
+      ? { ...current }
+      : {
+          sitio_street: this.permanent_sitio_street,
+          barangay_id: this.permanent_barangay_id,
+          city_municipality_id: this.permanent_city_municipality_id,
+          province_id: this.permanent_province_id,
+        };
+    return { current, permanent };
   };
 
   // ---------- STATIC METHODS ----------
@@ -320,7 +408,7 @@ module.exports = (sequelize) => {
   Patient.associate = function (models) {
     Patient.belongsTo(models.User, { foreignKey: 'user_id', as: 'User' });
 
-    // Structured address
+    // Current address
     Patient.belongsTo(models.Barangay, {
       foreignKey: 'barangay_id',
       as: 'Barangay',
@@ -332,6 +420,20 @@ module.exports = (sequelize) => {
     Patient.belongsTo(models.Province, {
       foreignKey: 'province_id',
       as: 'Province',
+    });
+
+    // Permanent address
+    Patient.belongsTo(models.Barangay, {
+      foreignKey: 'permanent_barangay_id',
+      as: 'PermanentBarangay',
+    });
+    Patient.belongsTo(models.CityMunicipality, {
+      foreignKey: 'permanent_city_municipality_id',
+      as: 'PermanentCityMunicipality',
+    });
+    Patient.belongsTo(models.Province, {
+      foreignKey: 'permanent_province_id',
+      as: 'PermanentProvince',
     });
 
     Patient.hasMany(models.Appointment, {
