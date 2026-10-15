@@ -2,18 +2,12 @@
 const { SystemSetting } = require('../models');
 
 class SystemSettingService {
-  /**
-   * Get all settings (raw rows)
-   */
   async getAll() {
     return await SystemSetting.findAll({
       order: [['category', 'ASC'], ['key', 'ASC']]
     });
   }
 
-  /**
-   * Get a single setting by ID
-   */
   async getById(id) {
     const setting = await SystemSetting.findByPk(id);
     if (!setting) {
@@ -24,9 +18,6 @@ class SystemSettingService {
     return setting;
   }
 
-  /**
-   * Get a single setting by key
-   */
   async getByKey(key) {
     const setting = await SystemSetting.findOne({ where: { key } });
     if (!setting) {
@@ -37,30 +28,18 @@ class SystemSettingService {
     return setting;
   }
 
-  /**
-   * Get all settings as a flat object (typed)
-   */
   async getSettingsObject() {
     return await SystemSetting.getSettingsObject();
   }
 
-  /**
-   * Get settings by category
-   */
   async getByCategory(category) {
     return await SystemSetting.getByCategory(category);
   }
 
-  /**
-   * Get settings grouped by category
-   */
   async getCategorizedSettings() {
     return await SystemSetting.getCategorizedSettings();
   }
 
-  /**
-   * Create a new setting
-   */
   async create(data) {
     const { key, value, description, data_type, category } = data;
 
@@ -70,7 +49,6 @@ class SystemSettingService {
       throw error;
     }
 
-    // Check for duplicate key
     const existing = await SystemSetting.findOne({ where: { key } });
     if (existing) {
       const error = new Error(`System setting with key "${key}" already exists`);
@@ -78,7 +56,6 @@ class SystemSettingService {
       throw error;
     }
 
-    // Normalise value and data_type
     const { stringValue, detectedType } = this._normalizeValue(value);
 
     return await SystemSetting.create({
@@ -89,15 +66,11 @@ class SystemSettingService {
       category: category || null
     });
   }
-
-  /**
-   * Update a setting by ID
-   */
   async update(id, data) {
     const setting = await this.getById(id);
     const { key, value, description, data_type, category } = data;
 
-    // Check key uniqueness if changed
+
     if (key && key !== setting.key) {
       const existing = await SystemSetting.findOne({ where: { key } });
       if (existing) {
@@ -123,17 +96,13 @@ class SystemSettingService {
     return setting;
   }
 
-  /**
-   * Update a setting by key
-   */
+
   async updateByKey(key, data) {
     const setting = await this.getByKey(key);
     return await this.update(setting.id, data);
   }
 
-  /**
-   * Bulk update multiple settings by key
-   */
+
   async updateMany(updates) {
     if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
       const error = new Error('Request body must be an object of { key: value } pairs');
@@ -143,27 +112,21 @@ class SystemSettingService {
     return await SystemSetting.updateMany(updates);
   }
 
-  /**
-   * Delete a setting by ID
-   */
+
   async delete(id) {
     const setting = await this.getById(id);
     await setting.destroy();
     return { success: true, message: `Setting "${setting.key}" deleted` };
   }
 
-  /**
-   * Delete a setting by key
-   */
+
   async deleteByKey(key) {
     const setting = await this.getByKey(key);
     await setting.destroy();
     return { success: true, message: `Setting "${setting.key}" deleted` };
   }
 
-  /**
-   * Helper: normalize any JS value into a string + detected data type
-   */
+
   _normalizeValue(value) {
     let detectedType = 'string';
     let stringValue = String(value);

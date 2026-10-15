@@ -7,17 +7,11 @@ const { Op } = require('sequelize');
 
 class KioskService {
 
-  /**
-   * Find patient by phone using the HMAC hash (encrypted column can't be queried).
-   */
   async _findPatientByPhone(phone) {
     const phoneHash = hmac(phone.trim());
     return db.Patient.findOne({ where: { contact_number_hash: phoneHash } });
   }
 
-  /**
-   * Check in patient with appointment
-   */
   async joinQueueWithAppointment(phone) {
     phone = phone.trim();
     const today = new Date().toISOString().split('T')[0];
@@ -120,9 +114,6 @@ class KioskService {
     });
   }
 
-  /**
-   * Register walk-in patient
-   */
   async registerWalkIn(patientData, office = 'testing') {
     const requiredFields = ['first_name', 'last_name', 'gender', 'contact_number'];
     for (const field of requiredFields) {
@@ -166,9 +157,7 @@ class KioskService {
     });
   }
 
-  /**
-   * Safe facility-code generator with collision-resistant fallback.
-   */
+
   async _safeGenerateCode(patientData) {
     try {
       return await patientCodeService.generateFacilityCode({
@@ -266,10 +255,6 @@ class KioskService {
     return transactionType;
   }
 
-  /**
-   * Get display state for kiosk/public screen.
-   * PRIVACY: does NOT expose patient names, facility codes, or any PII.
-   */
   async getDisplayState(office) {
     const today = new Date().toISOString().split('T')[0];
     const queueState = await queueService.getQueueState(office, today);
@@ -282,7 +267,7 @@ class KioskService {
     return {
       office,
       current_serving: queueState.current_serving
-        ? { queue_number: queueState.current_serving.queue_number } // ❌ no name
+        ? { queue_number: queueState.current_serving.queue_number }
         : null,
       waiting_count: queueState.waiting_count,
       waiting_list: waitingList,
@@ -291,9 +276,6 @@ class KioskService {
     };
   }
 
-  /**
-   * Patient existence check — uses hash lookup.
-   */
   async patientExists(phone) {
     const patient = await this._findPatientByPhone(phone);
     if (patient) {

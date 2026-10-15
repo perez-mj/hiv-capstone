@@ -13,7 +13,22 @@
               Manage patient records across your facility
             </p>
           </div>
-          <div class="d-flex ga-2">
+          <div class="d-flex ga-2 align-center">
+            <v-tooltip location="bottom">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  :icon="maskSensitive ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+                  variant="text"
+                  color="primary"
+                  @click="toggleMask"
+                />
+              </template>
+              <div class="text-center">
+                <div>{{ maskSensitive ? 'Show sensitive info' : 'Hide sensitive info' }}</div>
+                <div class="text-caption">Shift + M</div>
+              </div>
+            </v-tooltip>
             <v-btn color="primary" variant="tonal" prepend-icon="mdi-download" class="text-none" :loading="exporting"
               @click="exportData">
               Export
@@ -130,56 +145,72 @@
           <v-data-table-server v-model:page="currentPage" v-model:items-per-page="itemsPerPage" :headers="headers"
             :items="patients" :items-length="totalPatients" :loading="loading" :sort-by="sortBy"
             @update:options="onUpdateOptions" hover class="modern-table">
-            <!-- Name -->
+            <!-- Name + PFC -->
             <template #item.full_name="{ item }">
-              <div class="d-flex align-center">
-                <v-avatar size="36" color="primary" variant="tonal" class="mr-3">
-                  <span class="text-caption font-weight-bold">
-                    {{ getInitials(item) }}
-                  </span>
-                </v-avatar>
-                <div>
-                  <div class="font-weight-medium">
+              <div class="d-flex flex-column">
+                <a
+                  class="patient-link font-weight-medium"
+                  href="#"
+                  @click.prevent="viewPatient(item.id)"
+                >
+                  <template v-if="maskSensitive">
+                    {{ maskName(item) }}
+                  </template>
+                  <template v-else>
                     {{ item.last_name }}, {{ item.first_name }}
                     {{ getMiddleInitial(item.middle_name) }}
                     {{ item.suffix || '' }}
-                  </div>
-                  <div class="text-caption text-medium-emphasis">
-                    {{ item.contact_number || 'No contact' }}
-                  </div>
+                  </template>
+                </a>
+                <div class="d-flex align-center ga-2 mt-1">
+                  <!-- PFC always visible -->
+                  <a
+                    class="pfc-link text-caption font-weight-medium"
+                    href="#"
+                    @click.prevent="viewPatient(item.id)"
+                  >
+                    {{ item.patient_facility_code }}
+                  </a>
+                  <span class="text-caption text-medium-emphasis">
+                    • {{ maskSensitive ? maskValue(item.contact_number) : (item.contact_number || 'No contact') }}
+                  </span>
                 </div>
               </div>
-            </template>
-
-            <!-- Facility Code -->
-            <template #item.patient_facility_code="{ item }">
-              <v-chip size="small" color="primary" variant="tonal" class="font-weight-medium">
-                {{ item.patient_facility_code }}
-              </v-chip>
             </template>
 
             <!-- Age -->
             <template #item.age="{ item }">
               <span class="text-body-2">
-                {{ calculateAge(item.birth_date) }}
+                {{ maskSensitive ? '••' : calculateAge(item.birth_date) }}
                 <span class="text-medium-emphasis">yrs</span>
               </span>
             </template>
 
             <!-- Gender -->
             <template #item.gender="{ item }">
-              <span class="text-capitalize text-body-2">{{ item.gender || '—' }}</span>
+              <span class="text-capitalize text-body-2">
+                {{ maskSensitive ? '••••' : (item.gender || '—') }}
+              </span>
             </template>
 
-            <!-- Purpose (was "Status") -->
+            <!-- Purpose -->
             <template #item.purpose="{ item }">
-              <v-chip size="small" variant="flat" :color="item.purpose === 'treatment' ? 'success' : 'info'"
-                :prepend-icon="item.purpose === 'treatment' ? 'mdi-hospital' : 'mdi-test-tube'" class="text-capitalize">
+              <v-chip
+                v-if="!maskSensitive"
+                size="small"
+                variant="flat"
+                :color="item.purpose === 'treatment' ? 'success' : 'info'"
+                :prepend-icon="item.purpose === 'treatment' ? 'mdi-hospital' : 'mdi-test-tube'"
+                class="text-capitalize"
+              >
                 {{ item.purpose || 'testing' }}
+              </v-chip>
+              <v-chip v-else size="small" variant="flat" color="grey" class="text-capitalize">
+                ••••
               </v-chip>
             </template>
 
-            <!-- Enrollment Date -->
+            <!-- Enrollment Date (always visible) -->
             <template #item.enrollment_date="{ item }">
               <span class="text-body-2">{{ formatDate(item.enrollment_date) }}</span>
             </template>
@@ -187,13 +218,6 @@
             <!-- Actions -->
             <template #item.actions="{ item }">
               <div class="d-flex justify-center ga-1">
-                <v-tooltip text="View" location="top">
-                  <template #activator="{ props }">
-                    <v-btn v-bind="props" icon="mdi-eye-outline" size="small" variant="text" color="primary"
-                      @click="viewPatient(item.id)" />
-                  </template>
-                </v-tooltip>
-
                 <v-tooltip text="Edit" location="top">
                   <template #activator="{ props }">
                     <v-btn v-bind="props" icon="mdi-pencil-outline" size="small" variant="text" color="info"
@@ -204,7 +228,7 @@
                 <v-tooltip text="Start Encounter" location="top">
                   <template #activator="{ props }">
                     <v-btn v-bind="props" icon="mdi-test-tube" size="small" variant="text" color="success"
-                      @click="startEncounter(item.id)" />
+                      @click="startEncounter(item.purpose, item.id)" />
                   </template>
                 </v-tooltip>
               </div>
@@ -263,7 +287,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import patientService from '@/services/patientService'
 import { useAuthStore } from '@/stores/authStore'
@@ -271,17 +295,23 @@ import { useAuthStore } from '@/stores/authStore'
 const router = useRouter()
 const authStore = useAuthStore()
 
+/* ─────────────── Persistence key ─────────────── */
+const MASK_STORAGE_KEY = 'patient-list:maskSensitive'
+
 /* ─────────────── State ─────────────── */
 const patients = ref([])
 const loading = ref(false)
 const exporting = ref(false)
 const searchQuery = ref('')
-const purposeFilter = ref(null)   // ✅ renamed from statusFilter
+const purposeFilter = ref(null)
 const yearFilter = ref(null)
 const currentPage = ref(1)
 const itemsPerPage = ref(20)
 const totalPatients = ref(0)
-const sortBy = ref([{ key: 'created_at', order: 'desc' }]) // ✅ match backend default
+const sortBy = ref([{ key: 'created_at', order: 'desc' }])
+
+// Initialize from localStorage (default: false)
+const maskSensitive = ref(localStorage.getItem(MASK_STORAGE_KEY) === 'true')
 
 const stats = ref({ total: 0, testing: 0, treatment: 0, active: 0 })
 
@@ -308,19 +338,48 @@ const yearOptions = computed(() => {
 })
 
 const headers = [
-  { title: 'Name', key: 'full_name', sortable: false }, // ✅ backend doesn't sort by name
-  { title: 'PFC', key: 'patient_facility_code', align: 'center', sortable: false, width: '160px' },
+  { title: 'Patient', key: 'full_name', sortable: false },
   { title: 'Age', key: 'age', align: 'center', sortable: false, width: '100px' },
   { title: 'Gender', key: 'gender', align: 'center', sortable: false, width: '110px' },
   { title: 'Purpose', key: 'purpose', align: 'center', sortable: false, width: '130px' },
   { title: 'Enrolled', key: 'enrollment_date', align: 'center', sortable: false, width: '130px' },
-  { title: 'Actions', key: 'actions', align: 'center', sortable: false, width: '150px' }
+  { title: 'Actions', key: 'actions', align: 'center', sortable: false, width: '120px' }
 ]
 
 /* ─────────────── Computed ─────────────── */
 const hasActiveFilters = computed(
   () => !!searchQuery.value || !!purposeFilter.value || !!yearFilter.value
 )
+
+/* ─────────────── Mask toggle + persistence ─────────────── */
+function toggleMask() {
+  maskSensitive.value = !maskSensitive.value
+}
+
+// Persist on every change
+watch(maskSensitive, (val) => {
+  localStorage.setItem(MASK_STORAGE_KEY, String(val))
+})
+
+/* ─────────────── Keyboard shortcut ─────────────── */
+function isTypingTarget(el) {
+  if (!el) return false
+  const tag = el.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
+  if (el.isContentEditable) return true
+  // Vuetify selects render as role="combobox" or inside menus
+  if (el.closest?.('[role="combobox"], .v-select, .v-autocomplete, .v-overlay-container')) return true
+  return false
+}
+
+function handleKeydown(event) {
+  // Shift + M
+  if (event.shiftKey && (event.key === 'M' || event.key === 'm')) {
+    if (isTypingTarget(event.target)) return
+    event.preventDefault()
+    toggleMask()
+  }
+}
 
 /* ─────────────── Data loading ─────────────── */
 async function loadPatients() {
@@ -334,9 +393,7 @@ async function loadPatients() {
       yearFilter.value
     )
 
-    let items = response.items || []
-
-    patients.value = items
+    patients.value = response.items || []
     totalPatients.value = response.total || 0
   } catch (error) {
     showSnackbar(extractError(error), 'error')
@@ -349,7 +406,6 @@ async function loadStats() {
   try {
     stats.value = await patientService.getStats()
   } catch (error) {
-    // non-fatal
     console.warn('Failed to load stats:', extractError(error))
   }
 }
@@ -420,16 +476,13 @@ const navigateToCreate = () => router.push('/patients/create')
 const viewPatient = (id) => router.push(`/patients/${id}`)
 const editPatient = (id) => router.push(`/patients/${id}/edit`)
 
-function startEncounter(id) {
-  const office = authStore.userOffice || 'testing'
+function startEncounter(patientPurpose, id) {
+  // item is the row object, so we have access to item.purpose
+  const office = patientPurpose
   router.push(`/${office}/encounter/${id}`)
 }
 
 /* ─────────────── Formatting helpers ─────────────── */
-function getInitials(patient) {
-  return `${patient.first_name?.charAt(0) || ''}${patient.last_name?.charAt(0) || ''}`.toUpperCase()
-}
-
 function getMiddleInitial(middleName) {
   if (!middleName) return ''
   return middleName.charAt(0).toUpperCase() + '.'
@@ -454,9 +507,27 @@ function formatDate(date) {
   })
 }
 
+/* ─────────────── Sensitive info masking ─────────────── */
+function maskValue(value) {
+  if (!value) return '—'
+  const str = String(value)
+  if (str.length <= 4) return '••••'
+  return '•'.repeat(str.length - 4) + str.slice(-4)
+}
+
+function maskName(patient) {
+  const last = patient.last_name?.charAt(0) || ''
+  const first = patient.first_name?.charAt(0) || ''
+  const middle = patient.middle_name?.charAt(0) || ''
+  const suffix = patient.suffix || ''
+  let masked = `${last}••••, ${first}••••`
+  if (middle) masked += ` ${middle}••`
+  if (suffix) masked += ` ${suffix}`
+  return masked
+}
+
 /* ─────────────── Error handling ─────────────── */
 function extractError(error) {
-  // Backend returns { error: "..." }; axios may nest under response.data
   return (
     error?.response?.data?.error ||
     error?.response?.data?.message ||
@@ -474,6 +545,12 @@ function showSnackbar(message, color = 'success') {
 onMounted(() => {
   loadPatients()
   loadStats()
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+  clearTimeout(searchTimeout)
 })
 </script>
 
@@ -518,6 +595,27 @@ onMounted(() => {
   padding-bottom: 14px !important;
 }
 
+/* ─── Clickable links ─── */
+.patient-link,
+.pfc-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.patient-link:hover,
+.pfc-link:hover {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pfc-link {
+  font-family: 'Roboto Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+/* ─── Table footer ─── */
 .table-footer {
   display: flex;
   align-items: center;

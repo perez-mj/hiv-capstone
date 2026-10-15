@@ -21,11 +21,6 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: false
     },
-    // Widened from STRING(50) -> STRING(128).
-    // Must fit:
-    //   - 64-char MultiChain txids
-    //   - compound keys like "patient.create:42" or "testing.create:1001"
-    //   - batch identifiers like "batch-1789606731234"
     entity_id: {
       type: DataTypes.STRING(128),
       allowNull: true
@@ -43,7 +38,7 @@ module.exports = (sequelize) => {
       allowNull: true
     },
     ip_address: {
-      type: DataTypes.STRING(45),   // IPv6-safe
+      type: DataTypes.STRING(45),
       allowNull: true
     },
     user_agent: {
@@ -71,6 +66,13 @@ module.exports = (sequelize) => {
 
   AuditLog.associate = function (models) {
     AuditLog.belongsTo(models.User, { foreignKey: 'user_id', as: 'User' });
+  };
+
+  AuditLog.forEntity = function (entityType, entityId) {
+    return this.findAll({
+      where: { entity_type: entityType, entity_id: String(entityId) },
+      order: [['created_at', 'DESC']]
+    });
   };
 
   return AuditLog;

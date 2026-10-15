@@ -1,419 +1,254 @@
-<!-- frontend/src/views/patient/HistoryView.vue -->
 <template>
-  <div>
-    <v-row>
+  <v-container fluid class="pa-4">
+    <!-- Header -->
+    <v-row align="center" class="mb-4">
       <v-col cols="12">
-        <h2 class="text-h4 mb-4">
-          <v-icon left>mdi-test-tube</v-icon>
-          Test Results & Treatment History
-        </h2>
+        <h1 class="text-h5 font-weight-bold mb-1">Visit History</h1>
+        <div class="text-caption text-medium-emphasis">
+          Your complete record of testing and treatment visits
+        </div>
       </v-col>
     </v-row>
 
-    <!-- Tabs -->
-    <v-tabs v-model="tab" color="primary" grow>
-      <v-tab value="tests">
-        <v-icon left>mdi-clipboard-check</v-icon>
-        HIV Test Results
-      </v-tab>
-      <v-tab value="treatment">
-        <v-icon left>mdi-pill</v-icon>
-        Treatment History
-      </v-tab>
-    </v-tabs>
+    <!-- Summary cards -->
+    <v-row class="mb-4">
+      <v-col cols="12" sm="4">
+        <v-card elevation="2" class="pa-4">
+          <div class="d-flex align-center">
+            <v-avatar color="blue-lighten-4" size="48" class="mr-3">
+              <v-icon color="blue-darken-2">mdi-flask</v-icon>
+            </v-avatar>
+            <div>
+              <div class="text-caption text-medium-emphasis">Testing Visits</div>
+              <div class="text-h6 font-weight-bold">{{ testingCount }}</div>
+            </div>
+          </div>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="4">
+        <v-card elevation="2" class="pa-4">
+          <div class="d-flex align-center">
+            <v-avatar color="teal-lighten-4" size="48" class="mr-3">
+              <v-icon color="teal-darken-2">mdi-medical-bag</v-icon>
+            </v-avatar>
+            <div>
+              <div class="text-caption text-medium-emphasis">Treatment Visits</div>
+              <div class="text-h6 font-weight-bold">{{ treatmentCount }}</div>
+            </div>
+          </div>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="4">
+        <v-card elevation="2" class="pa-4">
+          <div class="d-flex align-center">
+            <v-avatar color="purple-lighten-4" size="48" class="mr-3">
+              <v-icon color="purple-darken-2">mdi-calendar-clock</v-icon>
+            </v-avatar>
+            <div>
+              <div class="text-caption text-medium-emphasis">Last Visit</div>
+              <div class="text-h6 font-weight-bold">{{ lastVisitLabel }}</div>
+            </div>
+          </div>
+        </v-card>
+      </v-col>
+    </v-row>
 
-    <v-window v-model="tab" class="mt-4">
-      <!-- Test Results -->
-      <v-window-item value="tests">
-        <v-row>
-          <v-col cols="12">
-            <v-card>
-              <v-card-title class="primary white--text">
-                HIV Testing History
-                <v-spacer />
-                <v-chip dark color="info">
-                  {{ testingEncounters.length }} tests
-                </v-chip>
-              </v-card-title>
-              
-              <v-card-text>
-                <v-list v-if="testingEncounters.length > 0">
-                  <v-list-item 
-                    v-for="test in testingEncounters" 
-                    :key="test.id"
-                    three-line
-                    class="mb-2 elevation-1"
-                  >
-                    <v-list-item-icon>
-                      <v-icon 
-                        :color="getTestResultColor(test.hiv_test?.result)" 
-                        size="36"
-                      >
-                        {{ getTestResultIcon(test.hiv_test?.result) }}
-                      </v-icon>
-                    </v-list-item-icon>
-                    
-                    <v-list-item-content>
-                      <v-list-item-title>
-                        HIV Test - {{ formatDate(test.test_date || test.created_at) }}
-                      </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <v-chip 
-                          :color="getTestResultColor(test.hiv_test?.result)" 
-                          dark
-                          small
-                        >
-                          {{ test.hiv_test?.result || 'Pending' }}
-                        </v-chip>
-                        <span v-if="test.hiv_test?.kit_lot_number" class="ml-2">
-                          Kit: {{ test.hiv_test.kit_lot_number }}
-                        </span>
-                      </v-list-item-subtitle>
-                      <v-list-item-subtitle class="mt-1">
-                        <v-icon small>mdi-account</v-icon>
-                        Conducted by: {{ test.hiv_test?.tested_by || 'N/A' }}
-                      </v-list-item-subtitle>
-                    </v-list-item-content>
-                    
-                    <v-list-item-action>
-                      <v-btn small color="primary" @click="viewTestDetails(test)">
-                        View Details
-                      </v-btn>
-                    </v-list-item-action>
-                  </v-list-item>
-                </v-list>
-                
-                <v-alert v-else type="info" class="mt-3">
-                  No HIV test results available yet.
-                </v-alert>
-              </v-card-text>
-            </v-card>
+    <!-- Filters -->
+    <v-card class="mb-4" elevation="2">
+      <v-card-text>
+        <v-row dense align="center">
+          <v-col cols="12" sm="3">
+            <v-select
+              v-model="filters.office"
+              :items="officeOptions"
+              item-title="label"
+              item-value="value"
+              label="Office"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field v-model="filters.from" label="From" type="date" variant="outlined" density="comfortable" hide-details />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field v-model="filters.to" label="To" type="date" variant="outlined" density="comfortable" hide-details />
+          </v-col>
+          <v-col cols="12" sm="3" class="d-flex justify-end">
+            <v-btn variant="text" @click="resetFilters" class="mr-2">Reset</v-btn>
+            <v-btn color="primary" variant="flat" prepend-icon="mdi-magnify" :loading="loading" @click="loadHistory">
+              Apply
+            </v-btn>
           </v-col>
         </v-row>
-      </v-window-item>
+      </v-card-text>
+    </v-card>
 
-      <!-- Treatment History -->
-      <v-window-item value="treatment">
-        <v-row>
-          <v-col cols="12">
-            <v-card>
-              <v-card-title class="success white--text">
-                ART Treatment History
-                <v-spacer />
-                <v-chip dark color="info">
-                  {{ treatmentEncounters.length }} visits
+    <!-- Timeline -->
+    <v-card elevation="2">
+      <v-card-title class="text-subtitle-1 font-weight-bold">Timeline</v-card-title>
+      <v-divider />
+      <v-card-text>
+        <v-skeleton-loader v-if="loading" type="list-item-two-line@5" />
+        <div v-else-if="encounters.length === 0" class="text-center py-10">
+          <v-icon size="64" color="grey-lighten-1">mdi-history</v-icon>
+          <div class="text-h6 mt-3">No visits found</div>
+          <div class="text-body-2 text-medium-emphasis">
+            Your visit history will appear here once you've completed an encounter.
+          </div>
+        </div>
+
+        <v-timeline v-else side="end" density="comfortable" truncate-line="both">
+          <v-timeline-item
+            v-for="enc in encounters"
+            :key="enc.id"
+            :dot-color="enc.office === 'testing' ? 'blue-darken-2' : 'teal-darken-2'"
+            :icon="enc.office === 'testing' ? 'mdi-flask' : 'mdi-medical-bag'"
+            size="small"
+          >
+            <v-card elevation="1" class="mb-3">
+              <v-card-title class="d-flex align-center text-body-1 font-weight-bold py-2">
+                <span>{{ enc.TransactionType?.name || 'Encounter' }}</span>
+                <v-chip
+                  size="small"
+                  class="ml-2"
+                  :color="enc.office === 'testing' ? 'blue-lighten-4' : 'teal-lighten-4'"
+                  variant="flat"
+                >
+                  {{ enc.office }}
                 </v-chip>
+                <v-spacer />
+                <span class="text-caption text-medium-emphasis">
+                  {{ formatDateTime(enc.occurred_at) }}
+                </span>
               </v-card-title>
-              
-              <v-card-text>
-                <v-list v-if="treatmentEncounters.length > 0">
-                  <v-list-item 
-                    v-for="encounter in treatmentEncounters" 
-                    :key="encounter.id"
-                    three-line
-                    class="mb-2 elevation-1"
+              <v-divider />
+              <v-card-text class="py-3">
+                <v-row dense v-if="enc.data && Object.keys(enc.data).length">
+                  <v-col
+                    v-for="(value, key) in enc.data"
+                    :key="key"
+                    cols="12"
+                    sm="6"
                   >
-                    <v-list-item-icon>
-                      <v-icon color="success" size="36">mdi-pill</v-icon>
-                    </v-list-item-icon>
-                    
-                    <v-list-item-content>
-                      <v-list-item-title>
-                        Treatment Visit - {{ formatDate(encounter.created_at) }}
-                      </v-list-item-title>
-                      <v-list-item-subtitle>
-                        <span v-if="encounter.art_prescription?.medication_name">
-                          Medication: {{ encounter.art_prescription.medication_name }}
-                        </span>
-                        <span v-if="encounter.art_prescription?.dosage" class="ml-2">
-                          Dosage: {{ encounter.art_prescription.dosage }}
-                        </span>
-                      </v-list-item-subtitle>
-                      <v-list-item-subtitle v-if="encounter.next_appointment_date">
-                        <v-icon small>mdi-calendar</v-icon>
-                        Next appointment: {{ formatDate(encounter.next_appointment_date) }}
-                      </v-list-item-subtitle>
-                    </v-list-item-content>
-                    
-                    <v-list-item-action>
-                      <v-btn small color="success" @click="viewTreatmentDetails(encounter)">
-                        View Details
-                      </v-btn>
-                    </v-list-item-action>
-                  </v-list-item>
-                </v-list>
-                
-                <v-alert v-else type="info" class="mt-3">
-                  No treatment history available yet.
-                </v-alert>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-      </v-window-item>
-    </v-window>
+                    <div class="text-caption text-medium-emphasis">{{ humanize(key) }}</div>
+                    <div class="text-body-2">{{ formatValue(value) }}</div>
+                  </v-col>
+                </v-row>
+                <div v-else class="text-caption text-medium-emphasis">No details recorded.</div>
 
-    <!-- Test Details Dialog -->
-    <v-dialog v-model="showTestDialog" max-width="600">
-      <v-card>
-        <v-card-title class="primary white--text">
-          Test Details
-          <v-spacer />
-          <v-btn icon dark @click="showTestDialog = false">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </v-card-title>
-        
-        <v-card-text class="mt-4">
-          <v-list>
-            <v-list-item>
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Result</v-list-item-title>
-                <v-list-item-subtitle>
-                  <v-chip 
-                    :color="getTestResultColor(selectedTest?.hiv_test?.result)" 
-                    dark
-                  >
-                    {{ selectedTest?.hiv_test?.result || 'N/A' }}
-                  </v-chip>
-                </v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider />
-            
-            <v-list-item>
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Test Date</v-list-item-title>
-                <v-list-item-subtitle>{{ formatDate(selectedTest?.test_date || selectedTest?.created_at) }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider />
-            
-            <v-list-item v-if="selectedTest?.hiv_test?.kit_lot_number">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Kit Lot Number</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedTest.hiv_test.kit_lot_number }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider />
-            
-            <v-list-item v-if="selectedTest?.hiv_test?.tested_by">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Tested By</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedTest.hiv_test.tested_by }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider />
-            
-            <v-list-item v-if="selectedTest?.pretest_counseling?.notes">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Pre-test Counseling Notes</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedTest.pretest_counseling.notes }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider />
-            
-            <v-list-item v-if="selectedTest?.posttest_counseling?.notes">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Post-test Counseling Notes</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedTest.posttest_counseling.notes }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-          </v-list>
-        </v-card-text>
-        
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="primary" @click="showTestDialog = false">Close</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+                <template v-if="enc.notes">
+                  <v-divider class="my-2" />
+                  <div class="text-caption text-medium-emphasis">Notes</div>
+                  <div class="text-body-2" style="white-space: pre-wrap">{{ enc.notes }}</div>
+                </template>
 
-    <!-- Treatment Details Dialog -->
-    <v-dialog v-model="showTreatmentDialog" max-width="700">
-      <v-card>
-        <v-card-title class="success white--text">
-          Treatment Details
-          <v-spacer />
-          <v-btn icon dark @click="showTreatmentDialog = false">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </v-card-title>
-        
-        <v-card-text class="mt-4">
-          <v-list>
-            <v-list-item v-if="selectedTreatment?.consultation_notes">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Consultation Notes</v-list-item-title>
-                <v-list-item-subtitle>{{ selectedTreatment.consultation_notes }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider />
-            
-            <v-list-item v-if="selectedTreatment?.art_prescription">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Prescription</v-list-item-title>
-                <v-list-item-subtitle>
-                  <strong>{{ selectedTreatment.art_prescription.medication_name }}</strong>
-                </v-list-item-subtitle>
-                <v-list-item-subtitle>
-                  Dosage: {{ selectedTreatment.art_prescription.dosage }}
-                </v-list-item-subtitle>
-                <v-list-item-subtitle>
-                  Frequency: {{ selectedTreatment.art_prescription.frequency }}
-                </v-list-item-subtitle>
-                <v-list-item-subtitle v-if="selectedTreatment.art_prescription.quantity">
-                  Quantity: {{ selectedTreatment.art_prescription.quantity }}
-                </v-list-item-subtitle>
-                <v-list-item-subtitle v-if="selectedTreatment.art_prescription.refill_date">
-                  Refill Date: {{ formatDate(selectedTreatment.art_prescription.refill_date) }}
-                </v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider v-if="selectedTreatment?.lab_results?.length" />
-            
-            <v-list-item v-if="selectedTreatment?.lab_results?.length">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Lab Results</v-list-item-title>
-                <div v-for="(lab, index) in selectedTreatment.lab_results" :key="index" class="ml-2">
-                  <v-chip small color="info" class="mr-1">
-                    {{ lab.type }}
-                  </v-chip>
-                  <span>{{ lab.value }}</span>
-                  <span v-if="lab.date" class="text-caption text-grey ml-2">
-                    ({{ formatDate(lab.date) }})
-                  </span>
-                  <span v-if="lab.notes" class="text-caption text-grey ml-2">
-                    - {{ lab.notes }}
-                  </span>
+                <div v-if="enc.Staff" class="text-caption text-medium-emphasis mt-2">
+                  Attended by: {{ enc.Staff.username }}
                 </div>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider v-if="selectedTreatment?.adherence" />
-            
-            <v-list-item v-if="selectedTreatment?.adherence">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Adherence</v-list-item-title>
-                <v-list-item-subtitle>
-                  Missed doses in last 30 days: 
-                  <v-chip :color="selectedTreatment.adherence.missed_doses_last_30_days ? 'warning' : 'success'" small>
-                    {{ selectedTreatment.adherence.missed_doses_last_30_days ? 'Yes' : 'No' }}
-                  </v-chip>
-                </v-list-item-subtitle>
-                <v-list-item-subtitle v-if="selectedTreatment.adherence.missed_dose_count">
-                  Missed dose count: {{ selectedTreatment.adherence.missed_dose_count }}
-                </v-list-item-subtitle>
-                <v-list-item-subtitle v-if="selectedTreatment.adherence.notes">
-                  Notes: {{ selectedTreatment.adherence.notes }}
-                </v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-            
-            <v-divider v-if="selectedTreatment?.next_appointment_date" />
-            
-            <v-list-item v-if="selectedTreatment?.next_appointment_date">
-              <v-list-item-content>
-                <v-list-item-title class="text-caption text-grey">Next Appointment</v-list-item-title>
-                <v-list-item-subtitle>{{ formatDate(selectedTreatment.next_appointment_date) }}</v-list-item-subtitle>
-              </v-list-item-content>
-            </v-list-item>
-          </v-list>
-        </v-card-text>
-        
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="success" @click="showTreatmentDialog = false">Close</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-  </div>
+              </v-card-text>
+            </v-card>
+          </v-timeline-item>
+        </v-timeline>
+      </v-card-text>
+    </v-card>
+
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
+      {{ snackbar.message }}
+    </v-snackbar>
+  </v-container>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { usePatientStore } from '@/stores/patientStore';
-import { useAuthStore } from '@/stores/authStore';
+import { ref, reactive, computed, onMounted } from 'vue';
 import api from '@/plugins/axios';
 
-const patientStore = usePatientStore();
-const authStore = useAuthStore();
+const encounters = ref([]);
+const loading = ref(false);
 
-const tab = ref('tests');
-const testingEncounters = ref([]);
-const treatmentEncounters = ref([]);
-const showTestDialog = ref(false);
-const showTreatmentDialog = ref(false);
-const selectedTest = ref(null);
-const selectedTreatment = ref(null);
-
-const getTestResultColor = (result) => {
-  const colors = {
-    positive: 'error',
-    negative: 'success',
-    indeterminate: 'warning'
-  };
-  return colors[result] || 'grey';
-};
-
-const getTestResultIcon = (result) => {
-  const icons = {
-    positive: 'mdi-alert-circle',
-    negative: 'mdi-check-circle',
-    indeterminate: 'mdi-help-circle'
-  };
-  return icons[result] || 'mdi-circle-outline';
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
-};
-
-const viewTestDetails = (test) => {
-  selectedTest.value = test;
-  showTestDialog.value = true;
-};
-
-const viewTreatmentDetails = (encounter) => {
-  selectedTreatment.value = encounter;
-  showTreatmentDialog.value = true;
-};
-
-const loadPatientHistory = async () => {
-  try {
-    const patientId = patientStore.currentPatient?.id;
-    if (!patientId) {
-      // Get patient by user ID
-      const response = await api.get('/patients/me');
-      patientStore.currentPatient = response.data;
-      const id = response.data.id;
-      
-      const historyResponse = await api.get(`/patients/${id}/history`);
-      testingEncounters.value = historyResponse.data.testing || [];
-      treatmentEncounters.value = historyResponse.data.treatment || [];
-    } else {
-      const historyResponse = await api.get(`/patients/${patientId}/history`);
-      testingEncounters.value = historyResponse.data.testing || [];
-      treatmentEncounters.value = historyResponse.data.treatment || [];
-    }
-  } catch (error) {
-    console.error('Error loading patient history:', error);
-  }
-};
-
-onMounted(() => {
-  loadPatientHistory();
+const filters = reactive({
+  office: 'all',
+  from: '',
+  to: '',
 });
+
+const officeOptions = [
+  { label: 'All Offices', value: 'all' },
+  { label: 'Testing', value: 'testing' },
+  { label: 'Treatment', value: 'treatment' },
+];
+
+const snackbar = reactive({ show: false, message: '', color: 'success' });
+function notify(message, color = 'success') {
+  snackbar.message = message;
+  snackbar.color = color;
+  snackbar.show = true;
+}
+
+const testingCount = computed(() => encounters.value.filter(e => e.office === 'testing').length);
+const treatmentCount = computed(() => encounters.value.filter(e => e.office === 'treatment').length);
+
+const lastVisitLabel = computed(() => {
+  if (encounters.value.length === 0) return '—';
+  const latest = encounters.value.reduce((a, b) =>
+    new Date(a.occurred_at) > new Date(b.occurred_at) ? a : b
+  );
+  return new Date(latest.occurred_at).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'short', day: '2-digit',
+  });
+});
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function humanize(key) {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatValue(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+async function loadHistory() {
+  loading.value = true;
+  try {
+    const params = {};
+    if (filters.from) params.from = filters.from;
+    if (filters.to) params.to = filters.to;
+    const { data } = await api.get('/encounters/my', { params });
+    let list = data || [];
+    if (filters.office !== 'all') {
+      list = list.filter(e => e.office === filters.office);
+    }
+    encounters.value = list;
+  } catch (e) {
+    notify('Failed to load visit history: ' + (e.response?.data?.error || e.message), 'error');
+  } finally {
+    loading.value = false;
+  }
+}
+
+function resetFilters() {
+  filters.office = 'all';
+  filters.from = '';
+  filters.to = '';
+  loadHistory();
+}
+
+onMounted(loadHistory);
 </script>
+
+<style scoped>
+.v-timeline-item__body {
+  width: 100%;
+}
+</style>

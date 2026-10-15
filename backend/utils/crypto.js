@@ -2,7 +2,7 @@
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 12;        // GCM standard
+const IV_LENGTH = 12;  
 const AUTH_TAG_LENGTH = 16;
 const ENCODING = 'hex';
 
@@ -16,10 +16,6 @@ if (HMAC_KEY.length !== 32) {
   throw new Error('HMAC_KEY must be 32 bytes (64 hex chars)');
 }
 
-/**
- * AES-256-GCM encrypt. Returns "iv:authTag:ciphertext" (all hex).
- * Non-deterministic — safe for storage, NOT searchable.
- */
 function encrypt(plaintext) {
   if (plaintext === null || plaintext === undefined || plaintext === '') return null;
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -30,13 +26,10 @@ function encrypt(plaintext) {
   return `${iv.toString(ENCODING)}:${authTag}:${encrypted}`;
 }
 
-/**
- * AES-256-GCM decrypt. Input must be "iv:authTag:ciphertext".
- */
 function decrypt(ciphertext) {
   if (!ciphertext) return null;
   const parts = String(ciphertext).split(':');
-  if (parts.length !== 3) return null; // not encrypted / plaintext fallback
+  if (parts.length !== 3) return null;
   const [ivHex, authTagHex, encrypted] = parts;
   try {
     const iv = Buffer.from(ivHex, ENCODING);
@@ -47,15 +40,10 @@ function decrypt(ciphertext) {
     decrypted += decipher.final('utf8');
     return decrypted;
   } catch (err) {
-    // Tampered or wrong key
     return null;
   }
 }
 
-/**
- * HMAC-SHA256 blind index. Deterministic — safe for equality search.
- * Normalizes input (trim + lowercase) so "Reactive" === "reactive".
- */
 function hmac(value) {
   if (value === null || value === undefined || value === '') return null;
   return crypto

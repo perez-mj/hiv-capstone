@@ -30,22 +30,15 @@ app.use('/api/patients', require('./routes/patients'));
 app.use('/api/appointments', require('./routes/appointmentAvailability'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/queue', require('./routes/queue'));
-app.use('/api/testing', require('./routes/testing'));
-app.use('/api/treatment', require('./routes/treatment'));
+app.use('/api/encounters', require('./routes/encounters'));
 app.use('/api/blockchain', require('./routes/blockchain'));
-app.use('/api/backup', require('./routes/backup'));
 app.use('/api/kiosk', require('./routes/kiosk'));
-
-
 app.use('/api/locations', require('./routes/location'));
-// app.use('/api/reports', require('./routes/reports'));
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });

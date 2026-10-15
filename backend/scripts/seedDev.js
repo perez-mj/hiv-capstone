@@ -126,13 +126,13 @@ class DevSeeder {
     this.log('\nSeeding transaction types...');
 
     const types = [
-      { name: 'Testing',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
-      { name: 'Testing Result',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#a0e999', is_active: true },
-      { name: 'New - STI Consultation',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
-      { name: 'Old - STI Consultation',      office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
-      { name: 'Consultation', office: 'treatment', estimated_duration_minutes: 45, color_code: '#FF9800', is_active: true },
-      { name: 'Refill',       office: 'treatment', estimated_duration_minutes: 15, color_code: '#2196F3', is_active: true },
-      { name: 'Other',        office: 'treatment', estimated_duration_minutes: 20, color_code: '#9C27B0', is_active: true },
+      { name: 'Testing',                office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
+      { name: 'Testing Result',         office: 'testing',   estimated_duration_minutes: 15, color_code: '#a0e999', is_active: true },
+      { name: 'New - STI Consultation', office: 'treatment', estimated_duration_minutes: 35, color_code: '#ab65c7', is_active: true },
+      { name: 'Old - STI Consultation', office: 'treatment', estimated_duration_minutes: 30, color_code: '#80128f', is_active: true },
+      { name: 'Consultation',           office: 'treatment', estimated_duration_minutes: 45, color_code: '#c76bfc', is_active: true },
+      { name: 'Refill',                 office: 'treatment', estimated_duration_minutes: 15, color_code: '#63497a', is_active: true },
+      { name: 'Other',                  office: 'treatment', estimated_duration_minutes: 20, color_code: '#b0277b', is_active: true },
     ];
 
     for (const t of types) {

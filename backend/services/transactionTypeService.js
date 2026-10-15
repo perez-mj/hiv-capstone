@@ -151,7 +151,6 @@ class TransactionTypeService {
   async toggleActive(id) {
     const type = await this.findOrFail(id);
 
-    // Prevent deactivation if there are active appointments
     if (type.is_active) {
       const activeAppointments = await Appointment.count({
         where: {

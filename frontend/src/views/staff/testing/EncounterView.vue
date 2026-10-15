@@ -1,558 +1,431 @@
 <!-- frontend/src/views/staff/testing/EncounterView.vue -->
 <template>
   <v-container fluid class="pa-4">
-    <v-row>
-      <v-col cols="12" lg="8" offset-lg="2">
-        <v-card>
-          <v-card-title class="d-flex justify-space-between align-center">
-            {{ isEditMode ? 'Edit' : 'New' }} Testing Encounter
-            <v-spacer></v-spacer>
-            <v-chip color="info" variant="flat" v-if="patient">
-              {{ patient.first_name }} {{ patient.last_name }}
-            </v-chip>
-          </v-card-title>
-          <v-divider></v-divider>
-          
-          <v-card-text>
-            <!-- Patient Selection -->
-            <v-row v-if="!patient">
-              <v-col cols="12">
-                <v-card variant="outlined" class="pa-4">
-                  <div class="text-subtitle-1 font-weight-medium mb-2">Select Patient</div>
-                  <v-row>
-                    <v-col cols="12" sm="8">
-                      <v-text-field
-                        v-model="searchQuery"
-                        label="Search Patient"
-                        placeholder="Type name or contact number..."
-                        variant="outlined"
-                        density="comfortable"
-                        @update:model-value="searchPatients"
-                        clearable
-                      >
-                        <template v-slot:append>
-                          <v-progress-circular
-                            v-if="searching"
-                            indeterminate
-                            size="24"
-                          ></v-progress-circular>
-                        </template>
-                      </v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                      <v-btn 
-                        block 
-                        color="primary" 
-                        variant="tonal"
-                        @click="navigateToPatientCreate"
-                      >
-                        <v-icon start>mdi-account-plus</v-icon>
-                        New Patient
-                      </v-btn>
-                    </v-col>
-                  </v-row>
-                  
-                  <v-list v-if="searchResults.length > 0" density="compact">
-                    <v-list-item 
-                      v-for="p in searchResults" 
-                      :key="p.id"
-                      @click="selectPatient(p)"
-                    >
-                      <v-list-item-title>
-                        {{ p.first_name }} {{ p.last_name }}
-                      </v-list-item-title>
-                      <v-list-item-subtitle>
-                        {{ p.contact_number }} • {{ p.patient_facility_code }}
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                  </v-list>
-                </v-card>
-              </v-col>
-            </v-row>
-
-            <!-- Encounter Form -->
-            <v-form v-else ref="form" v-model="valid">
-              <!-- Patient Info -->
-              <v-card variant="tonal" class="mb-4 pa-3">
-                <v-row>
-                  <v-col cols="12" sm="4">
-                    <div class="text-caption text-grey">Name</div>
-                    <div class="font-weight-medium">{{ patient.first_name }} {{ patient.last_name }}</div>
-                  </v-col>
-                  <v-col cols="12" sm="3">
-                    <div class="text-caption text-grey">Age</div>
-                    <div class="font-weight-medium">{{ patientAge }}</div>
-                  </v-col>
-                  <v-col cols="12" sm="3">
-                    <div class="text-caption text-grey">Gender</div>
-                    <div class="font-weight-medium">{{ patient.gender || 'N/A' }}</div>
-                  </v-col>
-                  <v-col cols="12" sm="2">
-                    <div class="text-caption text-grey">Status</div>
-                    <v-chip :color="patient.status === 'testing' ? 'info' : 'success'" size="small">
-                      {{ patient.status }}
-                    </v-chip>
-                  </v-col>
-                </v-row>
-              </v-card>
-
-              <!-- Step 1: Pre-test Counseling -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-primary-lighten-4">
-                  <v-icon start>mdi-chat</v-icon>
-                  Step 1: Pre-test Counseling
-                  <v-spacer></v-spacer>
-                  <v-checkbox
-                    v-model="encounter.pretest_counseling.conducted"
-                    label="Completed"
-                    hide-details
-                    density="compact"
-                  ></v-checkbox>
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12">
-                      <div class="text-subtitle-2 mb-2">Counseling Checklist</div>
-                      <v-checkbox
-                        v-for="item in pretestChecklist"
-                        :key="item.value"
-                        v-model="encounter.pretest_counseling.checklist"
-                        :value="item.value"
-                        :label="item.label"
-                        hide-details
-                        density="compact"
-                      ></v-checkbox>
-                    </v-col>
-                    <v-col cols="12" class="mt-2">
-                      <v-textarea
-                        v-model="encounter.pretest_counseling.notes"
-                        label="Counseling Notes"
-                        placeholder="Enter pre-test counseling notes..."
-                        variant="outlined"
-                        rows="3"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Step 2: HIV Test Result -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-info-lighten-4">
-                  <v-icon start>mdi-test-tube</v-icon>
-                  Step 2: HIV Test Result
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-select
-                        v-model="encounter.hiv_test.result"
-                        :items="testResultOptions"
-                        label="Test Result"
-                        variant="outlined"
-                        density="comfortable"
-                        required
-                        :rules="[v => !!v || 'Test result is required']"
-                        :disabled="!encounter.pretest_counseling.conducted"
-                      ></v-select>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="encounter.hiv_test.kit_lot_number"
-                        label="Kit Lot Number"
-                        variant="outlined"
-                        density="comfortable"
-                        :disabled="!encounter.pretest_counseling.conducted"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="encounter.hiv_test.tested_by"
-                        label="Tested By"
-                        variant="outlined"
-                        density="comfortable"
-                        :disabled="!encounter.pretest_counseling.conducted"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="encounter.hiv_test.test_date"
-                        label="Test Date"
-                        type="date"
-                        variant="outlined"
-                        density="comfortable"
-                        :disabled="!encounter.pretest_counseling.conducted"
-                      ></v-text-field>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Step 3: Post-test Counseling -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-success-lighten-4">
-                  <v-icon start>mdi-chat-processing</v-icon>
-                  Step 3: Post-test Counseling
-                  <v-spacer></v-spacer>
-                  <v-checkbox
-                    v-model="encounter.posttest_counseling.conducted"
-                    label="Completed"
-                    hide-details
-                    density="compact"
-                    :disabled="!encounter.pretest_counseling.conducted || !encounter.hiv_test.result"
-                  ></v-checkbox>
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12">
-                      <div class="text-subtitle-2 mb-2">Counseling Checklist</div>
-                      <v-checkbox
-                        v-for="item in posttestChecklist"
-                        :key="item.value"
-                        v-model="encounter.posttest_counseling.checklist"
-                        :value="item.value"
-                        :label="item.label"
-                        hide-details
-                        density="compact"
-                        :disabled="!encounter.pretest_counseling.conducted || !encounter.hiv_test.result"
-                      ></v-checkbox>
-                    </v-col>
-                    <v-col cols="12" class="mt-2">
-                      <v-textarea
-                        v-model="encounter.posttest_counseling.notes"
-                        label="Counseling Notes"
-                        placeholder="Enter post-test counseling notes..."
-                        variant="outlined"
-                        rows="3"
-                        :disabled="!encounter.pretest_counseling.conducted || !encounter.hiv_test.result"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Step 4: Referral (if positive) -->
-              <v-card 
-                v-if="encounter.hiv_test.result === 'positive'" 
-                variant="outlined" 
-                class="mb-4"
-                color="warning"
-              >
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-warning-lighten-4">
-                  <v-icon start color="warning">mdi-alert-circle</v-icon>
-                  Step 4: Referral to Treatment
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-alert type="info" variant="tonal" class="mb-3">
-                    This patient tested positive and will be referred to the Treatment office.
-                  </v-alert>
-                  
-                  <v-row>
-                    <v-col cols="12">
-                      <v-checkbox
-                        v-model="encounter.referral.referred_to_treatment"
-                        label="Refer to Treatment Office"
-                        hide-details
-                        density="compact"
-                      ></v-checkbox>
-                    </v-col>
-                    <v-col cols="12">
-                      <v-textarea
-                        v-model="encounter.referral.reason"
-                        label="Referral Reason"
-                        placeholder="Enter referral reason..."
-                        variant="outlined"
-                        rows="2"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Actions -->
-              <v-row>
-                <v-col cols="12" class="d-flex justify-space-between">
-                  <v-btn variant="outlined" @click="cancel">
-                    <v-icon start>mdi-close</v-icon>
-                    Cancel
-                  </v-btn>
-                  
-                  <div>
-                    <v-btn 
-                      color="success" 
-                      @click="submitEncounter"
-                      :loading="submitting"
-                      :disabled="!isFormComplete"
-                    >
-                      <v-icon start>mdi-check</v-icon>
-                      {{ isEditMode ? 'Update' : 'Submit' }} Encounter
-                    </v-btn>
-                  </div>
-                </v-col>
-              </v-row>
-            </v-form>
-          </v-card-text>
-        </v-card>
+    <!-- Header -->
+    <v-row align="center" class="mb-4">
+      <v-col cols="12" md="8">
+        <div class="d-flex align-center">
+          <v-btn icon variant="text" @click="goBack" class="mr-2">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          <div>
+            <h1 class="text-h5 font-weight-bold mb-0">Testing Encounter</h1>
+            <div class="text-caption text-medium-emphasis">
+              Record a new testing transaction for the selected patient
+            </div>
+          </div>
+        </div>
+      </v-col>
+      <v-col cols="12" md="4" class="text-md-right">
+        <v-chip color="blue-darken-2" variant="flat" prepend-icon="mdi-flask">
+          Testing Office
+        </v-chip>
       </v-col>
     </v-row>
 
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
+    <!-- Patient Selector (when no patientId in route) -->
+    <v-card v-if="!patientId" class="mb-4" elevation="2">
+      <v-card-title class="text-subtitle-1 font-weight-bold">
+        Select Patient
+      </v-card-title>
+      <v-card-text>
+        <v-autocomplete
+          v-model="selectedPatientId"
+          :items="patientOptions"
+          :loading="loadingPatients"
+          item-title="label"
+          item-value="id"
+          label="Search patient by name or facility code"
+          prepend-inner-icon="mdi-account-search"
+          variant="outlined"
+          hide-details
+          clearable
+          @update:search="searchPatients"
+          @update:model-value="onPatientSelected"
+        />
+      </v-card-text>
+    </v-card>
+
+    <!-- Patient summary -->
+    <v-card v-if="patient" class="mb-4" elevation="2">
+      <v-card-text>
+        <v-row dense>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Patient</div>
+            <div class="text-body-1 font-weight-medium">{{ patientFullName }}</div>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Facility Code</div>
+            <div class="text-body-1">{{ patient.patient_facility_code }}</div>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Contact</div>
+            <div class="text-body-1">{{ patient.contact_number || '—' }}</div>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
+
+    <!-- Encounter Form -->
+    <v-card v-if="patient" elevation="2">
+      <v-card-title class="text-subtitle-1 font-weight-bold">
+        Encounter Details
+      </v-card-title>
+      <v-divider />
+      <v-card-text>
+        <v-form ref="formRef" v-model="formValid" lazy-validation>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.transaction_type_id"
+                :items="transactionTypes"
+                item-title="name"
+                item-value="id"
+                label="Transaction Type *"
+                :rules="[v => !!v || 'Transaction type is required']"
+                variant="outlined"
+                :loading="loadingTypes"
+                prepend-inner-icon="mdi-tag"
+              >
+                <template #item="{ props, item }">
+                  <v-list-item v-bind="props">
+                    <template #prepend>
+                      <v-avatar
+                        size="12"
+                        :color="item.raw.color_code || 'grey'"
+                        class="mr-2"
+                      />
+                    </template>
+                    <v-list-item-subtitle v-if="item.raw.estimated_duration_minutes">
+                      {{ item.raw.estimated_duration_minutes }} min
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                </template>
+              </v-select>
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.occurred_at"
+                label="Occurred At"
+                type="datetime-local"
+                variant="outlined"
+                prepend-inner-icon="mdi-clock-outline"
+              />
+            </v-col>
+
+            <!-- Dynamic fields based on selected transaction type -->
+            <v-col cols="12">
+              <v-divider class="my-2" />
+              <div class="text-subtitle-2 font-weight-bold mb-2">
+                Clinical Data
+              </div>
+
+              <div v-if="currentTypeSchema.length === 0" class="text-caption text-medium-emphasis">
+                No additional fields required for this transaction type.
+              </div>
+
+              <v-row v-else>
+                <v-col
+                  v-for="field in currentTypeSchema"
+                  :key="field.key"
+                  cols="12"
+                  :md="field.cols || 6"
+                >
+                  <v-text-field
+                    v-if="field.type === 'text' || field.type === 'number'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    :type="field.type"
+                    :rules="field.required ? [v => v !== '' && v !== null && v !== undefined || `${field.label} is required`] : []"
+                    variant="outlined"
+                  />
+
+                  <v-textarea
+                    v-else-if="field.type === 'textarea'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
+                    variant="outlined"
+                    rows="3"
+                    auto-grow
+                  />
+
+                  <v-select
+                    v-else-if="field.type === 'select'"
+                    v-model="form.data[field.key]"
+                    :items="field.options || []"
+                    :label="field.label"
+                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
+                    variant="outlined"
+                  />
+
+                  <v-switch
+                    v-else-if="field.type === 'boolean'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    color="primary"
+                    inset
+                  />
+
+                  <v-text-field
+                    v-else-if="field.type === 'date'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    type="date"
+                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
+                    variant="outlined"
+                  />
+                </v-col>
+              </v-row>
+            </v-col>
+
+            <v-col cols="12">
+              <v-textarea
+                v-model="form.notes"
+                label="Notes (optional)"
+                variant="outlined"
+                rows="3"
+                auto-grow
+                prepend-inner-icon="mdi-note-text-outline"
+              />
+            </v-col>
+          </v-row>
+        </v-form>
+      </v-card-text>
+
+      <v-divider />
+      <v-card-actions class="pa-4">
+        <v-spacer />
+        <v-btn variant="text" @click="resetForm">Reset</v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          :loading="submitting"
+          :disabled="!formValid || !form.transaction_type_id"
+          prepend-icon="mdi-content-save"
+          @click="submit"
+        >
+          Save Encounter
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+
+    <!-- Empty state -->
+    <v-card v-if="!patient && !patientId" class="pa-8 text-center" elevation="2">
+      <v-icon size="64" color="grey-lighten-1">mdi-account-search-outline</v-icon>
+      <div class="text-h6 mt-3">No patient selected</div>
+      <div class="text-body-2 text-medium-emphasis">
+        Search and select a patient above to begin a testing encounter.
+      </div>
+    </v-card>
+
+    <!-- Snackbar -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
       {{ snackbar.message }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbar.show = false">Close</v-btn>
+      </template>
     </v-snackbar>
   </v-container>
 </template>
 
-<script>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import testingService from '@/services/testingService'
-import patientService from '@/services/patientService'
+<script setup>
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import testingService from '@/services/testingService';
+import patientService from '@/services/patientService';
+import transactionTypeService from '@/services/transactionTypeService';
 
-export default {
-  name: 'TestingEncounterView',
-  setup() {
-    const router = useRouter()
-    const route = useRoute()
-    const form = ref(null)
-    const valid = ref(false)
-    const submitting = ref(false)
-    const searching = ref(false)
-    const searchQuery = ref('')
-    const searchResults = ref([])
-    const patient = ref(null)
-    const isEditMode = ref(false)
-    const encounterId = ref(null)
+const route = useRoute();
+const router = useRouter();
 
-    const snackbar = ref({
-      show: false,
-      message: '',
-      color: 'success'
-    })
+const patientId = ref(route.params.patientId ? Number(route.params.patientId) : null);
 
-    // Form data
-    const encounter = ref({
-      pretest_counseling: {
-        conducted: false,
-        checklist: [],
-        notes: ''
-      },
-      hiv_test: {
-        result: null,
-        kit_lot_number: '',
-        tested_by: '',
-        test_date: new Date().toISOString().split('T')[0]
-      },
-      posttest_counseling: {
-        conducted: false,
-        checklist: [],
-        notes: ''
-      },
-      referral: {
-        referred_to_treatment: true,
-        reason: 'HIV Positive result'
-      }
-    })
+// ----- Patient -----
+const patient = ref(null);
+const selectedPatientId = ref(patientId.value);
+const patientOptions = ref([]);
+const loadingPatients = ref(false);
 
-    // Options
-    const testResultOptions = [
-      { title: 'Select result...', value: null },
-      { title: 'Positive', value: 'positive' },
-      { title: 'Negative', value: 'negative' },
-      { title: 'Indeterminate', value: 'indeterminate' }
-    ]
+// ----- Transaction types -----
+const transactionTypes = ref([]);
+const loadingTypes = ref(false);
 
-    const pretestChecklist = [
-      { value: 'informed_consent', label: 'Informed consent obtained' },
-      { value: 'risk_assessment', label: 'Risk assessment completed' },
-      { value: 'test_explained', label: 'Testing process explained' },
-      { value: 'confidentiality', label: 'Confidentiality discussed' },
-      { value: 'support_system', label: 'Support system identified' }
-    ]
+// ----- Form -----
+const formRef = ref(null);
+const formValid = ref(false);
+const submitting = ref(false);
 
-    const posttestChecklist = [
-      { value: 'result_discussed', label: 'Result discussed' },
-      { value: 'emotional_support', label: 'Emotional support provided' },
-      { value: 'next_steps', label: 'Next steps explained' },
-      { value: 'prevention_counseling', label: 'Prevention counseling' },
-      { value: 'referral_info', label: 'Referral information provided' }
-    ]
+const form = reactive({
+  transaction_type_id: null,
+  occurred_at: defaultDateTimeLocal(),
+  data: {},
+  notes: '',
+});
 
-    // Computed
-    const patientAge = computed(() => {
-      if (!patient.value?.birth_date) return 'N/A'
-      const birth = new Date(patient.value.birth_date)
-      const today = new Date()
-      let age = today.getFullYear() - birth.getFullYear()
-      const m = today.getMonth() - birth.getMonth()
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-        age--
-      }
-      return age
-    })
+// ----- Schema map: define fields per transaction type name -----
+const TRANSACTION_TYPE_SCHEMAS = {
+  'HIV Rapid Test': [
+    { key: 'test_type', label: 'Test Type', type: 'select', required: true, options: ['Determine', 'Uni-Gold', 'SD Bioline'], cols: 6 },
+    { key: 'result', label: 'Result', type: 'select', required: true, options: ['Reactive', 'Non-Reactive', 'Invalid'], cols: 6 },
+    { key: 'kit_lot_number', label: 'Kit Lot Number', type: 'text', cols: 6 },
+    { key: 'kit_expiry', label: 'Kit Expiry', type: 'date', cols: 6 },
+    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
+  ],
+  'CD4 Count': [
+    { key: 'result', label: 'CD4 Result (cells/mm³)', type: 'number', required: true, cols: 6 },
+    { key: 'specimen_type', label: 'Specimen Type', type: 'select', options: ['Whole Blood', 'Plasma', 'Serum'], cols: 6 },
+    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
+  ],
+  'Viral Load': [
+    { key: 'result', label: 'Viral Load (copies/mL)', type: 'number', required: true, cols: 6 },
+    { key: 'specimen_type', label: 'Specimen Type', type: 'select', options: ['Plasma', 'DBS'], cols: 6 },
+    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
+  ],
+  'default': [
+    { key: 'result', label: 'Result / Findings', type: 'textarea', required: true, cols: 12 },
+    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
+  ],
+};
 
-    const isFormComplete = computed(() => {
-      const e = encounter.value
-      return e.pretest_counseling.conducted &&
-             e.hiv_test.result &&
-             e.posttest_counseling.conducted
-    })
+const currentTypeSchema = computed(() => {
+  const tt = transactionTypes.value.find(t => t.id === form.transaction_type_id);
+  if (!tt) return [];
+  return TRANSACTION_TYPE_SCHEMAS[tt.name] || TRANSACTION_TYPE_SCHEMAS['default'];
+});
 
-    // Methods
-    const loadPatient = async (id) => {
-      try {
-        const data = await patientService.getPatient(id)
-        patient.value = data
-        console.log('Patient loaded:', data)
-      } catch (error) {
-        showSnackbar('Failed to load patient: ' + error.message, 'error')
-      }
-    }
+const patientFullName = computed(() => {
+  if (!patient.value) return '';
+  const p = patient.value;
+  return [p.first_name, p.middle_name, p.last_name, p.suffix].filter(Boolean).join(' ');
+});
 
-    const loadEncounter = async (id) => {
-      try {
-        const data = await testingService.getEncounter(id)
-        encounter.value = data
-        patient.value = data.Patient
-        isEditMode.value = true
-        encounterId.value = id
-        console.log('Encounter loaded:', data)
-      } catch (error) {
-        showSnackbar('Failed to load encounter: ' + error.message, 'error')
-      }
-    }
+// ----- Snackbar -----
+const snackbar = reactive({ show: false, message: '', color: 'success' });
+function notify(message, color = 'success') {
+  snackbar.message = message;
+  snackbar.color = color;
+  snackbar.show = true;
+}
 
-    const searchPatients = async () => {
-      if (searchQuery.value.length < 2) {
-        searchResults.value = []
-        return
-      }
-      
-      searching.value = true
-      try {
-        const results = await patientService.searchPatients(searchQuery.value)
-        searchResults.value = results.slice(0, 10)
-      } catch (error) {
-        console.error('Search error:', error)
-      } finally {
-        searching.value = false
-      }
-    }
+// ----- Helpers -----
+function defaultDateTimeLocal() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
-    const selectPatient = (p) => {
-      patient.value = p
-      searchQuery.value = ''
-      searchResults.value = []
-    }
+function goBack() {
+  router.back();
+}
 
-    const submitEncounter = async () => {
-      if (!form.value || !form.value.validate()) {
-        showSnackbar('Please fill in all required fields', 'warning')
-        return
-      }
-
-      if (!encounter.value.pretest_counseling.conducted) {
-        showSnackbar('Pre-test counseling must be completed', 'warning')
-        return
-      }
-
-      if (!encounter.value.hiv_test.result) {
-        showSnackbar('HIV test result is required', 'warning')
-        return
-      }
-
-      if (!encounter.value.posttest_counseling.conducted) {
-        showSnackbar('Post-test counseling must be completed', 'warning')
-        return
-      }
-
-      submitting.value = true
-      try {
-        const data = {
-          patient_id: patient.value.id,
-          ...encounter.value
-        }
-
-        const result = await testingService.createEncounter(data)
-        showSnackbar('Encounter submitted successfully!', 'success')
-        
-        // If positive, navigate to treatment or show message
-        if (encounter.value.hiv_test.result === 'positive') {
-          setTimeout(() => {
-            router.push(`/treatment/encounter/${patient.value.id}`)
-          }, 1500)
-        } else {
-          setTimeout(() => {
-            router.push('/testing/queue')
-          }, 1500)
-        }
-      } catch (error) {
-        console.error('Submit error:', error)
-        showSnackbar('Failed to submit: ' + (error.response?.data?.error || error.message), 'error')
-      } finally {
-        submitting.value = false
-      }
-    }
-
-    const cancel = () => {
-      if (confirm('Are you sure you want to cancel? Any unsaved data will be lost.')) {
-        router.push('/testing/queue')
-      }
-    }
-
-    const navigateToPatientCreate = () => {
-      router.push('/patients/create')
-    }
-
-    const showSnackbar = (message, color = 'success') => {
-      snackbar.value = { show: true, message, color }
-    }
-
-    // Lifecycle
-    onMounted(async () => {
-      const patientId = route.params.patientId
-      const id = route.params.id
-
-      if (id) {
-        await loadEncounter(id)
-      } else if (patientId) {
-        await loadPatient(patientId)
-      }
-    })
-
-    return {
-      // State
-      form,
-      valid,
-      submitting,
-      searching,
-      searchQuery,
-      searchResults,
-      patient,
-      isEditMode,
-      encounterId,
-      encounter,
-      snackbar,
-      
-      // Computed
-      patientAge,
-      isFormComplete,
-      
-      // Options
-      testResultOptions,
-      pretestChecklist,
-      posttestChecklist,
-      
-      // Methods
-      searchPatients,
-      selectPatient,
-      submitEncounter,
-      cancel,
-      navigateToPatientCreate
-    }
+// ----- Data loading -----
+async function loadPatient() {
+  if (!patientId.value) return;
+  try {
+    patient.value = await patientService.getPatient(patientId.value);
+    selectedPatientId.value = patient.value.id;
+  } catch (e) {
+    notify('Failed to load patient: ' + (e.response?.data?.error || e.message), 'error');
   }
 }
+
+async function loadTransactionTypes() {
+  loadingTypes.value = true;
+  try {
+    // Signature: getTransactionTypes(office, params)
+    const list = await transactionTypeService.getTransactionTypes('testing', { is_active: true });
+    transactionTypes.value = list;
+    if (!form.transaction_type_id && list.length === 1) {
+      form.transaction_type_id = list[0].id;
+    }
+  } catch (e) {
+    notify('Failed to load transaction types: ' + (e.response?.data?.error || e.message), 'error');
+  } finally {
+    loadingTypes.value = false;
+  }
+}
+
+async function searchPatients(query) {
+  if (!query || query.length < 2) {
+    patientOptions.value = [];
+    return;
+  }
+  loadingPatients.value = true;
+  try {
+    // Signature: getPatients(page, limit, search, purpose, year)
+    const result = await patientService.getPatients(1, 20, query, 'testing');
+    // Backend returns { items, total, page, totalPages }
+    const rows = result?.items || result?.data || result?.patients || (Array.isArray(result) ? result : []);
+    patientOptions.value = rows.map(p => ({
+      id: p.id,
+      label: `${p.first_name} ${p.last_name} — ${p.patient_facility_code}`,
+    }));
+  } catch (e) {
+    console.error('Patient search failed:', e);
+    patientOptions.value = [];
+  } finally {
+    loadingPatients.value = false;
+  }
+}
+
+async function onPatientSelected(id) {
+  if (!id) return
+  // Let the autocomplete finish its selection event first.
+  await nextTick()
+  // Route change first, then flip the v-if state so the autocomplete
+  // isn't unmounted mid-patch.
+  await router.replace({ name: 'TestingEncounter', params: { patientId: id } })
+  patientId.value = id
+  await loadPatient()
+  resetForm()
+}
+
+// ----- Form behavior -----
+function resetForm() {
+  form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
+  form.occurred_at = defaultDateTimeLocal();
+  form.data = {};
+  form.notes = '';
+  formRef.value?.resetValidation();
+}
+
+async function submit() {
+  if (!formRef.value) return;
+  const valid = await formRef.value.validate();
+  if (!valid.valid) return;
+
+  submitting.value = true;
+  try {
+    await testingService.createEncounter({
+      patient_id: patientId.value,
+      transaction_type_id: form.transaction_type_id,
+      data: form.data,
+      notes: form.notes || undefined,
+      occurred_at: form.occurred_at ? new Date(form.occurred_at).toISOString() : undefined,
+    });
+    notify('Testing encounter saved successfully.', 'success');
+    resetForm();
+  } catch (e) {
+    notify('Failed to save encounter: ' + (e.response?.data?.error || e.message), 'error');
+  } finally {
+    submitting.value = false;
+  }
+}
+
+// ----- Lifecycle -----
+onMounted(async () => {
+  await loadTransactionTypes();
+  if (patientId.value) {
+    await loadPatient();
+  }
+});
+
+watch(patientId, (v) => {
+  if (v) loadPatient();
+});
 </script>
+
+<style scoped>
+</style>

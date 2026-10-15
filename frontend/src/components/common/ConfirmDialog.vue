@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, watch, onBeforeUnmount } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -67,13 +67,61 @@ const model = computed({
 });
 
 function onConfirm() {
+  if (props.loading) return;
   emit('confirm');
 }
 
 function onCancel() {
+  if (props.loading) return;
   emit('update:modelValue', false);
   emit('cancel');
 }
+
+function handleKeydown(e) {
+  if (!model.value) return;
+
+  // Escape -> cancel
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    onCancel();
+    return;
+  }
+
+  // Enter -> confirm
+  if (e.key === 'Enter') {
+    if (props.loading) return;
+
+    // Don't hijack Enter inside multi-line inputs / contenteditable
+    const tag = e.target?.tagName;
+    const isTextarea = tag === 'TEXTAREA';
+    const isContentEditable = e.target?.isContentEditable;
+    if (isTextarea || isContentEditable) return;
+
+    // Also skip if the target is a button inside the dialog (let its own handler fire)
+    // Uncomment the next two lines if you add more buttons inside the slot
+    // const isButton = tag === 'BUTTON';
+    // if (isButton) return;
+
+    e.preventDefault();
+    onConfirm();
+  }
+}
+
+watch(
+  model,
+  (open) => {
+    if (open) {
+      window.addEventListener('keydown', handleKeydown);
+    } else {
+      window.removeEventListener('keydown', handleKeydown);
+    }
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <style scoped>

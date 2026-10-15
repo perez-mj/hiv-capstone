@@ -35,7 +35,6 @@ module.exports = (sequelize) => {
     underscored: true
   });
 
-  // Instance method to get typed value
   SystemSetting.prototype.getTypedValue = function() {
     switch(this.data_type) {
       case 'number':
@@ -63,7 +62,6 @@ module.exports = (sequelize) => {
     return result;
   };
 
-  // Class method to get settings by category
   SystemSetting.getByCategory = async function(category) {
     return await this.findAll({
       where: { category },
@@ -71,7 +69,6 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Class method to get settings as categorized object
   SystemSetting.getCategorizedSettings = async function() {
     const settings = await this.findAll({
       order: [['category', 'ASC'], ['key', 'ASC']]

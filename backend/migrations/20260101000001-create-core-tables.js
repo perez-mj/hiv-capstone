@@ -20,6 +20,7 @@ module.exports = {
       office: { type: S.STRING(20), allowNull: true, defaultValue: null },
       is_active: { type: S.BOOLEAN, defaultValue: true },
       last_login: { type: S.DATE, allowNull: true },
+      password_changed_at: { type: S.DATE, allowNull: true },
       ...ts,
     });
     await queryInterface.addIndex('users', ['role']);
@@ -67,13 +68,8 @@ module.exports = {
       facebook_messenger_hash: { type: S.STRING(64), allowNull: true },
 
       // ---------- CURRENT ADDRESS ----------
-      // House # / street / purok / sitio — the free-text part below barangay.
-      // Encrypted like the rest of PII.
       sitio_street: { type: S.TEXT, allowNull: true },
 
-      // PSGC FKs. No region_id and no postal_code by design:
-      //  - region is derivable via cities_municipalities.region_id
-      //  - postal codes are not maintained in the PSGC dataset
       barangay_id: {
         type: S.INTEGER.UNSIGNED,
         allowNull: true,
@@ -97,9 +93,6 @@ module.exports = {
       },
 
       // ---------- PERMANENT ADDRESS ----------
-      // If same_as_current_address is true, the permanent_* fields are
-      // auto-populated from the current address by the model hook.
-      // A PSGC FK only matches "same as current" if all three FK ids match.
       same_as_current_address: {
         type: S.BOOLEAN,
         allowNull: false,
@@ -222,7 +215,6 @@ module.exports = {
     });
     await queryInterface.addIndex('appointment_settings', ['is_active']);
     // Partial unique index on office WHERE office IS NOT NULL — DB-specific.
-    // MySQL 8+:
     if (queryInterface.sequelize.getDialect() === 'mysql') {
       await queryInterface.addIndex('appointment_settings', ['office'], {
         name: 'unique_office_settings',
@@ -235,24 +227,9 @@ module.exports = {
         where: { office: { [S.Op.ne]: null } },
       });
     }
-
-    // ---------- transaction_types (paranoid) ----------
-    await queryInterface.createTable('transaction_types', {
-      id,
-      name: { type: S.STRING(50), allowNull: false, unique: true },
-      office: { type: S.ENUM('testing', 'treatment'), allowNull: false },
-      estimated_duration_minutes: { type: S.INTEGER, allowNull: false },
-      description: { type: S.TEXT, allowNull: true },
-      is_active: { type: S.BOOLEAN, defaultValue: true },
-      color_code: { type: S.STRING(7), allowNull: true },
-      ...ts,
-      deleted_at: { type: S.DATE, allowNull: true },
-    });
-    await queryInterface.addIndex('transaction_types', ['office']);
   },
 
   async down(queryInterface) {
-    await queryInterface.dropTable('transaction_types');
     await queryInterface.dropTable('appointment_settings');
     await queryInterface.dropTable('system_settings');
     await queryInterface.dropTable('refresh_tokens');

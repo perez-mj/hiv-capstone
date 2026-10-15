@@ -11,7 +11,7 @@ class PatientService {
   // ---------- READ ----------
   async getPatients({
   page = 1, limit = 20, search = '',
-  purpose = null, year = null,        // ✅ NEW
+  purpose = null, year = null,      
   includeUser = true, actorId = null, req = null
 }) {
   const offset = (page - 1) * limit;
@@ -26,12 +26,10 @@ class PatientService {
     ];
   }
 
-  // ✅ purpose is encrypted → filter via hash
   if (purpose) {
     where.purpose_hash = hmac(purpose);
   }
 
-  // ✅ enrollment_date is plaintext DATEONLY → range filter
   if (year) {
     where.enrollment_date = {
       [Op.gte]: `${year}-01-01`,
@@ -149,7 +147,6 @@ class PatientService {
   }
 
   async getPatientStats(actorId = null, req = null) {
-    // NOTE: status and purpose are encrypted; filter via their *_hash columns.
     const [
       total,
       active,
@@ -183,15 +180,13 @@ class PatientService {
       username,
       email,
       password,
-      confirmPassword,   // ignore — validated on frontend
+      confirmPassword,
       ...patientFields
     } = patientData;
 
-    // Duplicate contact check (outside txn is fine; hash is deterministic)
     const existing = await this.getPatientByContact(patientFields.contact_number);
     if (existing) throw new Error('Contact number already registered');
 
-    // Pre-validate portal fields before hitting the DB
     if (create_portal_account) {
       if (!username || !email || !password) {
         throw new Error('Username, email, and password are required for portal account');
@@ -207,7 +202,6 @@ class PatientService {
     try {
       await db.sequelize.transaction(async (t) => {
         if (create_portal_account) {
-          // User.beforeCreate hook hashes password_hash automatically
           user = await db.User.create(
             {
               username,
@@ -229,7 +223,6 @@ class PatientService {
         );
       });
     } catch (err) {
-      // Translate unique constraint violations into friendly messages
       if (err.name === 'SequelizeUniqueConstraintError') {
         const field = err.errors?.[0]?.path;
         if (field === 'username') throw new Error('Username already taken');
@@ -240,7 +233,6 @@ class PatientService {
       throw err;
     }
 
-    // Anchor on-chain (best-effort — never throws; logs on failure)
     await blockchainService.anchorPatientCreate(patient, userId);
 
     audit.write({
@@ -277,7 +269,6 @@ class PatientService {
     const changedFields = Object.keys(updates);
     await patient.update(updates);
 
-    // Anchor on-chain (best-effort)
     await blockchainService.anchorPatientUpdate(patient, userId, changedFields);
 
     audit.write({
@@ -300,11 +291,8 @@ class PatientService {
     const oldData = patient.toJSON();
 
     if (hardDelete) {
-      // Capture the instance reference before destroy so we can still anchor
       await patient.destroy({ force: true });
 
-      // Anchor on-chain (best-effort). Uses `patient.id` from the in-memory
-      // instance, which is still valid after destroy.
       await blockchainService.anchorPatientDelete(patient, userId, true);
 
       audit.write({
@@ -316,7 +304,6 @@ class PatientService {
 
     await patient.update({ status: 'inactive' });
 
-    // Anchor on-chain (best-effort)
     await blockchainService.anchorPatientDelete(patient, userId, false);
 
     audit.write({
@@ -334,7 +321,6 @@ class PatientService {
     const newCode = await patient.regenerateFacilityCode();
     await patient.save();
 
-    // Anchor on-chain (best-effort) — dedicated event type for code regen
     await blockchainService.anchorSafe(
       'patient.code_regenerate',
       patient.id,
@@ -380,8 +366,6 @@ class PatientService {
   async bulkGenerateCodes(patients, actorId = null, req = null) {
     const results = await patientCodeService.bulkGenerateCodes(patients);
 
-    // Anchor a single summary event (not one per patient) — keeps the stream
-    // readable and avoids spamming N publishes for a bulk op.
     await blockchainService.anchorSafe(
       'patient.bulk_generate_codes',
       `batch-${Date.now()}`,
@@ -403,8 +387,6 @@ class PatientService {
     });
     return results;
   }
-
-  // TODO: add an importPatients() method for bulk CSV import, with validation and audit logging
 }
 
 module.exports = new PatientService();

@@ -1,25 +1,18 @@
 // backend/utils/auditSanitizer.js
 
 const ALWAYS_REDACT = new Set([
-  // Auth
   'password', 'password_hash', 'current_password', 'new_password',
   'confirm_password', 'token', 'refresh_token', 'access_token',
   'jwt', 'otp', 'totp_secret',
 
-  // Crypto internals
   'encryption_key', 'hmac_key',
 
-  // Patient PII
-  'first_name', 'middle_name', 'last_name', 'birth_date',
-  'contact_number', 'address',
-  'emergency_contact', 'emergency_phone',
-  'guardian_name', 'guardian_contact',
+  'first_name', 'middle_name', 'last_name', 'birth_date', 'suffix',
+  'contact_number', 'current_address', 'permanent_address',
 
-  // Patient PHI
   'status', 'hiv_status', 'test_result', 'diagnosis',
   'treatment_notes', 'medical_notes',
 
-  // Hash columns
   'first_name_hash', 'middle_name_hash', 'last_name_hash',
   'birth_date_hash', 'gender_hash', 'contact_number_hash',
   'status_hash', 'emergency_phone_hash'

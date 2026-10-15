@@ -1,24 +1,8 @@
 // backend/utils/audit.js
 const db = require('../models');
 const { sanitize } = require('./auditSanitizer');
-const logger = require('./logger');   // you already have backend/utils/logger.js
+const logger = require('./logger');
 
-/**
- * Write an audit log entry. Fire-and-forget — never throws, never blocks.
- *
- * Usage from a service:
- *   await audit.write({
- *     userId: actorId,
- *     action: 'UPDATE',
- *     entityType: 'Patient',
- *     entityId: patient.id,
- *     oldData,
- *     newData: patient.toJSON()
- *   });
- *
- * Or non-awaited (truly fire-and-forget):
- *   audit.write({ ... });
- */
 async function write({
   userId = null,
   action,
@@ -26,7 +10,7 @@ async function write({
   entityId = null,
   oldData = null,
   newData = null,
-  metadata = null,       // any extra context (search query, filters, etc.)
+  metadata = null,       
   ipAddress = null,
   userAgent = null,
   statusCode = 200,
@@ -54,24 +38,11 @@ async function write({
 
     return row;
   } catch (err) {
-    // Audit must NEVER break the caller
     logger.error('[audit] failed to write audit log:', err.message);
     return null;
   }
 }
 
-/**
- * Convenience: wrap an async operation with before/after audit.
- *
- * Usage:
- *   const result = await audit.track({
- *     userId, action: 'UPDATE', entityType: 'Patient',
- *     entityId: id,
- *     before: () => patient.toJSON(),
- *     run: () => patient.update(updates),
- *     after: (updated) => updated.toJSON()
- *   });
- */
 async function track({
   userId, action, entityType, entityId,
   before, run, after,
@@ -82,7 +53,6 @@ async function track({
   const result = await run();
   const newData = typeof after === 'function' ? after(result) : (after ?? result);
 
-  // Fire-and-forget — don't await in the hot path
   write({
     userId, action, entityType, entityId,
     oldData, newData,

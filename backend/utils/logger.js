@@ -17,22 +17,21 @@ const LEVELS = {
 };
 
 const COLORS = {
-  error: '\x1b[31m',   // red
-  warn:  '\x1b[33m',   // yellow
-  info:  '\x1b[36m',   // cyan
-  http:  '\x1b[35m',   // magenta
-  debug: '\x1b[90m',   // gray
+  error: '\x1b[31m', 
+  warn:  '\x1b[33m',   
+  info:  '\x1b[36m',  
+  http:  '\x1b[35m',   
+  debug: '\x1b[90m',
   reset: '\x1b[0m'
 };
 
-// ---------- Redaction (matches auditSanitizer) ----------
+// ---------- Redaction ----------
 const REDACT_KEYS = new Set([
   'password', 'password_hash', 'current_password', 'new_password',
   'confirm_password', 'token', 'refresh_token', 'access_token',
   'jwt', 'otp', 'totp_secret', 'encryption_key', 'hmac_key',
   'first_name', 'middle_name', 'last_name', 'birth_date',
-  'contact_number', 'address', 'emergency_contact', 'emergency_phone',
-  'guardian_name', 'guardian_contact',
+  'contact_number', 'current_address', 'permanent_address',
   'status', 'hiv_status', 'test_result', 'diagnosis',
   'treatment_notes', 'medical_notes',
   'first_name_hash', 'middle_name_hash', 'last_name_hash',
@@ -64,7 +63,7 @@ function redact(value, depth = 0) {
   return value;
 }
 
-// ---------- File streams (prod only) ----------
+// ---------- File streams ----------
 let fileStream = null;
 let errorStream = null;
 
@@ -117,21 +116,16 @@ function write(level, message, meta = {}) {
 
     const line = format(level, message, meta);
 
-    // Console (dev) or files (prod)
     if (IS_PROD) {
       if (fileStream) fileStream.write(line + '\n');
       if (level === 'error' && errorStream) errorStream.write(line + '\n');
-      // Also echo errors to stderr so process managers catch them
       if (level === 'error') process.stderr.write(line + '\n');
     } else {
       if (level === 'error' || level === 'warn') console.error(line);
       else console.log(line);
     }
   } catch (err) {
-    // Last-resort fallback — logger must never crash the app
-    try {
       console.error('[logger] write failed:', err.message);
-    } catch { /* ignore */ }
   }
 }
 
@@ -143,7 +137,6 @@ const logger = {
   http:  (message, meta) => write('http',  message, meta),
   debug: (message, meta) => write('debug', message, meta),
 
-  // Child logger — attaches fixed metadata to every call
   child(bindings = {}) {
     return {
       error: (m, meta) => write('error', m, { ...bindings, ...meta }),

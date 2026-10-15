@@ -1,6 +1,4 @@
 // backend/config/config.js
-// Sequelize CLI reads this. It wraps the app's existing config/database.js
-// so we only maintain DB credentials in one place.
 const db = require('./database');
 
 const base = {

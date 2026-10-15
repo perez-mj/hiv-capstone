@@ -1,5 +1,5 @@
 // backend/models/AppointmentSetting.js
-const { DataTypes, Op } = require('sequelize');  // Add Op here
+const { DataTypes, Op } = require('sequelize');
 
 module.exports = (sequelize) => {
   const AppointmentSetting = sequelize.define('AppointmentSetting', {
@@ -13,7 +13,6 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: null
     },
-    // Working hours
     start_time: {
       type: DataTypes.TIME,
       allowNull: false,
@@ -42,7 +41,6 @@ module.exports = (sequelize) => {
         max: 20
       }
     },
-    // Lunch break
     lunch_start: {
       type: DataTypes.TIME,
       allowNull: false,
@@ -53,7 +51,6 @@ module.exports = (sequelize) => {
       allowNull: false,
       defaultValue: '13:00:00'
     },
-    // Daily capacity
     daily_capacity: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -63,7 +60,6 @@ module.exports = (sequelize) => {
         max: 100
       }
     },
-    // Working days (store as JSON array)
     working_days: {
       type: DataTypes.JSON,
       allowNull: false,
@@ -80,13 +76,11 @@ module.exports = (sequelize) => {
         }
       }
     },
-    // Holidays (store as JSON array of dates)
     holidays: {
       type: DataTypes.JSON,
       allowNull: false,
       defaultValue: []
     },
-    // Booking rules
     advance_booking_days: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -114,7 +108,6 @@ module.exports = (sequelize) => {
         max: 10
       }
     },
-    // Features
     allow_online_booking: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
@@ -131,10 +124,9 @@ module.exports = (sequelize) => {
       defaultValue: 24,
       validate: {
         min: 0,
-        max: 168 // 7 days
+        max: 168
       }
     },
-    // Status
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
@@ -145,8 +137,6 @@ module.exports = (sequelize) => {
     timestamps: true,
     underscored: true,
     indexes: [
-      // Only enforce unique constraint for non-null office values
-      // For MySQL/PostgreSQL, this is the correct syntax
       {
         name: 'unique_office_settings',
         fields: ['office'],
@@ -161,35 +151,29 @@ module.exports = (sequelize) => {
     ]
   });
 
-  // Instance method to get working days as array
   AppointmentSetting.prototype.getWorkingDays = function() {
     return this.working_days || ['mon', 'tue', 'wed', 'thu', 'fri'];
   };
 
-  // Instance method to get holidays as array
   AppointmentSetting.prototype.getHolidays = function() {
     return this.holidays || [];
   };
 
-  // Static method to get settings for an office (or global)
   AppointmentSetting.getSettingsForOffice = async function(office = null) {
     let settings;
     
     if (office) {
-      // Try to get office-specific settings first
       settings = await this.findOne({
         where: { office, is_active: true }
       });
     }
     
-    // Fall back to global settings
     if (!settings) {
       settings = await this.findOne({
         where: { office: null, is_active: true }
       });
     }
     
-    // If no settings exist, create default
     if (!settings) {
       settings = await this.create({
         office: null,
@@ -200,7 +184,6 @@ module.exports = (sequelize) => {
     return settings;
   };
 
-  // Static method to get settings as a plain object
   AppointmentSetting.getSettingsObject = async function(office = null) {
     const settings = await this.getSettingsForOffice(office);
     return settings.toJSON();

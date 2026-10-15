@@ -107,23 +107,34 @@
                 </v-col>
 
                 <v-col cols="12" md="6">
-                  <v-select
-                    v-model="patient.status"
-                    :items="statusOptions"
-                    label="Status"
-                    readonly
-                    outlined
-                    hint="New patients start in Testing status"
+                  <v-text-field
+                    v-model="patient.email"
+                    label="Email"
+                    type="email"
+                    :rules="[
+                      v => !v || /.+@.+\..+/.test(v) || 'Invalid email'
+                    ]"
+                    hint="Optional — used for notifications if no portal account"
                     persistent-hint
+                    outlined
+                  />
+                </v-col>
+
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="patient.facebook_messenger"
+                    label="Facebook / Messenger"
+                    prepend-inner-icon="mdi-facebook"
+                    outlined
                   />
                 </v-col>
               </v-row>
 
               <v-divider class="my-4" />
 
-              <!-- ==================== STRUCTURED ADDRESS ==================== -->
+              <!-- ==================== CURRENT ADDRESS ==================== -->
               <div class="text-subtitle-1 font-weight-bold mb-3">
-                Address
+                Current Address
               </div>
               <v-row>
                 <v-col cols="12" md="6">
@@ -197,6 +208,106 @@
                 </v-col>
               </v-row>
 
+              <!-- ==================== PERMANENT ADDRESS ==================== -->
+              <v-divider class="my-4" />
+
+              <div class="d-flex align-center mb-3">
+                <div class="text-subtitle-1 font-weight-bold">
+                  Permanent Address
+                </div>
+                <v-spacer></v-spacer>
+                <v-checkbox
+                  v-model="patient.same_as_current_address"
+                  label="Same as current address"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  class="mt-0"
+                />
+              </div>
+
+              <template v-if="!patient.same_as_current_address">
+                <v-row>
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="permanentRegionId"
+                      :items="regions"
+                      item-title="name"
+                      item-value="id"
+                      label="Region"
+                      :loading="loadingRegions"
+                      outlined
+                      clearable
+                      @update:model-value="onPermanentRegionChange"
+                    />
+                  </v-col>
+
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="patient.permanent_province_id"
+                      :items="permanentProvinces"
+                      item-title="name"
+                      item-value="id"
+                      label="Province"
+                      :loading="loadingPermanentProvinces"
+                      :disabled="!permanentRegionId || permanentProvinces.length === 0"
+                      clearable
+                      outlined
+                      :hint="permanentProvinces.length === 0 && permanentRegionId
+                        ? 'No provinces for this region (e.g. NCR)'
+                        : ''"
+                      persistent-hint
+                      @update:model-value="onPermanentProvinceChange"
+                    />
+                  </v-col>
+
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="patient.permanent_city_municipality_id"
+                      :items="permanentCities"
+                      item-title="name"
+                      item-value="id"
+                      label="City / Municipality"
+                      :loading="loadingPermanentCities"
+                      :disabled="!permanentRegionId"
+                      outlined
+                      @update:model-value="onPermanentCityChange"
+                    />
+                  </v-col>
+
+                  <v-col cols="12" md="6">
+                    <v-select
+                      v-model="patient.permanent_barangay_id"
+                      :items="permanentBarangays"
+                      item-title="name"
+                      item-value="id"
+                      label="Barangay"
+                      :loading="loadingPermanentBarangays"
+                      :disabled="!patient.permanent_city_municipality_id"
+                      outlined
+                    />
+                  </v-col>
+
+                  <v-col cols="12">
+                    <v-text-field
+                      v-model="patient.permanent_sitio_street"
+                      label="House No. / Street / Purok / Sitio"
+                      outlined
+                    />
+                  </v-col>
+                </v-row>
+              </template>
+
+              <v-alert
+                v-else
+                type="info"
+                variant="tonal"
+                density="compact"
+                class="mt-2"
+              >
+                Permanent address will mirror the current address.
+              </v-alert>
+
               <v-divider class="my-4" />
 
               <!-- ==================== ENROLLMENT ==================== -->
@@ -217,11 +328,16 @@
                 </v-col>
 
                 <v-col cols="12" md="6">
-                  <v-text-field
+                  <v-select
                     v-model="patient.purpose"
-                    label="Purpose"
+                    :items="purposeOptions"
+                    item-title="title"
+                    item-value="value"
+                    label="Purpose *"
+                    required
+                    :rules="[v => !!v || 'Purpose is required']"
                     outlined
-                    hint="e.g. testing, treatment"
+                    hint="Choose the enrollment purpose"
                     persistent-hint
                   />
                 </v-col>
@@ -349,10 +465,11 @@ export default {
     const today = new Date().toISOString().split('T')[0]
 
     // Patient fields — match the Patient model exactly.
-    // NOTE: no `address`, `guardian_*`, `emergency_*` — those don't exist
-    // in the model. Address is structured: province_id, city_municipality_id,
-    // barangay_id, sitio_street.
+    // NOTE: `status` is intentionally NOT here. It is derived server-side
+    // (new records default to 'testing' via the model hook). The UI no
+    // longer lets staff set it directly.
     const patient = reactive({
+      // Personal
       first_name: '',
       middle_name: '',
       last_name: '',
@@ -360,12 +477,24 @@ export default {
       birth_date: '',
       gender: '',
       contact_number: '',
+      email: '',
+      facebook_messenger: '',
+
+      // Current address
       sitio_street: '',
       barangay_id: null,
       city_municipality_id: null,
       province_id: null,
-      purpose: 'testing',
-      status: 'testing'
+
+      // Permanent address
+      same_as_current_address: true,
+      permanent_sitio_street: '',
+      permanent_barangay_id: null,
+      permanent_city_municipality_id: null,
+      permanent_province_id: null,
+
+      // Enrollment — purpose is constrained to testing | treatment
+      purpose: 'testing'
     })
 
     // Portal (User) fields — only sent when createPortalAccount is true
@@ -376,7 +505,7 @@ export default {
       confirmPassword: ''
     })
 
-    // Location cascading state
+    // ---------------- CURRENT ADDRESS CASCADING ----------------
     const regions = ref([])
     const provinces = ref([])
     const cities = ref([])
@@ -387,6 +516,15 @@ export default {
     const loadingCities = ref(false)
     const loadingBarangays = ref(false)
 
+    // ---------------- PERMANENT ADDRESS CASCADING ----------------
+    const permanentRegionId = ref(null)
+    const permanentProvinces = ref([])
+    const permanentCities = ref([])
+    const permanentBarangays = ref([])
+    const loadingPermanentProvinces = ref(false)
+    const loadingPermanentCities = ref(false)
+    const loadingPermanentBarangays = ref(false)
+
     const snackbar = ref({ show: false, message: '', color: 'success' })
 
     const genderOptions = [
@@ -395,7 +533,11 @@ export default {
       { title: 'Other', value: 'other' }
     ]
 
-    const statusOptions = ['testing', 'treatment']
+    // Purpose is restricted to exactly two values.
+    const purposeOptions = [
+      { title: 'Testing', value: 'testing' },
+      { title: 'Treatment', value: 'treatment' }
+    ]
 
     // Clear portal credentials when the checkbox is unchecked
     watch(createPortalAccount, (enabled) => {
@@ -419,8 +561,8 @@ export default {
       }
     }
 
+    // ---------- Current address cascading ----------
     const onRegionChange = async (regionId) => {
-      // Reset downstream selections
       patient.province_id = null
       patient.city_municipality_id = null
       patient.barangay_id = null
@@ -430,7 +572,6 @@ export default {
 
       if (!regionId) return
 
-      // Load provinces for this region
       loadingProvinces.value = true
       try {
         provinces.value = await locationService.getProvinces(regionId)
@@ -440,9 +581,6 @@ export default {
         loadingProvinces.value = false
       }
 
-      // Also load cities directly under the region — needed for NCR
-      // (region with no provinces). We always load them so the user
-      // can pick a city even when there is no province.
       loadingCities.value = true
       try {
         cities.value = await locationService.getCitiesByRegion(regionId)
@@ -460,7 +598,6 @@ export default {
       barangays.value = []
 
       if (!provinceId) {
-        // Fall back to cities directly under the region (NCR case)
         if (selectedRegionId.value) {
           loadingCities.value = true
           try {
@@ -502,6 +639,84 @@ export default {
       }
     }
 
+    // ---------- Permanent address cascading ----------
+    const onPermanentRegionChange = async (regionId) => {
+      patient.permanent_province_id = null
+      patient.permanent_city_municipality_id = null
+      patient.permanent_barangay_id = null
+      permanentProvinces.value = []
+      permanentCities.value = []
+      permanentBarangays.value = []
+
+      if (!regionId) return
+
+      loadingPermanentProvinces.value = true
+      try {
+        permanentProvinces.value = await locationService.getProvinces(regionId)
+      } catch (e) {
+        permanentProvinces.value = []
+      } finally {
+        loadingPermanentProvinces.value = false
+      }
+
+      loadingPermanentCities.value = true
+      try {
+        permanentCities.value = await locationService.getCitiesByRegion(regionId)
+      } catch (e) {
+        permanentCities.value = []
+      } finally {
+        loadingPermanentCities.value = false
+      }
+    }
+
+    const onPermanentProvinceChange = async (provinceId) => {
+      patient.permanent_city_municipality_id = null
+      patient.permanent_barangay_id = null
+      permanentCities.value = []
+      permanentBarangays.value = []
+
+      if (!provinceId) {
+        if (permanentRegionId.value) {
+          loadingPermanentCities.value = true
+          try {
+            permanentCities.value = await locationService.getCitiesByRegion(
+              permanentRegionId.value
+            )
+          } catch (e) {
+            permanentCities.value = []
+          } finally {
+            loadingPermanentCities.value = false
+          }
+        }
+        return
+      }
+
+      loadingPermanentCities.value = true
+      try {
+        permanentCities.value = await locationService.getCitiesByProvince(provinceId)
+      } catch (e) {
+        permanentCities.value = []
+      } finally {
+        loadingPermanentCities.value = false
+      }
+    }
+
+    const onPermanentCityChange = async (cityId) => {
+      patient.permanent_barangay_id = null
+      permanentBarangays.value = []
+
+      if (!cityId) return
+
+      loadingPermanentBarangays.value = true
+      try {
+        permanentBarangays.value = await locationService.getBarangays(cityId)
+      } catch (e) {
+        permanentBarangays.value = []
+      } finally {
+        loadingPermanentBarangays.value = false
+      }
+    }
+
     // ---------------- SUBMIT ----------------
     const submit = async () => {
       if (!form.value.validate()) return
@@ -509,6 +724,15 @@ export default {
       submitting.value = true
       try {
         const payload = { ...patient }
+
+        // Strip permanent-address fields when mirroring current address —
+        // the model hook will copy them from current anyway.
+        if (payload.same_as_current_address) {
+          delete payload.permanent_sitio_street
+          delete payload.permanent_barangay_id
+          delete payload.permanent_city_municipality_id
+          delete payload.permanent_province_id
+        }
 
         if (createPortalAccount.value) {
           payload.create_portal_account = true
@@ -546,13 +770,13 @@ export default {
       portalCredentials,
       createPortalAccount,
       genderOptions,
-      statusOptions,
+      purposeOptions,
       today,
       submit,
       cancel,
       snackbar,
 
-      // location
+      // current address
       regions,
       provinces,
       cities,
@@ -564,7 +788,19 @@ export default {
       loadingBarangays,
       onRegionChange,
       onProvinceChange,
-      onCityChange
+      onCityChange,
+
+      // permanent address
+      permanentRegionId,
+      permanentProvinces,
+      permanentCities,
+      permanentBarangays,
+      loadingPermanentProvinces,
+      loadingPermanentCities,
+      loadingPermanentBarangays,
+      onPermanentRegionChange,
+      onPermanentProvinceChange,
+      onPermanentCityChange
     }
   }
 }

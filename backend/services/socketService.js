@@ -12,9 +12,7 @@ class SocketService {
     return this;
   }
 
-  /**
-   * Get the Socket.IO instance
-   */
+
   getIO() {
     if (!this.io) {
       console.warn('Socket.IO not initialized');
@@ -23,9 +21,6 @@ class SocketService {
     return this.io;
   }
 
-  /**
-   * Safely emit an event to a room
-   */
   emitToRoom(room, event, data) {
     try {
       if (!this.io) {
@@ -42,9 +37,7 @@ class SocketService {
     }
   }
 
-  /**
-   * Emit queue update
-   */
+
   emitQueueUpdated(office, payload = {}) {
     if (!this.io) {
       console.warn('Socket.IO not initialized, cannot emit queue update');
@@ -58,9 +51,6 @@ class SocketService {
     console.log(`Queue update emitted to queue-${office}`);
   }
 
-  /**
-   * Emit next called
-   */
   emitNextCalled(office, payload = {}) {
     if (!this.io) {
       console.warn('Socket.IO not initialized, cannot emit next called');
@@ -74,9 +64,7 @@ class SocketService {
     console.log(`Next called emitted to queue-${office}`);
   }
 
-  /**
-   * Emit queue reset
-   */
+
   emitQueueReset(office, payload = {}) {
     if (!this.io) {
       console.warn('Socket.IO not initialized, cannot emit queue reset');
@@ -90,9 +78,7 @@ class SocketService {
     console.log(`Queue reset emitted to queue-${office}`);
   }
 
-  /**
-   * ✅ NEW: Emit encounter completed
-   */
+
   emitEncounterCompleted(office, payload = {}) {
     if (!this.io) {
       console.warn('Socket.IO not initialized, cannot emit encounter completed');
@@ -106,9 +92,7 @@ class SocketService {
     console.log(`Encounter completed emitted to queue-${office}`, payload);
   }
 
-  /**
-   * ✅ NEW: Generic emit method for custom events
-   */
+
   emit(room, event, data) {
     return this.emitToRoom(room, event, data);
   }

@@ -131,6 +131,18 @@ const routes = [
         component: () => import('@/views/staff/appointments/EditView.vue'),
         meta: { roles: ['staff', 'admin'] }
       },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/staff/ProfileView.vue'),
+        meta: { roles: ['staff', 'admin', 'patient'] }
+      },
+      {
+        path: 'change-password',
+        name: 'ChangePassword',
+        component: () => import('@/views/staff/ChangePasswordView.vue'),
+        meta: { roles: ['staff', 'admin', 'patient'] }
+      },
 
       // Admin Only Pages
       {

@@ -98,7 +98,6 @@ exports.createSetting = async (req, res) => {
       is_active
     } = req.body;
 
-    // Check if settings already exist for this office
     if (office) {
       const existing = await AppointmentSetting.findOne({ where: { office } });
       if (existing) {

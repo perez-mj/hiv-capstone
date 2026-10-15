@@ -529,8 +529,9 @@ function showSnackbar(message, color = 'success') {
 async function loadTransactionTypes() {
   loading.value = true;
   try {
-    const response = await transactionTypeService.getAll({ include_inactive: true });
-    transactionTypes.value = response.data || [];
+    // The service normalizes the backend envelope ({ success, items, ... }) into an array.
+    const list = await transactionTypeService.getAll({ include_inactive: true });
+    transactionTypes.value = Array.isArray(list) ? list : [];
   } catch (error) {
     console.error('Error loading transaction types:', error);
     showSnackbar('Failed to load transaction types', 'error');

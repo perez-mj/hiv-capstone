@@ -1,879 +1,403 @@
 <!-- frontend/src/views/staff/treatment/EncounterView.vue -->
 <template>
   <v-container fluid class="pa-4">
-    <v-row>
-      <v-col cols="12" lg="8" offset-lg="2">
-        <v-card>
-          <v-card-title class="text-h5">
-            <v-icon start>mdi-clipboard-pulse</v-icon>
-            {{ isEditMode ? 'Edit' : 'New' }} Treatment Encounter
-            <v-spacer></v-spacer>
-            <v-chip color="success" variant="flat" v-if="patient">
-              {{ patient.first_name }} {{ patient.last_name }}
-            </v-chip>
-          </v-card-title>
-          <v-divider></v-divider>
-          
-          <v-card-text>
-            <!-- Patient Selection -->
-            <v-row v-if="!patient">
-              <v-col cols="12">
-                <v-card variant="outlined" class="pa-4">
-                  <div class="text-subtitle-1 font-weight-medium mb-2">Select Patient</div>
-                  
-                  <v-alert type="info" variant="tonal" class="mb-3">
-                    <strong>Note:</strong> Only patients with status "treatment" can be seen here.
-                  </v-alert>
-                  
-                  <v-row>
-                    <v-col cols="12" sm="8">
-                      <v-text-field
-                        v-model="searchQuery"
-                        label="Search Patient"
-                        placeholder="Type name or contact number..."
-                        variant="outlined"
-                        density="comfortable"
-                        @update:model-value="searchPatients"
-                        clearable
-                      >
-                        <template v-slot:append>
-                          <v-progress-circular
-                            v-if="searching"
-                            indeterminate
-                            size="24"
-                          ></v-progress-circular>
-                        </template>
-                      </v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                      <v-btn 
-                        block 
-                        color="primary" 
-                        variant="tonal"
-                        @click="navigateToPatientCreate"
-                      >
-                        <v-icon start>mdi-account-plus</v-icon>
-                        New Patient
-                      </v-btn>
-                    </v-col>
-                  </v-row>
-                  
-                  <v-list v-if="searchResults.length > 0" density="compact">
-                    <v-list-item 
-                      v-for="p in searchResults" 
-                      :key="p.id"
-                      @click="selectPatient(p)"
-                    >
-                      <v-list-item-title>
-                        {{ p.first_name }} {{ p.last_name }}
-                      </v-list-item-title>
-                      <v-list-item-subtitle>
-                        {{ p.contact_number }} • {{ p.patient_facility_code }}
-                        <v-chip 
-                          :color="p.status === 'treatment' ? 'success' : 'warning'" 
-                          size="x-small"
-                          class="ml-2"
-                        >
-                          {{ p.status }}
-                        </v-chip>
-                      </v-list-item-subtitle>
-                    </v-list-item>
-                  </v-list>
-                </v-card>
-              </v-col>
-            </v-row>
-
-            <!-- Encounter Form -->
-            <v-form v-else ref="form" v-model="valid">
-              <!-- Patient Info -->
-              <v-card variant="tonal" class="mb-4 pa-3">
-                <v-row>
-                  <v-col cols="12" sm="4">
-                    <div class="text-caption text-grey">Name</div>
-                    <div class="font-weight-medium">{{ patient.first_name }} {{ patient.last_name }}</div>
-                  </v-col>
-                  <v-col cols="12" sm="3">
-                    <div class="text-caption text-grey">Age</div>
-                    <div class="font-weight-medium">{{ patientAge }}</div>
-                  </v-col>
-                  <v-col cols="12" sm="3">
-                    <div class="text-caption text-grey">Gender</div>
-                    <div class="font-weight-medium">{{ patient.gender || 'N/A' }}</div>
-                  </v-col>
-                  <v-col cols="12" sm="2">
-                    <div class="text-caption text-grey">Status</div>
-                    <v-chip color="success" size="small">Treatment</v-chip>
-                  </v-col>
-                </v-row>
-              </v-card>
-
-              <!-- Consultation Notes (SOAP) -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
-                  <v-icon start>mdi-note-text</v-icon>
-                  Consultation Notes (SOAP Format)
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-textarea
-                        v-model="encounter.consultation_notes.subjective"
-                        label="Subjective (Patient's symptoms, complaints)"
-                        placeholder="What the patient reports..."
-                        variant="outlined"
-                        rows="3"
-                      ></v-textarea>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-textarea
-                        v-model="encounter.consultation_notes.objective"
-                        label="Objective (Clinical findings, vitals)"
-                        placeholder="Physical exam findings, test results..."
-                        variant="outlined"
-                        rows="3"
-                      ></v-textarea>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-textarea
-                        v-model="encounter.consultation_notes.assessment"
-                        label="Assessment (Diagnosis, clinical impression)"
-                        placeholder="Your assessment and diagnosis..."
-                        variant="outlined"
-                        rows="3"
-                      ></v-textarea>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-textarea
-                        v-model="encounter.consultation_notes.plan"
-                        label="Plan (Treatment, follow-up, referrals)"
-                        placeholder="Treatment plan, medications, follow-up..."
-                        variant="outlined"
-                        rows="3"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- ART Prescription -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
-                  <v-icon start>mdi-pill</v-icon>
-                  ART Prescription
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="encounter.art_prescription.medication_name"
-                        label="Medication Name"
-                        placeholder="e.g., Tenofovir/Lamivudine/Dolutegravir"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="encounter.art_prescription.dosage"
-                        label="Dosage"
-                        placeholder="e.g., 300mg/300mg/50mg"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                      <v-text-field
-                        v-model="encounter.art_prescription.frequency"
-                        label="Frequency"
-                        placeholder="e.g., Once daily"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                      <v-text-field
-                        v-model="encounter.art_prescription.quantity"
-                        label="Quantity"
-                        placeholder="e.g., 30 tablets"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="4">
-                      <v-text-field
-                        v-model="encounter.art_prescription.refill_date"
-                        label="Refill Date"
-                        type="date"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12">
-                      <v-text-field
-                        v-model="encounter.art_prescription.prescribed_by"
-                        label="Prescribed By"
-                        placeholder="Doctor's name"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Lab Results -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
-                  <v-icon start>mdi-flask</v-icon>
-                  Lab Results
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="labResults.cd4.value"
-                        label="CD4 Count"
-                        placeholder="e.g., 450"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                      <v-text-field
-                        v-model="labResults.cd4.date"
-                        label="CD4 Date"
-                        type="date"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                      <v-textarea
-                        v-model="labResults.cd4.notes"
-                        label="CD4 Notes"
-                        variant="outlined"
-                        rows="2"
-                      ></v-textarea>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="labResults.viral_load.value"
-                        label="Viral Load"
-                        placeholder="e.g., < 40"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                      <v-text-field
-                        v-model="labResults.viral_load.date"
-                        label="Viral Load Date"
-                        type="date"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                      <v-textarea
-                        v-model="labResults.viral_load.notes"
-                        label="Viral Load Notes"
-                        variant="outlined"
-                        rows="2"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Adherence Monitoring -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
-                  <v-icon start>mdi-calendar-check</v-icon>
-                  Adherence Monitoring
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-select
-                        v-model="encounter.adherence.missed_doses_last_30_days"
-                        :items="adherenceOptions"
-                        label="Missed doses in last 30 days?"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-select>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="encounter.adherence.missed_dose_count"
-                        label="Number of missed doses"
-                        placeholder="e.g., 2"
-                        type="number"
-                        variant="outlined"
-                        density="comfortable"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12">
-                      <v-textarea
-                        v-model="encounter.adherence.notes"
-                        label="Adherence Notes"
-                        placeholder="Additional notes about adherence..."
-                        variant="outlined"
-                        rows="2"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                </v-card-text>
-              </v-card>
-
-              <!-- Next Appointment (Optional) -->
-              <v-card variant="outlined" class="mb-4">
-                <v-card-title class="text-subtitle-1 font-weight-medium bg-surface-light">
-                  <v-icon start>mdi-calendar-plus</v-icon>
-                  Next Appointment 
-                  <v-chip size="small" color="grey" variant="tonal" class="ml-2">Optional</v-chip>
-                </v-card-title>
-                <v-divider></v-divider>
-                <v-card-text class="pt-4">
-                  <v-row>
-                    <v-col cols="12" sm="6">
-                      <v-text-field
-                        v-model="nextAppointment.date"
-                        label="Next Appointment Date"
-                        type="date"
-                        variant="outlined"
-                        density="comfortable"
-                        :min="minDate"
-                        @update:model-value="onDateChange"
-                      ></v-text-field>
-                    </v-col>
-                    <v-col cols="12" sm="6">
-                      <v-select
-                        v-model="nextAppointment.time_slot"
-                        :items="availableTimeSlots"
-                        item-title="label"
-                        item-value="value"
-                        label="Time Slot"
-                        placeholder="Select a time slot"
-                        variant="outlined"
-                        density="comfortable"
-                        :disabled="!nextAppointment.date || loadingSlots || availableTimeSlots.length === 0"
-                        :loading="loadingSlots"
-                        :rules="[(v) => !nextAppointment.date || !!v || 'Time slot is required']"
-                      >
-                        <template v-slot:prepend-item>
-                          <v-list-item disabled>
-                            <v-list-item-subtitle class="text-caption">
-                              {{ availableSlotsMessage }}
-                            </v-list-item-subtitle>
-                          </v-list-item>
-                        </template>
-                        <template v-slot:item="{ props, item }">
-                          <v-list-item v-bind="props">
-                            <template v-slot:prepend>
-                              <v-icon 
-                                :color="item.raw.available ? 'success' : 'grey'"
-                                size="small"
-                              >
-                                {{ item.raw.available ? 'mdi-check-circle' : 'mdi-close-circle' }}
-                              </v-icon>
-                            </template>
-                            <v-list-item-subtitle v-if="!item.raw.available">
-                              {{ item.raw.isBooked ? 'Booked' : 'Not available' }}
-                            </v-list-item-subtitle>
-                          </v-list-item>
-                        </template>
-                      </v-select>
-                    </v-col>
-                    <v-col cols="12">
-                      <v-select
-                        v-model="nextAppointment.transaction_type_id"
-                        :items="transactionTypes"
-                        item-title="name"
-                        item-value="id"
-                        label="Transaction Type"
-                        placeholder="Select transaction type for appointment"
-                        variant="outlined"
-                        density="comfortable"
-                        :disabled="!nextAppointment.date"
-                        :rules="[(v) => !nextAppointment.date || !!v || 'Transaction type is required when scheduling an appointment']"
-                        @update:model-value="validateAppointmentFields"
-                      >
-                        <template v-slot:prepend-item>
-                          <v-list-item disabled>
-                            <v-list-item-subtitle class="text-caption">
-                              Required if appointment date is set
-                            </v-list-item-subtitle>
-                          </v-list-item>
-                        </template>
-                      </v-select>
-                    </v-col>
-                    <v-col cols="12">
-                      <v-textarea
-                        v-model="nextAppointment.notes"
-                        label="Appointment Notes (Optional)"
-                        placeholder="Additional notes for the appointment..."
-                        variant="outlined"
-                        rows="2"
-                      ></v-textarea>
-                    </v-col>
-                  </v-row>
-                  
-                  <!-- Validation messages -->
-                  <v-alert 
-                    v-if="nextAppointment.date && !nextAppointment.transaction_type_id"
-                    type="warning"
-                    variant="tonal"
-                    dense
-                    class="mt-2"
-                  >
-                    Please select a transaction type for the appointment.
-                  </v-alert>
-                  <v-alert 
-                    v-if="nextAppointment.date && availableTimeSlots.filter(s => s.available).length === 0 && !loadingSlots"
-                    type="warning"
-                    variant="tonal"
-                    dense
-                    class="mt-2"
-                  >
-                    No available time slots for the selected date. Please choose another date.
-                  </v-alert>
-                </v-card-text>
-              </v-card>
-
-              <!-- Actions -->
-              <v-row>
-                <v-col cols="12" class="d-flex justify-space-between">
-                  <v-btn variant="outlined" @click="cancel">
-                    <v-icon start>mdi-close</v-icon>
-                    Cancel
-                  </v-btn>
-                  
-                  <div>
-                    <v-btn 
-                      color="success" 
-                      @click="submitEncounter"
-                      :loading="submitting"
-                    >
-                      <v-icon start>mdi-check</v-icon>
-                      {{ isEditMode ? 'Update' : 'Submit' }} Encounter
-                    </v-btn>
-                  </div>
-                </v-col>
-              </v-row>
-            </v-form>
-          </v-card-text>
-        </v-card>
+    <!-- Header -->
+    <v-row align="center" class="mb-4">
+      <v-col cols="12" md="8">
+        <div class="d-flex align-center">
+          <v-btn icon variant="text" @click="goBack" class="mr-2">
+            <v-icon>mdi-arrow-left</v-icon>
+          </v-btn>
+          <div>
+            <h1 class="text-h5 font-weight-bold mb-0">Treatment Encounter</h1>
+            <div class="text-caption text-medium-emphasis">
+              Record a new treatment transaction for the selected patient
+            </div>
+          </div>
+        </div>
+      </v-col>
+      <v-col cols="12" md="4" class="text-md-right">
+        <v-chip color="teal-darken-2" variant="flat" prepend-icon="mdi-medical-bag">
+          Treatment Office
+        </v-chip>
       </v-col>
     </v-row>
 
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000">
+    <!-- Patient Selector -->
+    <v-card v-if="!patientId" class="mb-4" elevation="2">
+      <v-card-title class="text-subtitle-1 font-weight-bold">Select Patient</v-card-title>
+      <v-card-text>
+        <v-autocomplete
+          v-model="selectedPatientId"
+          :items="patientOptions"
+          :loading="loadingPatients"
+          item-title="label"
+          item-value="id"
+          label="Search patient by name or facility code"
+          prepend-inner-icon="mdi-account-search"
+          variant="outlined"
+          hide-details
+          clearable
+          @update:search="searchPatients"
+          @update:model-value="onPatientSelected"
+        />
+      </v-card-text>
+    </v-card>
+
+    <!-- Patient summary -->
+    <v-card v-if="patient" class="mb-4" elevation="2">
+      <v-card-text>
+        <v-row dense>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Patient</div>
+            <div class="text-body-1 font-weight-medium">{{ patientFullName }}</div>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Facility Code</div>
+            <div class="text-body-1">{{ patient.patient_facility_code }}</div>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Contact</div>
+            <div class="text-body-1">{{ patient.contact_number || '—' }}</div>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
+
+    <!-- Encounter Form -->
+    <v-card v-if="patient" elevation="2">
+      <v-card-title class="text-subtitle-1 font-weight-bold">Encounter Details</v-card-title>
+      <v-divider />
+      <v-card-text>
+        <v-form ref="formRef" v-model="formValid" lazy-validation>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.transaction_type_id"
+                :items="transactionTypes"
+                item-title="name"
+                item-value="id"
+                label="Transaction Type *"
+                :rules="[v => !!v || 'Transaction type is required']"
+                variant="outlined"
+                :loading="loadingTypes"
+                prepend-inner-icon="mdi-tag"
+              />
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.occurred_at"
+                label="Occurred At"
+                type="datetime-local"
+                variant="outlined"
+                prepend-inner-icon="mdi-clock-outline"
+              />
+            </v-col>
+
+            <v-col cols="12">
+              <v-divider class="my-2" />
+              <div class="text-subtitle-2 font-weight-bold mb-2">Clinical Data</div>
+
+              <div v-if="currentTypeSchema.length === 0" class="text-caption text-medium-emphasis">
+                No additional fields required for this transaction type.
+              </div>
+
+              <v-row v-else>
+                <v-col
+                  v-for="field in currentTypeSchema"
+                  :key="field.key"
+                  cols="12"
+                  :md="field.cols || 6"
+                >
+                  <v-text-field
+                    v-if="field.type === 'text' || field.type === 'number'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    :type="field.type"
+                    :rules="field.required ? [v => v !== '' && v !== null && v !== undefined || `${field.label} is required`] : []"
+                    variant="outlined"
+                  />
+
+                  <v-textarea
+                    v-else-if="field.type === 'textarea'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
+                    variant="outlined"
+                    rows="3"
+                    auto-grow
+                  />
+
+                  <v-select
+                    v-else-if="field.type === 'select'"
+                    v-model="form.data[field.key]"
+                    :items="field.options || []"
+                    :label="field.label"
+                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
+                    variant="outlined"
+                  />
+
+                  <v-switch
+                    v-else-if="field.type === 'boolean'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    color="primary"
+                    inset
+                  />
+
+                  <v-text-field
+                    v-else-if="field.type === 'date'"
+                    v-model="form.data[field.key]"
+                    :label="field.label"
+                    type="date"
+                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
+                    variant="outlined"
+                  />
+                </v-col>
+              </v-row>
+            </v-col>
+
+            <v-col cols="12">
+              <v-textarea
+                v-model="form.notes"
+                label="Notes (optional)"
+                variant="outlined"
+                rows="3"
+                auto-grow
+                prepend-inner-icon="mdi-note-text-outline"
+              />
+            </v-col>
+          </v-row>
+        </v-form>
+      </v-card-text>
+
+      <v-divider />
+      <v-card-actions class="pa-4">
+        <v-spacer />
+        <v-btn variant="text" @click="resetForm">Reset</v-btn>
+        <v-btn
+          color="teal-darken-2"
+          variant="flat"
+          :loading="submitting"
+          :disabled="!formValid || !form.transaction_type_id"
+          prepend-icon="mdi-content-save"
+          @click="submit"
+        >
+          Save Encounter
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+
+    <!-- Empty state -->
+    <v-card v-if="!patient && !patientId" class="pa-8 text-center" elevation="2">
+      <v-icon size="64" color="grey-lighten-1">mdi-account-search-outline</v-icon>
+      <div class="text-h6 mt-3">No patient selected</div>
+      <div class="text-body-2 text-medium-emphasis">
+        Search and select a patient above to begin a treatment encounter.
+      </div>
+    </v-card>
+
+    <!-- Snackbar -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
       {{ snackbar.message }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbar.show = false">Close</v-btn>
+      </template>
     </v-snackbar>
   </v-container>
 </template>
 
-<script>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import treatmentService from '@/services/treatmentService'
-import patientService from '@/services/patientService'
-import transactionTypeService from '@/services/transactionTypeService'
-import appointmentService from '@/services/appointmentService'
+<script setup>
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import treatmentService from '@/services/treatmentService';
+import patientService from '@/services/patientService';
+import transactionTypeService from '@/services/transactionTypeService';
 
-export default {
-  name: 'TreatmentEncounterView',
-  setup() {
-    const router = useRouter()
-    const route = useRoute()
-    const form = ref(null)
-    const valid = ref(false)
-    const submitting = ref(false)
-    const searching = ref(false)
-    const searchQuery = ref('')
-    const searchResults = ref([])
-    const patient = ref(null)
-    const isEditMode = ref(false)
-    const encounterId = ref(null)
-    const transactionTypes = ref([])
-    const loadingTransactionTypes = ref(false)
-    const loadingSlots = ref(false)
-    const availableTimeSlots = ref([])
+const route = useRoute();
+const router = useRouter();
 
-    const snackbar = ref({
-      show: false,
-      message: '',
-      color: 'success'
-    })
+const patientId = ref(route.params.patientId ? Number(route.params.patientId) : null);
 
-    // Form data
-    const encounter = ref({
-      consultation_notes: {
-        subjective: '',
-        objective: '',
-        assessment: '',
-        plan: ''
-      },
-      art_prescription: {
-        medication_name: '',
-        dosage: '',
-        frequency: '',
-        quantity: '',
-        refill_date: '',
-        prescribed_by: ''
-      },
-      lab_results: [],
-      adherence: {
-        missed_doses_last_30_days: 'no',
-        missed_dose_count: 0,
-        notes: ''
-      }
-    })
+// ----- Patient -----
+const patient = ref(null);
+const selectedPatientId = ref(patientId.value);
+const patientOptions = ref([]);
+const loadingPatients = ref(false);
 
-    // Next appointment data (separate from encounter)
-    const nextAppointment = ref({
-      date: '',
-      time_slot: null,
-      transaction_type_id: null,
-      notes: ''
-    })
+// ----- Transaction types -----
+const transactionTypes = ref([]);
+const loadingTypes = ref(false);
 
-    // Lab results helper
-    const labResults = ref({
-      cd4: {
-        value: '',
-        date: '',
-        notes: ''
-      },
-      viral_load: {
-        value: '',
-        date: '',
-        notes: ''
-      }
-    })
+// ----- Form -----
+const formRef = ref(null);
+const formValid = ref(false);
+const submitting = ref(false);
 
-    // Options
-    const adherenceOptions = [
-      { title: 'No', value: 'no' },
-      { title: 'Yes, occasional', value: 'occasional' },
-      { title: 'Yes, frequent', value: 'frequent' }
-    ]
+const form = reactive({
+  transaction_type_id: null,
+  occurred_at: defaultDateTimeLocal(),
+  data: {},
+  notes: '',
+});
 
-    // Computed
-    const patientAge = computed(() => {
-      if (!patient.value?.birth_date) return 'N/A'
-      const birth = new Date(patient.value.birth_date)
-      const today = new Date()
-      let age = today.getFullYear() - birth.getFullYear()
-      const m = today.getMonth() - birth.getMonth()
-      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-        age--
-      }
-      return age
-    })
+// ----- Treatment transaction type schemas -----
+const TRANSACTION_TYPE_SCHEMAS = {
+  'ARV Refill': [
+    { key: 'regimen', label: 'ARV Regimen', type: 'select', required: true, options: ['TLD', 'ABC/3TC+DTG', 'AZT/3TC+EFV', 'Other'], cols: 6 },
+    { key: 'months_supply', label: 'Months of Supply', type: 'select', required: true, options: [1, 3, 6], cols: 6 },
+    { key: 'pills_dispensed', label: 'Pills Dispensed', type: 'number', cols: 6 },
+    { key: 'next_refill_date', label: 'Next Refill Date', type: 'date', cols: 6 },
+    { key: 'adherence', label: 'Adherence', type: 'select', options: ['Good', 'Fair', 'Poor'], cols: 6 },
+    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
+  ],
+  'Consultation': [
+    { key: 'chief_complaint', label: 'Chief Complaint', type: 'textarea', required: true, cols: 12 },
+    { key: 'assessment', label: 'Assessment', type: 'textarea', cols: 12 },
+    { key: 'plan', label: 'Plan', type: 'textarea', cols: 12 },
+  ],
+  'Vital Signs': [
+    { key: 'blood_pressure', label: 'Blood Pressure', type: 'text', cols: 6 },
+    { key: 'heart_rate', label: 'Heart Rate (bpm)', type: 'number', cols: 6 },
+    { key: 'temperature', label: 'Temperature (°C)', type: 'number', cols: 6 },
+    { key: 'weight', label: 'Weight (kg)', type: 'number', cols: 6 },
+    { key: 'height', label: 'Height (cm)', type: 'number', cols: 6 },
+  ],
+  'default': [
+    { key: 'findings', label: 'Findings', type: 'textarea', required: true, cols: 12 },
+    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
+  ],
+};
 
-    const minDate = computed(() => {
-      const today = new Date()
-      today.setDate(today.getDate() + 1) // Allow booking from tomorrow
-      return today.toISOString().split('T')[0]
-    })
+const currentTypeSchema = computed(() => {
+  const tt = transactionTypes.value.find(t => t.id === form.transaction_type_id);
+  if (!tt) return [];
+  return TRANSACTION_TYPE_SCHEMAS[tt.name] || TRANSACTION_TYPE_SCHEMAS['default'];
+});
 
-    const availableSlotsMessage = computed(() => {
-      if (loadingSlots.value) return 'Loading available slots...'
-      if (!nextAppointment.value.date) return 'Please select a date first'
-      const available = availableTimeSlots.value.filter(s => s.available)
-      if (available.length === 0) return 'No slots available for this date'
-      return `${available.length} slot(s) available`
-    })
+const patientFullName = computed(() => {
+  if (!patient.value) return '';
+  const p = patient.value;
+  return [p.first_name, p.middle_name, p.last_name, p.suffix].filter(Boolean).join(' ');
+});
 
-    // Methods
-    const validateAppointmentFields = () => {
-      if (form.value) {
-        form.value.validate()
-      }
-    }
+const snackbar = reactive({ show: false, message: '', color: 'success' });
+function notify(message, color = 'success') {
+  snackbar.message = message;
+  snackbar.color = color;
+  snackbar.show = true;
+}
 
-    const loadTransactionTypes = async () => {
-      loadingTransactionTypes.value = true
-      try {
-        const response = await transactionTypeService.getTransactionTypes('treatment')
-        if (response.success) {
-          // Only show active transaction types
-          transactionTypes.value = response.data.filter(t => t.is_active !== false)
-        }
-      } catch (error) {
-        console.error('Failed to load transaction types:', error)
-        showSnackbar('Failed to load transaction types', 'error')
-      } finally {
-        loadingTransactionTypes.value = false
-      }
-    }
+function defaultDateTimeLocal() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
-    const loadAvailableSlots = async (date) => {
-      if (!date) {
-        availableTimeSlots.value = []
-        return
-      }
+function goBack() {
+  router.back();
+}
 
-      loadingSlots.value = true
-      try {
-        const result = await appointmentService.getAvailableSlots(date, 'treatment')
-        console.log('Available slots result:', result)
-        
-        if (result && result.slots && Array.isArray(result.slots)) {
-          // Map the slots to the format needed for the dropdown
-          // The API returns objects with time, available, isPast, isBooked
-          availableTimeSlots.value = result.slots.map(slot => {
-            // Format time from "08:30" to "08:30 AM"
-            const timeStr = slot.time || slot
-            const formattedTime = formatTimeDisplay(timeStr)
-            
-            return {
-              label: formattedTime,
-              value: timeStr,
-              available: slot.available !== false,
-              isPast: slot.isPast || false,
-              isBooked: slot.isBooked || false,
-              // Store the original slot data for reference
-              slot: slot
-            }
-          })
-          
-          // Auto-select the first available slot
-          const firstAvailable = availableTimeSlots.value.find(s => s.available)
-          if (firstAvailable) {
-            nextAppointment.value.time_slot = firstAvailable.value
-          } else {
-            nextAppointment.value.time_slot = null
-          }
-        } else {
-          availableTimeSlots.value = []
-          nextAppointment.value.time_slot = null
-        }
-      } catch (error) {
-        console.error('Failed to load available slots:', error)
-        availableTimeSlots.value = []
-        nextAppointment.value.time_slot = null
-        showSnackbar('Failed to load available time slots', 'error')
-      } finally {
-        loadingSlots.value = false
-      }
-    }
-
-    // Helper function to format time for display
-    const formatTimeDisplay = (timeStr) => {
-      if (!timeStr) return ''
-      const parts = timeStr.split(':')
-      const hours = parseInt(parts[0])
-      const minutes = parts[1] || '00'
-      const ampm = hours >= 12 ? 'PM' : 'AM'
-      const hour12 = hours % 12 || 12
-      return `${hour12}:${minutes} ${ampm}`
-    }
-
-    const onDateChange = () => {
-      // Reset time slot when date changes
-      nextAppointment.value.time_slot = null
-      if (nextAppointment.value.date) {
-        loadAvailableSlots(nextAppointment.value.date)
-      } else {
-        availableTimeSlots.value = []
-      }
-    }
-
-    const loadPatient = async (id) => {
-      try {
-        const data = await patientService.getPatient(id)
-        if (data.status !== 'treatment') {
-          showSnackbar('Patient must be in treatment status', 'warning')
-          return
-        }
-        patient.value = data
-      } catch (error) {
-        showSnackbar('Failed to load patient: ' + error.message, 'error')
-      }
-    }
-
-    const loadEncounter = async (id) => {
-      try {
-        const data = await treatmentService.getEncounter(id)
-        encounter.value = data
-        patient.value = data.Patient
-        isEditMode.value = true
-        encounterId.value = id
-        
-        // Populate lab results if they exist
-        if (data.lab_results && data.lab_results.length > 0) {
-          data.lab_results.forEach(result => {
-            if (result.type === 'CD4') {
-              labResults.value.cd4 = result
-            } else if (result.type === 'viral_load') {
-              labResults.value.viral_load = result
-            }
-          })
-        }
-      } catch (error) {
-        showSnackbar('Failed to load encounter: ' + error.message, 'error')
-      }
-    }
-
-    const searchPatients = async () => {
-      if (searchQuery.value.length < 2) {
-        searchResults.value = []
-        return
-      }
-      
-      searching.value = true
-      try {
-        const results = await patientService.searchPatients(searchQuery.value)
-        // Only show treatment patients
-        searchResults.value = results.filter(p => p.status === 'treatment').slice(0, 10)
-      } catch (error) {
-        console.error('Search error:', error)
-      } finally {
-        searching.value = false
-      }
-    }
-
-    const selectPatient = (p) => {
-      if (p.status !== 'treatment') {
-        showSnackbar('Patient must be in treatment status', 'warning')
-        return
-      }
-      patient.value = p
-      searchQuery.value = ''
-      searchResults.value = []
-    }
-
-    const prepareLabResults = () => {
-      const results = []
-      
-      if (labResults.value.cd4.value) {
-        results.push({
-          type: 'CD4',
-          value: labResults.value.cd4.value,
-          date: labResults.value.cd4.date || new Date().toISOString().split('T')[0],
-          notes: labResults.value.cd4.notes || ''
-        })
-      }
-      
-      if (labResults.value.viral_load.value) {
-        results.push({
-          type: 'viral_load',
-          value: labResults.value.viral_load.value,
-          date: labResults.value.viral_load.date || new Date().toISOString().split('T')[0],
-          notes: labResults.value.viral_load.notes || ''
-        })
-      }
-      
-      return results
-    }
-
-
-    const submitEncounter = async () => {
-      if (!form.value || !form.value.validate()) {
-        showSnackbar('Please fill in all required fields', 'warning')
-        return
-      }
-
-      // Validate appointment fields
-      if (nextAppointment.value.date) {
-        if (!nextAppointment.value.transaction_type_id) {
-          showSnackbar('Please select a transaction type for the appointment', 'warning')
-          return
-        }
-        if (!nextAppointment.value.time_slot) {
-          showSnackbar('Please select a time slot for the appointment', 'warning')
-          return
-        }
-      }
-
-      submitting.value = true
-      try {
-        const data = {
-          patient_id: patient.value.id,
-          consultation_notes: encounter.value.consultation_notes,
-          art_prescription: encounter.value.art_prescription,
-          lab_results: prepareLabResults(),
-          adherence: encounter.value.adherence,
-          // Only include appointment fields if date is provided
-          ...(nextAppointment.value.date && {
-            next_appointment_date: nextAppointment.value.date,
-            next_appointment_transaction_type_id: nextAppointment.value.transaction_type_id,
-            next_appointment_time_slot: nextAppointment.value.time_slot
-          })
-        }
-
-        const result = await treatmentService.createEncounter(data)
-        showSnackbar('Treatment encounter submitted successfully!', 'success')
-        
-        setTimeout(() => {
-          router.push('/treatment/queue')
-        }, 1500)
-      } catch (error) {
-        console.error('Submit error:', error)
-        showSnackbar('Failed to submit: ' + (error.response?.data?.error || error.message), 'error')
-      } finally {
-        submitting.value = false
-      }
-    }
-
-    const cancel = () => {
-      if (confirm('Are you sure you want to cancel? Any unsaved data will be lost.')) {
-        router.push('/treatment/queue')
-      }
-    }
-
-    const navigateToPatientCreate = () => {
-      router.push('/patients/create')
-    }
-
-    const showSnackbar = (message, color = 'success') => {
-      snackbar.value = { show: true, message, color }
-    }
-
-    onMounted(async () => {
-      // Load transaction types first
-      await loadTransactionTypes()
-      
-      const patientId = route.params.patientId
-      const id = route.params.id
-
-      if (id) {
-        await loadEncounter(id)
-      } else if (patientId) {
-        await loadPatient(patientId)
-      }
-    })
-
-    return {
-      form,
-      valid,
-      submitting,
-      searching,
-      searchQuery,
-      searchResults,
-      patient,
-      isEditMode,
-      encounterId,
-      encounter,
-      nextAppointment,
-      labResults,
-      snackbar,
-      transactionTypes,
-      loadingTransactionTypes,
-      loadingSlots,
-      availableTimeSlots,
-      patientAge,
-      minDate,
-      adherenceOptions,
-      availableSlotsMessage,
-      searchPatients,
-      selectPatient,
-      submitEncounter,
-      cancel,
-      navigateToPatientCreate,
-      prepareLabResults,
-      validateAppointmentFields,
-      onDateChange,
-      loadAvailableSlots,
-      formatTimeDisplay
-    }
+async function loadPatient() {
+  if (!patientId.value) return;
+  try {
+    patient.value = await patientService.getPatient(patientId.value);
+    selectedPatientId.value = patient.value.id;
+  } catch (e) {
+    notify('Failed to load patient: ' + (e.response?.data?.error || e.message), 'error');
   }
 }
+
+async function loadTransactionTypes() {
+  loadingTypes.value = true;
+  try {
+    // Signature: getTransactionTypes(office, params)
+    const list = await transactionTypeService.getTransactionTypes('treatment', { is_active: true });
+    transactionTypes.value = list;
+    if (!form.transaction_type_id && list.length === 1) {
+      form.transaction_type_id = list[0].id;
+    }
+  } catch (e) {
+    notify('Failed to load transaction types: ' + (e.response?.data?.error || e.message), 'error');
+  } finally {
+    loadingTypes.value = false;
+  }
+}
+
+async function searchPatients(query) {
+  if (!query || query.length < 2) {
+    patientOptions.value = [];
+    return;
+  }
+  loadingPatients.value = true;
+  try {
+    // Signature: getPatients(page, limit, search, purpose, year)
+    const result = await patientService.getPatients(1, 20, query, 'treatment');
+    // Backend returns { items, total, page, totalPages }
+    const rows = result?.items || result?.data || result?.patients || (Array.isArray(result) ? result : []);
+    patientOptions.value = rows.map(p => ({
+      id: p.id,
+      label: `${p.first_name} ${p.last_name} — ${p.patient_facility_code}`,
+    }));
+  } catch (e) {
+    console.error('Patient search failed:', e);
+    patientOptions.value = [];
+  } finally {
+    loadingPatients.value = false;
+  }
+}
+
+async function onPatientSelected(id) {
+  if (!id) return
+  // Let the autocomplete finish its selection event first.
+  await nextTick()
+  // Route change first, then flip the v-if state so the autocomplete
+  // isn't unmounted mid-patch.
+  await router.replace({ name: 'TreatmentEncounter', params: { patientId: id } })
+  patientId.value = id
+  await loadPatient()
+  resetForm()
+}
+
+function resetForm() {
+  form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
+  form.occurred_at = defaultDateTimeLocal();
+  form.data = {};
+  form.notes = '';
+  formRef.value?.resetValidation();
+}
+
+async function submit() {
+  if (!formRef.value) return;
+  const valid = await formRef.value.validate();
+  if (!valid.valid) return;
+
+  submitting.value = true;
+  try {
+    await treatmentService.createEncounter({
+      patient_id: patientId.value,
+      transaction_type_id: form.transaction_type_id,
+      data: form.data,
+      notes: form.notes || undefined,
+      occurred_at: form.occurred_at ? new Date(form.occurred_at).toISOString() : undefined,
+    });
+    notify('Treatment encounter saved successfully.', 'success');
+    resetForm();
+  } catch (e) {
+    notify('Failed to save encounter: ' + (e.response?.data?.error || e.message), 'error');
+  } finally {
+    submitting.value = false;
+  }
+}
+
+onMounted(async () => {
+  await loadTransactionTypes();
+  if (patientId.value) await loadPatient();
+});
+
+watch(patientId, (v) => { if (v) loadPatient(); });
 </script>
+
+<style scoped>
+</style>

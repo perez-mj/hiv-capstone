@@ -6,11 +6,9 @@ const { Op } = require('sequelize');
 const auth = require('../middleware/auth');
 const { roleCheck } = require('../middleware/roleCheck');
 
-// All admin routes require authentication and admin role
 router.use(auth);
 router.use(roleCheck('admin'));
 
-// Dashboard
 router.get('/dashboard/stats', async (req, res) => {
   try {
     const totalUsers = await db.User.count();
@@ -44,14 +42,13 @@ router.get('/dashboard/stats', async (req, res) => {
   }
 });
 
-// User management
 router.get('/users', async (req, res) => {
   try {
     const users = await db.User.findAll({
       attributes: { exclude: ['password_hash'] },
       include: [{
         model: db.Patient,
-        as: 'Patient',  // This must match the 'as' in the association
+        as: 'Patient', 
         required: false,
         attributes: ['first_name', 'last_name', 'contact_number', 'status']
       }],
@@ -187,28 +184,23 @@ router.post('/users/:id/deactivate', async (req, res) => {
 
 
 const settingController = require('../controllers/systemSettingController');
-// System settings
-router.get('/settings/', settingController.getAll);                       // GET    /api/system-settings
-router.post('/settings/', settingController.create);                      // POST   /api/system-settings
+router.get('/settings/', settingController.getAll);                       
+router.post('/settings/', settingController.create);                      
 
-// ─── Special / aggregate routes (must come before /:id) ───────────
-router.get('/settings/object', settingController.getSettingsObject);      // GET    /api/system-settings/object
-router.get('/settings/categorized', settingController.getCategorized);    // GET    /api/system-settings/categorized
-router.get('/settings/category/:category', settingController.getByCategory); // GET /api/system-settings/category/:category
+router.get('/settings/object', settingController.getSettingsObject);      
+router.get('/settings/categorized', settingController.getCategorized);    
+router.get('/settings/category/:category', settingController.getByCategory);
 
-router.patch('/settings/bulk', settingController.updateMany);             // PATCH  /api/system-settings/bulk
+router.patch('/settings/bulk', settingController.updateMany);             
 
-// ─── Key-based routes ─────────────────────────────────────────────
-router.get('/settings/key/:key', settingController.getByKey);             // GET    /api/system-settings/key/:key
-router.put('/settings/key/:key', settingController.updateByKey);          // PUT    /api/system-settings/key/:key
-router.delete('/settings/key/:key', settingController.deleteByKey);       // DELETE /api/system-settings/key/:key
+router.get('/settings/key/:key', settingController.getByKey);            
+router.put('/settings/key/:key', settingController.updateByKey);         
+router.delete('/settings/key/:key', settingController.deleteByKey);      
 
-// ─── ID-based routes (must come last) ─────────────────────────────
-router.get('/settings/:id', settingController.getById);                   // GET    /api/system-settings/:id
-router.put('/settings/:id', settingController.update);                    // PUT    /api/system-settings/:id
-router.delete('/settings/:id', settingController.delete);                 // DELETE /api/system-settings/:id
+router.get('/settings/:id', settingController.getById);                   
+router.put('/settings/:id', settingController.update);                   
+router.delete('/settings/:id', settingController.delete);                 
 
-// Audit logs
 router.get('/audit-logs', async (req, res) => {
   try {
     const { page = 1, limit = 50, action, entity_type, user_id, start_date, end_date } = req.query;

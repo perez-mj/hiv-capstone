@@ -155,7 +155,6 @@ module.exports = (sequelize) => {
       facebook_messenger_hash: { type: DataTypes.STRING(64), allowNull: true, index: true },
 
       // ---------- CURRENT ADDRESS ----------
-      // Free-text portion below barangay: house # / street / purok / sitio.
       sitio_street: {
         type: DataTypes.TEXT,
         allowNull: true,
@@ -260,9 +259,6 @@ module.exports = (sequelize) => {
   );
 
   // ---------- HOOKS ----------
-
-  // Sync permanent address from current address when the flag is set.
-  // Must run BEFORE the facility-code hook so downstream code sees the resolved values.
   Patient.beforeValidate((patient) => {
     if (patient.same_as_current_address) {
       patient.permanent_sitio_street = patient.sitio_street;
@@ -278,7 +274,7 @@ module.exports = (sequelize) => {
     }
 
     if (patient.isNewRecord && !patient.status) {
-      patient.status = 'testing';
+      patient.status = 'indeterminate';
     }
 
     if (patient.isNewRecord && !patient.patient_facility_code) {
@@ -348,10 +344,6 @@ module.exports = (sequelize) => {
     return newCode;
   };
 
-  /**
-   * Returns a plain object describing the patient's current and permanent address.
-   * Useful for display, printing, or export layers.
-   */
   Patient.prototype.getAddresses = function () {
     const current = {
       sitio_street: this.sitio_street,
@@ -362,11 +354,11 @@ module.exports = (sequelize) => {
     const permanent = this.same_as_current_address
       ? { ...current }
       : {
-          sitio_street: this.permanent_sitio_street,
-          barangay_id: this.permanent_barangay_id,
-          city_municipality_id: this.permanent_city_municipality_id,
-          province_id: this.permanent_province_id,
-        };
+        sitio_street: this.permanent_sitio_street,
+        barangay_id: this.permanent_barangay_id,
+        city_municipality_id: this.permanent_city_municipality_id,
+        province_id: this.permanent_province_id,
+      };
     return { current, permanent };
   };
 
@@ -440,13 +432,9 @@ module.exports = (sequelize) => {
       foreignKey: 'patient_id',
       as: 'Appointments',
     });
-    Patient.hasMany(models.TestingEncounter, {
+    Patient.hasMany(models.Encounter, {
       foreignKey: 'patient_id',
-      as: 'TestingEncounters',
-    });
-    Patient.hasMany(models.TreatmentEncounter, {
-      foreignKey: 'patient_id',
-      as: 'TreatmentEncounters',
+      as: 'Encounters'
     });
     Patient.hasMany(models.QueueEntry, {
       foreignKey: 'patient_id',

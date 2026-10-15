@@ -8,11 +8,10 @@ const db = require('../models');
 const auth = require('../middleware/auth');
 
 
-// Helper to generate refresh token
 const generateRefreshToken = async (userId, ip, userAgent) => {
   const token = crypto.randomBytes(40).toString('hex');
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+  expiresAt.setDate(expiresAt.getDate() + 7);
 
   const refreshToken = await db.RefreshToken.create({
     token,
@@ -25,7 +24,6 @@ const generateRefreshToken = async (userId, ip, userAgent) => {
   return refreshToken.token;
 };
 
-// Register new patient
 router.post('/register', async (req, res) => {
   try {
     const { username, email, password, patient_details } = req.body;
@@ -72,7 +70,6 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -93,14 +90,12 @@ router.post('/login', async (req, res) => {
     user.last_login = new Date();
     await user.save();
     
-    // Generate access token (short-lived)
     const accessToken = jwt.sign(
       { user_id: user.id, role: user.role, office: user.office },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRY || '15m' }
     );
     
-    // Generate refresh token (long-lived)
     const refreshToken = await generateRefreshToken(
       user.id,
       req.ip,
@@ -120,7 +115,7 @@ router.post('/login', async (req, res) => {
       access_token: accessToken,
       refresh_token: refreshToken,
       token_type: 'Bearer',
-      expires_in: 900, // 15 minutes in seconds
+      expires_in: 900, 
       user: {
         id: user.id,
         username: user.username,
@@ -134,10 +129,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Logout
 router.post('/logout', auth, async (req, res) => {
   try {
-    // Revoke all refresh tokens for this user
     await db.RefreshToken.update(
       { revoked: true },
       { where: { user_id: req.user.id } }
@@ -158,7 +151,6 @@ router.post('/logout', auth, async (req, res) => {
   }
 });
 
-// Refresh token endpoint
 router.post('/refresh', async (req, res) => {
   try {
     const { refresh_token } = req.body;
@@ -167,7 +159,6 @@ router.post('/refresh', async (req, res) => {
       return res.status(400).json({ error: 'Refresh token required' });
     }
 
-    // Find valid refresh token
     const tokenRecord = await db.RefreshToken.findOne({
       where: {
         token: refresh_token,
@@ -191,21 +182,18 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'User account is deactivated' });
     }
 
-    // Generate new access token
     const newAccessToken = jwt.sign(
       { user_id: user.id, role: user.role, office: user.office },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRY || '15m' }
     );
 
-    // Optional: Rotate refresh token (issue new one)
     const newRefreshToken = await generateRefreshToken(
       user.id,
       req.ip,
       req.get('User-Agent')
     );
 
-    // Revoke old refresh token
     tokenRecord.revoked = true;
     await tokenRecord.save();
 
@@ -229,20 +217,52 @@ router.post('/refresh', async (req, res) => {
   }
 });
 
-// Change password
 router.post('/change-password', auth, async (req, res) => {
   try {
     const { current_password, new_password } = req.body;
     const user = req.user;
-    
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    if (new_password.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+
+    if (!/[A-Z]/.test(new_password)) {
+      return res.status(400).json({ error: 'Password must contain an uppercase letter' });
+    }
+
+    if (!/[a-z]/.test(new_password)) {
+      return res.status(400).json({ error: 'Password must contain a lowercase letter' });
+    }
+
+    if (!/\d/.test(new_password)) {
+      return res.status(400).json({ error: 'Password must contain a number' });
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(new_password)) {
+      return res.status(400).json({ error: 'Password must contain a special character' });
+    }
+
+    if (current_password === new_password) {
+      return res.status(400).json({ error: 'New password must be different from current password' });
+    }
+
     const isValid = await user.validatePassword(current_password);
     if (!isValid) {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
-    
+
     user.password_hash = new_password;
     await user.save();
-    
+
+    await db.RefreshToken.update(
+      { revoked: true },
+      { where: { user_id: user.id } }
+    );
+
     await db.AuditLog.create({
       user_id: user.id,
       action: 'PASSWORD_CHANGE',
@@ -251,18 +271,27 @@ router.post('/change-password', auth, async (req, res) => {
       ip_address: req.ip,
       user_agent: req.get('User-Agent')
     });
-    
+
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get current user
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = req.user.toJSON();
-    delete user.password_hash;
+    const user = await db.User.findByPk(req.user.id, {
+      attributes: [
+        'id', 'username', 'email', 'role', 'office',
+        'is_active', 'last_login', 'password_changed_at',
+        'created_at', 'updated_at'
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });

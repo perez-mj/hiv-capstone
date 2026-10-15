@@ -7,7 +7,6 @@ const db = require('../models');
 const { Op } = require('sequelize');
 const queueService = require('../services/queueService');
 
-// Get queue state for an office
 router.get('/:office/state', auth, roleCheck('staff', 'admin'), officeCheck(['testing', 'treatment']), async (req, res) => {
   try {
     const { office } = req.params;
@@ -20,7 +19,6 @@ router.get('/:office/state', auth, roleCheck('staff', 'admin'), officeCheck(['te
   }
 });
 
-// Add patient to queue
 router.post('/:office/add', auth, roleCheck('staff', 'admin'), officeCheck(['testing', 'treatment']), async (req, res) => {
   try {
     const { office } = req.params;
@@ -35,7 +33,6 @@ router.post('/:office/add', auth, roleCheck('staff', 'admin'), officeCheck(['tes
   }
 });
 
-// Call next patient
 router.post('/:office/next', auth, roleCheck('staff', 'admin'), officeCheck(['testing', 'treatment']), async (req, res) => {
   try {
     const { office } = req.params;
@@ -48,7 +45,6 @@ router.post('/:office/next', auth, roleCheck('staff', 'admin'), officeCheck(['te
   }
 });
 
-// Skip current patient
 router.post('/:office/skip', auth, roleCheck('staff', 'admin'), officeCheck(['testing', 'treatment']), async (req, res) => {
   try {
     const { office } = req.params;
@@ -62,7 +58,6 @@ router.post('/:office/skip', auth, roleCheck('staff', 'admin'), officeCheck(['te
   }
 });
 
-// Complete current patient
 router.post('/:office/complete-current', auth, roleCheck('staff', 'admin'), officeCheck(['testing', 'treatment']), async (req, res) => {
   try {
     const { office } = req.params;
@@ -75,7 +70,6 @@ router.post('/:office/complete-current', auth, roleCheck('staff', 'admin'), offi
   }
 });
 
-// Mark patient as no-show
 router.post('/:office/noshow', auth, roleCheck('staff', 'admin'), officeCheck(['testing', 'treatment']), async (req, res) => {
   try {
     const { office } = req.params;
@@ -89,7 +83,6 @@ router.post('/:office/noshow', auth, roleCheck('staff', 'admin'), officeCheck(['
   }
 });
 
-// Reset queue (end of day)
 router.delete('/:office/reset', auth, roleCheck('admin'), async (req, res) => {
   try {
     const { office } = req.params;

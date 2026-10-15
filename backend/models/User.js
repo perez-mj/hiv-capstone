@@ -43,6 +43,10 @@ module.exports = (sequelize) => {
     last_login: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    password_changed_at: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     tableName: 'users',
@@ -58,7 +62,7 @@ module.exports = (sequelize) => {
   // -------------------------------------------------------------------
   // Instance method to validate password
   // -------------------------------------------------------------------
-  User.prototype.validatePassword = async function(password) {
+  User.prototype.validatePassword = async function (password) {
     if (!password || !this.password_hash) {
       return false;
     }
@@ -73,7 +77,7 @@ module.exports = (sequelize) => {
   // -------------------------------------------------------------------
   // Static method to find by credentials
   // -------------------------------------------------------------------
-  User.findByCredentials = async function(username, password) {
+  User.findByCredentials = async function (username, password) {
     const user = await this.findOne({ where: { username } });
     if (!user) {
       return null;
@@ -87,11 +91,6 @@ module.exports = (sequelize) => {
 
   // -------------------------------------------------------------------
   // HOOKS
-  //
-  // bcrypt hashes look like: $2a$10$..., $2b$10$..., $2y$10$...
-  // We skip re-hashing when the value is already a bcrypt hash, so
-  // seeders and factory scripts that pre-hash passwords don't get
-  // double-hashed (which silently breaks login).
   // -------------------------------------------------------------------
   const BCRYPT_RE = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 
@@ -99,46 +98,49 @@ module.exports = (sequelize) => {
     const value = user.password_hash;
     if (!value) return;
 
-    // Already a bcrypt hash → don't double-hash
     if (BCRYPT_RE.test(value)) return;
 
     const salt = await bcrypt.genSalt(10);
     user.password_hash = await bcrypt.hash(value, salt);
   };
 
-  User.beforeCreate(hashPassword);
+  User.beforeCreate(async (user) => {
+    await hashPassword(user);
+    if (!user.password_changed_at) {
+      user.password_changed_at = new Date();
+    }
+  });
+
   User.beforeUpdate(async (user) => {
     if (user.changed('password_hash')) {
       await hashPassword(user);
+      // ✅ Auto-track password change time
+      user.password_changed_at = new Date();
     }
   });
 
   // -------------------------------------------------------------------
   // ASSOCIATIONS
   // -------------------------------------------------------------------
-  User.associate = function(models) {
-    // User has one Patient
+  User.associate = function (models) {
     User.hasOne(models.Patient, {
       foreignKey: 'user_id',
       as: 'Patient'
     });
 
-    // User has many AuditLogs
     User.hasMany(models.AuditLog, {
       foreignKey: 'user_id',
       as: 'AuditLogs'
     });
 
-    // User has many TestingEncounters (as staff)
-    User.hasMany(models.TestingEncounter, {
+    User.hasMany(models.Encounter, {
       foreignKey: 'staff_id',
-      as: 'TestingEncounters'
+      as: 'StaffEncounters'
     });
 
-    // User has many TreatmentEncounters (as staff)
-    User.hasMany(models.TreatmentEncounter, {
-      foreignKey: 'staff_id',
-      as: 'TreatmentEncounters'
+    User.hasMany(models.Encounter, {
+      foreignKey: 'voided_by',
+      as: 'VoidedEncounters'
     });
   };
 

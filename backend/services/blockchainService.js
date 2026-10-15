@@ -17,24 +17,11 @@ const STREAM =
 // Shared helpers
 // ===========================================================================
 
-/**
- * Decode a MultiChain stream item's `data` field into a parsed object.
- *
- * MultiChain returns `data` as a hex-encoded UTF-8 JSON string when
- * verbose=true, but we're defensive:
- *   - if `data` is missing → null
- *   - if `data` is already an object → return it as-is
- *   - if decoding/parsing fails → log + null (never throws)
- *
- * @param {object} raw - a stream item (from getstreamitem or liststreamitems)
- * @returns {object|null}
- */
 function decodeStreamPayload(raw) {
   if (!raw || !raw.data) return null;
 
   const { data } = raw;
 
-  // Already decoded by the node (some verbose modes / newer builds)
   if (typeof data === 'object') return data;
 
   if (typeof data !== 'string') {
@@ -115,8 +102,6 @@ class BlockchainService {
       userAgent: req?.get?.('User-Agent')
     });
 
-    // FIX: return the SAME shape on failure so the frontend never merges
-    // stale fields over fresh nulls.
     if (!info.ok) {
       return {
         ok: false,
@@ -160,12 +145,7 @@ class BlockchainService {
   // ANCHORING
   // =========================================================================
 
-  /**
-   * Publish a structured record to the MultiChain stream.
-   * Throws on failure — business code should use anchorSafe().
-   */
   async anchor(type, entityId, payload, actorId = null, extra = {}) {
-    // --- Input validation: catch the "undefined entityId" bug early ---
     if (!type || typeof type !== 'string') {
       throw new Error('anchor: `type` is required');
     }
@@ -341,15 +321,6 @@ class BlockchainService {
   // ENCOUNTERS
   // =========================================================================
 
-  /**
-   * Anchor an encounter event under the PATIENT id so it shows up in the
-   * patient-scoped verification panel. The encounter's own id is preserved
-   * in `extra.encounter_id`.
-   *
-   * FIX: previously anchored under `v.id` (encounter id), which meant the
-   * frontend filter (entity_id === patientId) silently dropped every
-   * encounter anchor.
-   */
   async anchorEncounterCreate(kind, encounter, actorId = null) {
     const v = typeof encounter.get === 'function'
       ? encounter.get()
@@ -382,15 +353,6 @@ class BlockchainService {
   // QUEUE
   // =========================================================================
 
-  /**
-   * Anchor a queue event under the PATIENT id so it shows up in the
-   * patient-scoped verification panel. The queue entry's own id is preserved
-   * in `extra.queue_entry_id`.
-   *
-   * FIX: previously anchored under `v.id` (queue entry id), which meant the
-   * frontend filter (entity_id === patientId) silently dropped every queue
-   * anchor.
-   */
   async anchorQueueEvent(eventType, entry, actorId = null) {
     const v = typeof entry.get === 'function' ? entry.get() : entry;
 
@@ -422,22 +384,9 @@ class BlockchainService {
   // READ RECENT ITEMS
   // =========================================================================
 
-  /**
-   * Return the most recent items in the stream.
-   *
-   * IMPORTANT: this returns RAW MultiChain items — `data` is a hex-encoded
-   * JSON string, and the stream key lives in `keys` (an array), not `key`.
-   * Consumers that need the decoded payload must call `decodeStreamPayload()`
-   * (exported below) or use the flattened fields on the item.
-   *
-   * Do NOT change this to return normalized objects without updating every
-   * caller — `verifyPatientAgainstChain()` in particular depends on `.data`
-   * being present.
-   */
   async listRecentItems(count = 20, verbose = true, actorId = null, req = null) {
     const safeCount = Math.min(Math.max(Number(count) || 20, 1), 2000);
 
-    // Coerce to real boolean — MultiChain rejects string booleans for `verbose`
     const verboseBool =
       verbose === true ||
       verbose === 'true' ||
@@ -480,7 +429,7 @@ class BlockchainService {
     if (!txid) return null;
 
     const result = await mc.tryRun(
-      ['getstreamitem', STREAM, txid, true],   // boolean, not string
+      ['getstreamitem', STREAM, txid, true], 
       { json: true }
     );
 
@@ -525,8 +474,6 @@ class BlockchainService {
     const item = await this.getItem(txid, actorId, req);
 
     if (!item) {
-      // FIX: `matches: null` (not false) — "not found" is distinct from
-      // "found but mismatched". Frontends rely on this distinction.
       return { txid, found: false, matches: null };
     }
 
@@ -565,14 +512,6 @@ class BlockchainService {
   // VERIFY PATIENT
   // =========================================================================
 
-  /**
-   * Rebuild the patient payload from the current DB row and compare its
-   * hash against the newest patient.* anchor on the blockchain.
-   *
-   * NOTE: this method depends on `listRecentItems()` returning RAW items
-   * with `.data` as a hex string. If you ever normalize that method,
-   * update this one to match.
-   */
   async verifyPatientAgainstChain(patientId, actorId = null, req = null) {
     const patient = await db.Patient.findByPk(patientId);
 
@@ -585,7 +524,6 @@ class BlockchainService {
       };
     }
 
-    // Pull a generous slice so older creates are not missed.
     const items = await this.listRecentItems(2000, true, actorId, req);
 
     const anchors = (items || [])
@@ -600,7 +538,6 @@ class BlockchainService {
       })
       .filter(item => {
         if (!item || !item.record) return false;
-        // Match by entity_id OR by facility code (belt and braces)
         const idMatch =
           String(item.record.entity_id) === String(patientId);
         const codeMatch =
@@ -662,15 +599,8 @@ class BlockchainService {
   }
 }
 
-
-// ===========================================================================
-// Exports
-// ===========================================================================
-
 const instance = new BlockchainService();
 
-// Attach the shared decoder so route handlers / other services can use it
-// without duplicating the hex-decode logic.
 instance.decodeStreamPayload = decodeStreamPayload;
 
 module.exports = instance;

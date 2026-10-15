@@ -177,14 +177,6 @@ router.get(
 // ============================================================================
 // VERIFY PATIENT AGAINST BLOCKCHAIN
 // ============================================================================
-//
-// Staff and admins can verify a patient.
-//
-// Example:
-// GET /api/blockchain/verify/patient/123
-//
-// ============================================================================
-
 router.get(
   '/verify/patient/:patientId',
   auth,

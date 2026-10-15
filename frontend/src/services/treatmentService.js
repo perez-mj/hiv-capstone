@@ -1,24 +1,29 @@
 // frontend/src/services/treatmentService.js
-import api from '@/plugins/axios'
+import api from '@/plugins/axios';
 
 export default {
-  async createEncounter(data) {
-    const response = await api.post('/treatment/encounter', data)
-    return response.data
-  },
-
-  async getPatientEncounters(patientId) {
-    const response = await api.get(`/treatment/encounters/${patientId}`)
-    return response.data
+  async getEncounters(params = {}) {
+    const { data } = await api.get('/encounters/office/treatment', { params });
+    return data;
   },
 
   async getEncounter(id) {
-    const response = await api.get(`/treatment/encounter/${id}`)
-    return response.data
+    const { data } = await api.get(`/encounters/${id}`);
+    return data;
   },
 
-  async updateEncounter(id, data) {
-    const response = await api.put(`/treatment/encounter/${id}`, data)
-    return response.data
-  }
-}
+  async createEncounter(payload) {
+    const { data } = await api.post('/encounters/office/treatment', payload);
+    return data;
+  },
+
+  async updateEncounter(id, payload) {
+    const { data } = await api.put(`/encounters/${id}`, payload);
+    return data;
+  },
+
+  async voidEncounter(id, reason) {
+    const { data } = await api.put(`/encounters/${id}/void`, { reason });
+    return data;
+  },
+};

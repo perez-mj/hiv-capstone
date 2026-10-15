@@ -1,11 +1,11 @@
 // backend/config/blockchain.js
 require('dotenv').config();
 module.exports = {
-  host:     process.env.BLOCKCHAIN_HOST || '127.0.0.1',
-  port:     process.env.BLOCKCHAIN_PORT || '8571',
-  rpcPort:  process.env.BLOCKCHAIN_RPC_PORT || '8572',
-  chain:    process.env.BLOCKCHAIN_CHAIN || 'omph_hiv_chain',
-  stream:   process.env.BLOCKCHAIN_STREAM || 'patient_audit',   
-  user:     process.env.BLOCKCHAIN_RPC_USER || 'multichainrpc',
-  password: process.env.BLOCKCHAIN_RPC_PASSWORD || '',
+  host:     process.env.BLOCKCHAIN_HOST,
+  port:     process.env.BLOCKCHAIN_PORT,
+  rpcPort:  process.env.BLOCKCHAIN_RPC_PORT,
+  chain:    process.env.BLOCKCHAIN_CHAIN,
+  stream:   process.env.BLOCKCHAIN_STREAM,   
+  user:     process.env.BLOCKCHAIN_RPC_USER,
+  password: process.env.BLOCKCHAIN_RPC_PASSWORD
 };

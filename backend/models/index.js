@@ -24,27 +24,26 @@ const db = {};
 db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
-// Import models
+// ---------- MODEL REGISTRATION ----------
 db.User = require('./User')(sequelize);
-db.SystemSetting = require('./SystemSetting')(sequelize); // Keep for other settings
-db.AppointmentSetting = require('./AppointmentSetting')(sequelize); // NEW
+db.SystemSetting = require('./SystemSetting')(sequelize);
+db.AppointmentSetting = require('./AppointmentSetting')(sequelize);
 db.RefreshToken = require('./RefreshToken')(sequelize);
 db.AuditLog = require('./AuditLog')(sequelize);
 db.Patient = require('./Patient')(sequelize);
 db.TransactionType = require('./TransactionType')(sequelize);
+db.Encounter = require('./Encounter')(sequelize);
 db.Appointment = require('./Appointment')(sequelize);
-db.TestingEncounter = require('./TestingEncounter')(sequelize);
-db.TreatmentEncounter = require('./TreatmentEncounter')(sequelize);
 db.Queue = require('./Queue')(sequelize);
 db.QueueEntry = require('./QueueEntry')(sequelize);
-
 
 db.Region = require('./Region')(sequelize);
 db.Province = require('./Province')(sequelize);
 db.CityMunicipality = require('./CityMunicipality')(sequelize);
 db.Barangay = require('./Barangay')(sequelize);
 
-// Define associations after all models are loaded
+
+// ---------- ASSOCIATIONS ----------
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
     db[modelName].associate(db);

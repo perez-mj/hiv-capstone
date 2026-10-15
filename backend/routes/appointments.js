@@ -8,14 +8,12 @@ const { Op } = require('sequelize');
 const queueService = require('../services/queueService');
 const schedulingService = require('../services/appointmentSchedulingService');
 
-// Book new appointment
 router.post('/', auth, async (req, res) => {
   try {
     let { patient_id, office, appointment_date, time_slot, notes, transaction_type_id } = req.body;
     
     console.log('Creating appointment with data:', { patient_id, office, appointment_date, time_slot, transaction_type_id });
     
-    // If user is patient, get their patient_id from the authenticated user
     if (req.user.role === 'patient') {
       const patient = await db.Patient.findOne({ 
         where: { user_id: req.user.id } 
@@ -29,12 +27,10 @@ router.post('/', auth, async (req, res) => {
       console.log(`Found patient ID: ${patient_id} for user ${req.user.id}`);
     }
     
-    // Validate required fields
     if (!patient_id) {
       return res.status(400).json({ error: 'Patient ID is required' });
     }
     
-    // If office is not provided, get it from transaction_type
     if (!office && transaction_type_id) {
       const transactionType = await db.TransactionType.findByPk(transaction_type_id);
       if (transactionType) {
@@ -56,7 +52,6 @@ router.post('/', auth, async (req, res) => {
     }
     
     if (!transaction_type_id) {
-      // Get default transaction type for the office
       const defaultType = await db.TransactionType.findOne({
         where: { 
           office: office,
@@ -71,7 +66,6 @@ router.post('/', auth, async (req, res) => {
       transaction_type_id = defaultType.id;
     }
     
-    // Validate that the time slot is available
     const availability = await schedulingService.getAvailableAppointmentSlots(
       appointment_date,
       office,
@@ -82,13 +76,11 @@ router.post('/', auth, async (req, res) => {
       return res.status(400).json({ error: availability.message || 'Selected time slot is not available' });
     }
     
-    // Check if the specific time slot is in the available slots
     const slotAvailable = availability.slots.some(slot => slot.time === time_slot && slot.available);
     if (!slotAvailable) {
       return res.status(400).json({ error: 'Selected time slot is not available' });
     }
     
-    // Create appointment
     const appointment = await db.Appointment.create({
       patient_id,
       office,
@@ -99,7 +91,6 @@ router.post('/', auth, async (req, res) => {
       transaction_type_id
     });
     
-    // Create audit log
     await db.AuditLog.create({
       user_id: req.user.id,
       action: 'CREATE',
@@ -118,7 +109,6 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// Get current user's appointments
 router.get('/my', auth, async (req, res) => {
   try {
     let patientId;
@@ -174,7 +164,6 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// Update appointment
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -185,7 +174,6 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' });
     }
     
-    // Check permissions
     if (req.user.role === 'patient') {
       const patient = await db.Patient.findOne({ where: { user_id: req.user.id } });
       if (!patient || patient.id !== appointment.patient_id) {
@@ -195,7 +183,6 @@ router.put('/:id', auth, async (req, res) => {
     
     const oldData = appointment.toJSON();
     
-    // Update only allowed fields
     if (notes !== undefined) appointment.notes = notes;
     
     await appointment.save();
@@ -233,7 +220,6 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// Get appointment by ID
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -257,7 +243,6 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Appointment not found' });
     }
     
-    // Check permissions
     if (req.user.role === 'patient') {
       const patient = await db.Patient.findOne({ where: { user_id: req.user.id } });
       if (!patient || patient.id !== appointment.patient_id) {
@@ -276,7 +261,6 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Get appointments for specific date (staff only)
 router.get('/date/:date', auth, roleCheck('staff', 'admin'), async (req, res) => {
   try {
     const { date } = req.params;
@@ -312,7 +296,6 @@ router.get('/date/:date', auth, roleCheck('staff', 'admin'), async (req, res) =>
   }
 });
 
-// Cancel appointment
 router.put('/:id/cancel', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -353,7 +336,6 @@ router.put('/:id/cancel', auth, async (req, res) => {
   }
 });
 
-// Reschedule appointment
 router.put('/:id/reschedule', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -371,7 +353,6 @@ router.put('/:id/reschedule', auth, async (req, res) => {
       }
     }
     
-    // Validate new slot is available
     const availability = await schedulingService.getAvailableAppointmentSlots(
       appointment_date,
       appointment.office,
@@ -411,7 +392,6 @@ router.put('/:id/reschedule', auth, async (req, res) => {
   }
 });
 
-// Check-in patient (staff only)
 router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -435,24 +415,20 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
     appointment.queued_at = new Date();
     await appointment.save();
     
-    // Add to queue - FIXED: Use the office from appointment with proper date
     try {
       const date = appointment.appointment_date;
-      // Use the appointment's office for the queue
       const office = appointment.office;
       
-      // Call the queue service with correct parameters
       await queueService.addToQueue(
-        office,           // office
-        date,             // date
-        appointment.patient_id,  // patient_id
-        appointment.id    // appointment_id (optional)
+        office,           
+        date,             
+        appointment.patient_id,  
+        appointment.id   
       );
       
       console.log(`Patient ${appointment.patient_id} added to ${office} queue for ${date}`);
     } catch (queueError) {
       console.error('Error adding to queue:', queueError);
-      // Continue even if queue fails - but log the error
     }
     
     await db.AuditLog.create({
@@ -466,7 +442,6 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
       user_agent: req.get('User-Agent')
     });
     
-    // Return the updated appointment with patient info
     const updatedAppointment = await db.Appointment.findByPk(id, {
       include: [
         {
@@ -489,7 +464,6 @@ router.put('/:id/checkin', auth, roleCheck('staff', 'admin'), async (req, res) =
   }
 });
 
-// Generate time slots for a specific date (staff only)
 router.get('/generate-slots/:date', auth, roleCheck('staff', 'admin'), async (req, res) => {
   try {
     const { date } = req.params;
@@ -510,7 +484,6 @@ router.get('/generate-slots/:date', auth, roleCheck('staff', 'admin'), async (re
   }
 });
 
-// Check if a specific date and time is available
 router.get('/check-availability', auth, async (req, res) => {
   try {
     const { date, timeSlot, office } = req.query;
@@ -522,7 +495,6 @@ router.get('/check-availability', auth, async (req, res) => {
       });
     }
 
-    // Check if date is available
     const dateObj = new Date(date);
     const isDateAvailable = await schedulingService.isDateAvailable(dateObj);
     if (!isDateAvailable) {
@@ -535,7 +507,6 @@ router.get('/check-availability', auth, async (req, res) => {
       });
     }
 
-    // Check if time slot is available
     const isAvailable = await schedulingService.isTimeSlotAvailable(
       date,
       timeSlot,

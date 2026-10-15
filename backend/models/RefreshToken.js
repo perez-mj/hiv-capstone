@@ -30,7 +30,7 @@ module.exports = (sequelize) => {
       defaultValue: false
     },
     ip_address: {
-      type: DataTypes.STRING(45), // IPv6 max length
+      type: DataTypes.STRING(45),
       allowNull: true
     },
     user_agent: {
