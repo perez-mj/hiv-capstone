@@ -143,9 +143,8 @@
                     :items="regions"
                     item-title="name"
                     item-value="id"
-                    label="Region *"
+                    label="Region"
                     :loading="loadingRegions"
-                    :rules="[v => !!v || 'Region is required']"
                     outlined
                     @update:model-value="onRegionChange"
                   />
@@ -176,10 +175,9 @@
                     :items="cities"
                     item-title="name"
                     item-value="id"
-                    label="City / Municipality *"
+                    label="City / Municipality"
                     :loading="loadingCities"
                     :disabled="!selectedRegionId"
-                    :rules="[v => !!v || 'City / Municipality is required']"
                     outlined
                     @update:model-value="onCityChange"
                   />
@@ -191,10 +189,9 @@
                     :items="barangays"
                     item-title="name"
                     item-value="id"
-                    label="Barangay *"
+                    label="Barangay"
                     :loading="loadingBarangays"
                     :disabled="!patient.city_municipality_id"
-                    :rules="[v => !!v || 'Barangay is required']"
                     outlined
                   />
                 </v-col>

@@ -6,53 +6,55 @@ module.exports = (sequelize) => {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
-      autoIncrement: true
+      autoIncrement: true,
     },
     patient_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: { model: 'patients', key: 'id' }
+      references: { model: 'patients', key: 'id' },
     },
     staff_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: { model: 'users', key: 'id' }
+      references: { model: 'users', key: 'id' },
     },
     office: {
       type: DataTypes.ENUM('testing', 'treatment'),
       allowNull: false,
     },
-    // Replaces the hardcoded enum — references transaction_types
     transaction_type_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: { model: 'transaction_types', key: 'id' }
+      references: { model: 'transaction_types', key: 'id' },
     },
-    // Flexible structured payload — schema differs per transaction type
-    // Validated in the service layer before persist
     data: {
       type: DataTypes.JSON,
       allowNull: false,
-      defaultValue: {}
+      defaultValue: {},
+    },
+    // ← NEW: snapshot of the schema version used when this encounter was created
+    schema_version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
     },
     notes: {
-      type: DataTypes.TEXT
+      type: DataTypes.TEXT,
     },
     occurred_at: {
       type: DataTypes.DATE,
       allowNull: false,
-      defaultValue: DataTypes.NOW
+      defaultValue: DataTypes.NOW,
     },
-    // Soft delete / voiding (never hard-delete clinical data)
     voided_at: {
-      type: DataTypes.DATE
+      type: DataTypes.DATE,
     },
     voided_by: {
       type: DataTypes.INTEGER,
-      references: { model: 'users', key: 'id' }
+      references: { model: 'users', key: 'id' },
     },
     void_reason: {
-      type: DataTypes.TEXT
+      type: DataTypes.TEXT,
     },
   }, {
     tableName: 'encounters',
@@ -67,23 +69,13 @@ module.exports = (sequelize) => {
     ],
   });
 
-  // ---------- ASSOCIATIONS ----------
   Encounter.associate = (models) => {
-    Encounter.belongsTo(models.Patient, {
-      foreignKey: 'patient_id',
-      as: 'Patient'
-    });
-    Encounter.belongsTo(models.User, {
-      foreignKey: 'staff_id',
-      as: 'Staff'
-    });
-    Encounter.belongsTo(models.User, {
-      foreignKey: 'voided_by',
-      as: 'Voider'
-    });
+    Encounter.belongsTo(models.Patient, { foreignKey: 'patient_id', as: 'Patient' });
+    Encounter.belongsTo(models.User, { foreignKey: 'staff_id', as: 'Staff' });
+    Encounter.belongsTo(models.User, { foreignKey: 'voided_by', as: 'Voider' });
     Encounter.belongsTo(models.TransactionType, {
       foreignKey: 'transaction_type_id',
-      as: 'TransactionType'
+      as: 'TransactionType',
     });
   };
 

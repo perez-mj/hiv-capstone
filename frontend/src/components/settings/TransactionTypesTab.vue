@@ -128,6 +128,26 @@
           </span>
         </template>
 
+        <!-- ← NEW: Checklist column -->
+        <template #item.checklist="{ item }">
+          <div class="d-flex align-center ga-2">
+            <v-chip
+              size="small"
+              variant="tonal"
+              :color="checklistCount(item) > 0 ? 'primary' : 'grey'"
+              :prepend-icon="checklistCount(item) > 0 ? 'mdi-format-list-checks' : 'mdi-minus'"
+            >
+              {{ checklistCount(item) }} field{{ checklistCount(item) === 1 ? '' : 's' }}
+            </v-chip>
+            <span
+              v-if="item.schema_version"
+              class="text-caption text-medium-emphasis"
+            >
+              v{{ item.schema_version }}
+            </span>
+          </div>
+        </template>
+
         <!-- Status -->
         <template #item.is_active="{ item }">
           <v-chip
@@ -143,6 +163,20 @@
         <!-- Actions -->
         <template #item.actions="{ item }">
           <div class="d-flex justify-center ga-1">
+            <!-- ← NEW: Checklist builder button -->
+            <v-tooltip text="Configure checklist" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-format-list-checks"
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  @click="openChecklistDialog(item)"
+                />
+              </template>
+            </v-tooltip>
+
             <v-tooltip text="Edit" location="top">
               <template #activator="{ props }">
                 <v-btn
@@ -227,10 +261,10 @@
         <div class="dialog-header">
           <div class="d-flex align-center">
             <v-avatar size="40" color="primary" variant="tonal" class="mr-3">
-              <v-icon>{{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}</v-icon>
+              <v-icon>{{ isEditing ? 'mdi-pencil-outline' : 'mdi-plus' }}</v-icon>
             </v-avatar>
             <div>
-              <h3 class="text-subtitle-1 font-weight-bold mb-0">{{ dialogTitle }}</h3>
+              <h3 class="text-h6 font-weight-bold mb-0">{{ dialogTitle }}</h3>
               <p class="text-caption text-medium-emphasis mb-0">
                 {{
                   isEditing
@@ -244,6 +278,7 @@
             icon="mdi-close"
             variant="text"
             size="small"
+            :disabled="saving"
             @click="closeDialog"
           />
         </div>
@@ -251,7 +286,11 @@
         <v-divider />
 
         <v-card-text class="pa-6">
-          <v-form ref="formRef" v-model="formValid" @submit.prevent="saveTransactionType">
+          <v-form
+            ref="formRef"
+            v-model="formValid"
+            @submit.prevent="onFormEnter"
+          >
             <v-text-field
               v-model="formData.name"
               label="Name"
@@ -339,6 +378,7 @@
               hide-details
               class="mt-2"
               inset
+              density="comfortable"
             >
               <template #label>
                 <div>
@@ -354,13 +394,19 @@
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
-          <v-btn variant="text" class="text-none" @click="closeDialog">Cancel</v-btn>
-          <v-spacer />
+        <v-card-actions class="pa-4 pt-0">
+          <v-btn
+            variant="text"
+            class="text-none flex-grow-1"
+            :disabled="saving"
+            @click="closeDialog"
+          >
+            Cancel
+          </v-btn>
           <v-btn
             color="primary"
             variant="flat"
-            class="text-none"
+            class="text-none flex-grow-1"
             :loading="saving"
             :disabled="!formValid"
             @click="saveTransactionType"
@@ -370,6 +416,13 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- ← NEW: Checklist Builder -->
+    <ChecklistBuilder
+      v-model="checklistDialog"
+      :transaction-type="checklistItem"
+      @saved="onChecklistSaved"
+    />
 
     <!-- ─────────────────────────────────────────────
          Delete Confirmation
@@ -382,6 +435,7 @@
       icon="mdi-alert-outline"
       :loading="deleting"
       @confirm="deleteTransactionType"
+      @cancel="deleteItem = null"
     >
       You're about to permanently delete
       <strong class="text-high-emphasis">"{{ deleteItem?.name }}"</strong>.
@@ -399,6 +453,7 @@
       :icon="toggleItem?.is_active ? 'mdi-pause-circle-outline' : 'mdi-play-circle-outline'"
       :loading="toggling"
       @confirm="toggleTransactionType"
+      @cancel="toggleItem = null"
     >
       <strong class="text-high-emphasis">"{{ toggleItem?.name }}"</strong>
       will be marked as
@@ -432,6 +487,7 @@
 import { ref, onMounted, computed } from 'vue';
 import transactionTypeService from '@/services/transactionTypeService';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
+import ChecklistBuilder from './ChecklistBuilder.vue';   // ← NEW
 
 /* ─────────────── State ─────────────── */
 const transactionTypes = ref([]);
@@ -462,6 +518,10 @@ const toggleDialog = ref(false);
 const toggleItem = ref(null);
 const toggling = ref(false);
 
+/* ─────────────── ← NEW: Checklist state ─────────────── */
+const checklistDialog = ref(false);
+const checklistItem = ref(null);
+
 /* ─────────────── Snackbar ─────────────── */
 const snackbar = ref({ show: false, message: '', color: 'success' });
 
@@ -476,12 +536,14 @@ const statusOptions = [
   { text: 'Inactive', value: '0' }
 ];
 
+// ← CHANGED: added Checklist column
 const headers = [
   { title: 'Name', key: 'name', sortable: true },
   { title: 'Office', key: 'office', sortable: true, width: '140px' },
-  { title: 'Duration', key: 'estimated_duration_minutes', sortable: true, width: '120px' },
+  { title: 'Duration', key: 'estimated_duration_minutes', sortable: true, width: '110px' },
+  { title: 'Checklist', key: 'checklist', sortable: false, width: '170px' },
   { title: 'Status', key: 'is_active', sortable: true, width: '120px' },
-  { title: 'Actions', key: 'actions', sortable: false, width: '150px', align: 'center' }
+  { title: 'Actions', key: 'actions', sortable: false, width: '200px', align: 'center' }
 ];
 
 /* ─────────────── Computed ─────────────── */
@@ -525,11 +587,14 @@ function showSnackbar(message, color = 'success') {
   snackbar.value = { show: true, message, color };
 }
 
+function checklistCount(item) {
+  return item?.checklist_schema?.fields?.length || 0;
+}
+
 /* ─────────────── Data loading ─────────────── */
 async function loadTransactionTypes() {
   loading.value = true;
   try {
-    // The service normalizes the backend envelope ({ success, items, ... }) into an array.
     const list = await transactionTypeService.getAll({ include_inactive: true });
     transactionTypes.value = Array.isArray(list) ? list : [];
   } catch (error) {
@@ -571,19 +636,33 @@ function openEditDialog(item) {
 }
 
 function closeDialog() {
+  if (saving.value) return;
   dialog.value = false;
   resetForm();
 }
 
+function onFormEnter(e) {
+  if (e?.target?.tagName === 'TEXTAREA') return;
+  if (formValid.value && !saving.value) {
+    saveTransactionType();
+  }
+}
+
 async function saveTransactionType() {
-  if (!formValid.value) return;
+  if (!formValid.value || saving.value) return;
   saving.value = true;
   try {
+    const payload = {
+      ...formData.value,
+      color_code: formData.value.color_code?.trim() || null,
+      description: formData.value.description?.trim() || null
+    };
+
     if (isEditing.value) {
-      await transactionTypeService.update(formData.value.id, formData.value);
+      await transactionTypeService.update(payload.id, payload);
       showSnackbar('Transaction type updated successfully');
     } else {
-      await transactionTypeService.create(formData.value);
+      await transactionTypeService.create(payload);
       showSnackbar('Transaction type created successfully');
     }
     await loadTransactionTypes();
@@ -599,6 +678,19 @@ async function saveTransactionType() {
   }
 }
 
+/* ─────────────── ← NEW: Checklist ─────────────── */
+function openChecklistDialog(item) {
+  checklistItem.value = item;
+  checklistDialog.value = true;
+}
+
+function onChecklistSaved(updated) {
+  // Patch in place so we don't refetch everything
+  const idx = transactionTypes.value.findIndex(t => t.id === updated.id);
+  if (idx !== -1) transactionTypes.value.splice(idx, 1, updated);
+  showSnackbar('Checklist updated successfully');
+}
+
 /* ─────────────── Delete ─────────────── */
 function confirmDelete(item) {
   deleteItem.value = item;
@@ -606,12 +698,14 @@ function confirmDelete(item) {
 }
 
 async function deleteTransactionType() {
+  if (!deleteItem.value) return;
+  const item = deleteItem.value;
+
   deleting.value = true;
   try {
-    await transactionTypeService.delete(deleteItem.value.id);
+    await transactionTypeService.delete(item.id);
     showSnackbar('Transaction type deleted successfully');
     await loadTransactionTypes();
-    deleteDialog.value = false;
   } catch (error) {
     console.error('Error deleting transaction type:', error);
     showSnackbar(
@@ -620,6 +714,7 @@ async function deleteTransactionType() {
     );
   } finally {
     deleting.value = false;
+    deleteDialog.value = false;
     deleteItem.value = null;
   }
 }
@@ -631,14 +726,16 @@ function confirmToggle(item) {
 }
 
 async function toggleTransactionType() {
+  if (!toggleItem.value) return;
+  const item = toggleItem.value;
+
   toggling.value = true;
   try {
-    await transactionTypeService.toggleActive(toggleItem.value.id);
+    await transactionTypeService.toggleActive(item.id);
     showSnackbar(
-      `Transaction type ${toggleItem.value.is_active ? 'deactivated' : 'activated'} successfully`
+      `Transaction type ${item.is_active ? 'deactivated' : 'activated'} successfully`
     );
     await loadTransactionTypes();
-    toggleDialog.value = false;
   } catch (error) {
     console.error('Error toggling transaction type:', error);
     showSnackbar(
@@ -647,6 +744,7 @@ async function toggleTransactionType() {
     );
   } finally {
     toggling.value = false;
+    toggleDialog.value = false;
     toggleItem.value = null;
   }
 }
@@ -656,13 +754,12 @@ onMounted(loadTransactionTypes);
 </script>
 
 <style scoped>
+/* … same styles as before, plus nothing new needed … */
 .transaction-types-tab {
   padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
 }
-
-/* ─── Header ─── */
 .header {
   display: flex;
   align-items: center;
@@ -671,33 +768,18 @@ onMounted(loadTransactionTypes);
   gap: 16px;
   margin-bottom: 24px;
 }
-
-.header__title {
-  display: flex;
-  align-items: center;
-}
-
-/* ─── Cards ─── */
-.filters-card,
-.table-card {
+.header__title { display: flex; align-items: center; }
+.filters-card, .table-card {
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
 }
-
-.dialog-card {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-/* ─── Dialog header ─── */
+.dialog-card { border-radius: 16px; overflow: hidden; }
 .dialog-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
 }
-
-/* ─── Table ─── */
 .modern-table :deep(thead th) {
   font-weight: 600 !important;
   text-transform: uppercase;
@@ -705,16 +787,11 @@ onMounted(loadTransactionTypes);
   letter-spacing: 0.5px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
-
-.modern-table :deep(tbody tr) {
-  transition: background 0.15s ease;
-}
-
+.modern-table :deep(tbody tr) { transition: background 0.15s ease; }
 .modern-table :deep(tbody td) {
   padding-top: 14px !important;
   padding-bottom: 14px !important;
 }
-
 .table-footer {
   display: flex;
   align-items: center;
@@ -722,49 +799,21 @@ onMounted(loadTransactionTypes);
   padding: 12px 20px;
   border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
-
-/* ─── Color indicators ─── */
 .color-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
   box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
-
 .color-swatch {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08); flex-shrink: 0;
 }
-
-.color-preview-block {
-  padding-top: 4px;
-}
-
-/* ─── Empty state ─── */
+.color-preview-block { padding-top: 4px; }
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 16px;
+  display: flex; flex-direction: column; align-items: center; padding: 48px 16px;
 }
-
-/* ─── Responsive ─── */
 @media (max-width: 600px) {
-  .transaction-types-tab {
-    padding: 16px;
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header__title {
-    justify-content: flex-start;
-  }
+  .transaction-types-tab { padding: 16px; }
+  .header { flex-direction: column; align-items: stretch; }
+  .header__title { justify-content: flex-start; }
 }
 </style>

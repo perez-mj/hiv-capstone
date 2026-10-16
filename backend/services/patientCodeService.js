@@ -6,11 +6,14 @@ class PatientCodeService {
     const db = require('../models');
     return db.Patient;
   }
+
   async generateFacilityCode(patientData) {
     let year;
 
-    if (patientData.purpose?.toLowerCase() === 'treatment' && patientData.treatment_transition_date) {
-
+    if (
+      patientData.purpose?.toLowerCase() === 'treatment' &&
+      patientData.treatment_transition_date
+    ) {
       year = new Date(patientData.treatment_transition_date).getFullYear();
     } else if (patientData.enrollment_date) {
       year = new Date(patientData.enrollment_date).getFullYear();
@@ -19,75 +22,63 @@ class PatientCodeService {
     }
 
     const yearSuffix = year.toString().slice(-2);
-
     const purposePrefix = this.getPurposePrefix(patientData.purpose);
-
     const initials = this.getPatientInitials(
       patientData.first_name,
       patientData.middle_name,
       patientData.last_name
     );
 
-    const baseCode = `${purposePrefix}${yearSuffix}-${initials}`;
-
-    return await this.makeUniqueCode(baseCode);
+    return await this.makeUniqueCode(`${purposePrefix}${yearSuffix}-${initials}`);
   }
 
-  
   getPurposePrefix(purpose) {
-    if (purpose?.toLowerCase() === 'treatment') {
-      return 'PR'; 
-    }
-    return 'P'; 
+    return purpose?.toLowerCase() === 'treatment' ? 'PR' : 'P';
   }
 
   getPatientInitials(firstName, middleName, lastName) {
     const firstInitial = firstName?.charAt(0).toUpperCase() || '';
-    const middleInitial = middleName && middleName.trim() !== ''
-      ? middleName.charAt(0).toUpperCase()
-      : '';
+    const middleInitial =
+      middleName && middleName.trim() !== ''
+        ? middleName.charAt(0).toUpperCase()
+        : '';
     const lastInitial = lastName?.charAt(0).toUpperCase() || '';
 
-    let initials = `${firstInitial}${lastInitial}`;
-    if (middleInitial) {
-      initials = `${firstInitial}${middleInitial}${lastInitial}`;
-    }
+    const initials = middleInitial
+      ? `${firstInitial}${middleInitial}${lastInitial}`
+      : `${firstInitial}${lastInitial}`;
 
     return initials || 'XX';
   }
-
 
   async makeUniqueCode(baseCode) {
     const Patient = this.getPatientModel();
 
     if (!Patient) {
-      console.warn('Patient model not available, using base code without uniqueness check');
+      console.warn(
+        'Patient model not available, using base code without uniqueness check'
+      );
       return baseCode;
     }
 
     try {
-      const existing = await Patient.findOne({
-        where: { patient_facility_code: baseCode }
+      // Single query: fetch every code starting with baseCode.
+      // The base code itself is included in this set if it exists.
+      const existing = await Patient.findAll({
+        where: { patient_facility_code: { [Op.like]: `${baseCode}%` } },
+        attributes: ['patient_facility_code'],
       });
 
-      if (!existing) return baseCode;
+      const existingSet = new Set(
+        existing.map((p) => p.patient_facility_code)
+      );
 
-      const existingCodes = await Patient.findAll({
-        where: {
-          patient_facility_code: {
-            [Op.like]: `${baseCode}%`
-          }
-        },
-        attributes: ['patient_facility_code']
-      });
-
-      const existingSet = new Set(existingCodes.map(p => p.patient_facility_code));
+      if (!existingSet.has(baseCode)) return baseCode;
 
       let counter = 2;
       while (existingSet.has(`${baseCode}${counter}`)) {
         counter++;
       }
-
       return `${baseCode}${counter}`;
     } catch (error) {
       console.error('Error checking uniqueness of facility code:', error);
@@ -106,14 +97,17 @@ class PatientCodeService {
       throw new Error('Invalid facility code format');
     }
 
-    const parts = code.split('-');
-    const prefix = parts[0];
-    const initials = parts[1];
+    const [prefix, initials] = code.split('-');
 
-    let purposePrefix, year, nameInitials, counter, purpose;
     const numericMatch = initials.match(/\d+$/);
-    counter = numericMatch ? parseInt(numericMatch[0]) : null;
-    nameInitials = numericMatch ? initials.slice(0, -numericMatch[0].length) : initials;
+    const counter = numericMatch ? parseInt(numericMatch[0]) : null;
+    const nameInitials = numericMatch
+      ? initials.slice(0, -numericMatch[0].length)
+      : initials;
+
+    let purposePrefix;
+    let year;
+    let purpose;
 
     if (prefix.startsWith('PR')) {
       purposePrefix = 'PR';
@@ -134,97 +128,29 @@ class PatientCodeService {
       counter,
       fullCode: code,
       purpose,
-      purposePrefix,
-      purpose
     };
   }
 
   async bulkGenerateCodes(patients) {
     const results = [];
-
     for (const patient of patients) {
       const code = await this.generateFacilityCode(patient);
-      results.push({
-        ...patient,
-        patient_facility_code: code
-      });
+      results.push({ ...patient, patient_facility_code: code });
     }
-
     return results;
   }
 
-
   async regenerateCode(patient) {
-    const Patient = this.getPatientModel();
-    const newCode = await this.generateFacilityCode({
+    // generateFacilityCode already guarantees uniqueness, so we just
+    // delegate to it. The previous double-counter logic was redundant.
+    return this.generateFacilityCode({
       first_name: patient.first_name,
       middle_name: patient.middle_name || '',
       last_name: patient.last_name,
       purpose: patient.purpose,
       enrollment_date: patient.enrollment_date,
-      treatment_transition_date: patient.treatment_transition_date
+      treatment_transition_date: patient.treatment_transition_date,
     });
-
-    if (newCode === patient.patient_facility_code) {
-      const baseCode = newCode;
-      let counter = 2;
-      let finalCode;
-
-      try {
-        while (true) {
-          const testCode = `${baseCode}${counter}`;
-          const existing = await Patient.findOne({
-            where: {
-              patient_facility_code: testCode,
-              id: { [Op.ne]: patient.id }
-            }
-          });
-
-          if (!existing) {
-            finalCode = testCode;
-            break;
-          }
-          counter++;
-        }
-      } catch (error) {
-        console.error('Error regenerating code:', error);
-        const timestamp = Date.now().toString().slice(-4);
-        finalCode = `${baseCode}${timestamp}`;
-      }
-
-      return finalCode;
-    }
-
-    return newCode;
-  }
-
-
-  async getNextAvailableCode(baseCode, startCounter = 2) {
-    const Patient = this.getPatientModel();
-
-    if (!Patient) {
-      return `${baseCode}${startCounter}`;
-    }
-
-    let counter = startCounter;
-
-    try {
-      while (true) {
-        const testCode = `${baseCode}${counter}`;
-        const existing = await Patient.findOne({
-          where: { patient_facility_code: testCode }
-        });
-
-        if (!existing) {
-          return testCode;
-        }
-        counter++;
-      }
-    } catch (error) {
-      console.error('Error finding next available code:', error);
-      const timestamp = Date.now().toString().slice(-4);
-      return `${baseCode}${timestamp}`;
-    }
   }
 }
 

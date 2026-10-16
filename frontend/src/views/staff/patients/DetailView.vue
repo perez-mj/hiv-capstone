@@ -1,727 +1,806 @@
 <!-- frontend/src/views/staff/patients/DetailView.vue -->
 <template>
   <v-container fluid class="pa-4 patient-detail-view">
-    <v-row>
-      <v-col cols="12">
-        <!-- ─────────────────────────────────────────────
-             Header
-        ───────────────────────────────────────────── -->
-        <div class="header mb-4">
-          <div class="d-flex align-center">
-            <v-btn
-              icon="mdi-arrow-left"
-              variant="text"
-              size="small"
-              class="mr-2"
-              @click="goBack"
-            />
-            <div>
-              <h2 class="text-h6 font-weight-bold mb-0">
-                {{ patient?.patient_facility_code || 'Patient Details' }}
-              </h2>
-              <p class="text-caption text-medium-emphasis mb-0">
-                {{ patient ? fullName : 'Loading patient record…' }}
-              </p>
-            </div>
-          </div>
-
-          <div v-if="patient" class="d-flex ga-2 align-center">
-            <v-tooltip location="bottom">
-              <template #activator="{ props }">
-                <v-btn
-                  v-bind="props"
-                  :icon="maskSensitive ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
-                  variant="text"
-                  color="primary"
-                  @click="toggleMask"
-                />
-              </template>
-              <div class="text-center">
-                <div>{{ maskSensitive ? 'Show sensitive info' : 'Hide sensitive info' }}</div>
-                <div class="text-caption text-medium-emphasis">Shift + M</div>
-              </div>
-            </v-tooltip>
-
-            <v-btn
-              color="primary"
-              variant="tonal"
-              prepend-icon="mdi-pencil"
-              class="text-none"
-              @click="editPatient"
-            >
-              Edit
-            </v-btn>
-
-            <v-btn
-              v-if="canStartEncounter"
-              color="success"
-              variant="flat"
-              :prepend-icon="encounterIcon"
-              class="text-none"
-              @click="startEncounter"
-            >
-              Start {{ encounterLabel }}
-            </v-btn>
-          </div>
+    <!-- ═══════════════════════════════════════════════
+         Header
+    ═══════════════════════════════════════════════ -->
+    <div class="header mb-4">
+      <div class="d-flex align-center">
+        <v-btn
+          icon="mdi-arrow-left"
+          variant="text"
+          size="small"
+          class="mr-2"
+          @click="goBack"
+        />
+        <div>
+          <h2 class="text-h6 font-weight-bold mb-0">
+            {{ patient?.patient_facility_code || 'Patient Details' }}
+          </h2>
+          <p class="text-caption text-medium-emphasis mb-0">
+            {{ patient ? fullName : 'Loading patient record…' }}
+          </p>
         </div>
+      </div>
 
-        <template v-if="patient">
-          <!-- ─────────────────────────────────────────────
-               Status strip
-          ───────────────────────────────────────────── -->
-          <v-card variant="flat" class="stat-strip mb-4">
-            <v-card-text class="pa-4">
-              <v-row dense align="center">
-                <v-col cols="12" sm="6" md="3">
-                  <div class="text-caption text-medium-emphasis">Status</div>
-                  <v-chip
-                    :color="patient.status === 'treatment' ? 'success' : 'info'"
-                    size="small"
-                    variant="flat"
-                    :prepend-icon="patient.status === 'treatment' ? 'mdi-hospital' : 'mdi-test-tube'"
-                    class="text-capitalize mt-1"
-                  >
-                    {{ patient.status }}
-                  </v-chip>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <div class="text-caption text-medium-emphasis">Portal Access</div>
-                  <v-chip
-                    :color="patient.user_id ? 'primary' : 'grey'"
-                    size="small"
-                    variant="tonal"
-                    class="mt-1"
-                  >
-                    <v-icon start size="14">
-                      {{ patient.user_id ? 'mdi-account-check' : 'mdi-account-off' }}
-                    </v-icon>
-                    {{ patient.user_id ? 'Enabled' : 'None' }}
-                  </v-chip>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <div class="text-caption text-medium-emphasis">Enrolled</div>
-                  <div class="text-body-2 font-weight-medium mt-1">
-                    {{ formatDate(patient.enrollment_date) }}
-                  </div>
-                </v-col>
-                <v-col cols="12" sm="6" md="3">
-                  <div class="text-caption text-medium-emphasis">Chain Status</div>
-                  <v-chip
-                    v-if="!loadingChain"
-                    :color="chainStatusColor"
-                    size="small"
-                    variant="tonal"
-                    class="mt-1"
-                  >
-                    {{ chainStatusText }}
-                  </v-chip>
-                  <v-chip v-else size="small" variant="tonal" color="info" class="mt-1">
-                    Loading…
-                  </v-chip>
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+      <div v-if="patient" class="d-flex ga-2 align-center flex-wrap">
+        <v-tooltip location="bottom">
+          <template #activator="{ props }">
+            <v-btn
+              v-bind="props"
+              :icon="maskSensitive ? 'mdi-eye-off-outline' : 'mdi-eye-outline'"
+              variant="text"
+              color="primary"
+              @click="toggleMask"
+            />
+          </template>
+          <div class="text-center">
+            <div>{{ maskSensitive ? 'Show sensitive info' : 'Hide sensitive info' }}</div>
+            <div class="text-caption text-medium-emphasis">Shift + M</div>
+          </div>
+        </v-tooltip>
 
-          <!-- ─────────────────────────────────────────────
-               Personal Info + Addresses
-          ───────────────────────────────────────────── -->
-          <v-row dense class="mb-4">
-            <v-col cols="12" md="6">
-              <v-card variant="flat" class="info-card h-100">
-                <v-card-title class="d-flex align-center pa-4 pb-2">
-                  <v-icon class="mr-2" color="primary">mdi-account-outline</v-icon>
-                  <span class="text-subtitle-1 font-weight-bold">Personal Information</span>
-                </v-card-title>
-                <v-divider />
-                <v-card-text class="pa-4">
-                  <InfoRow label="Full Name">
-                    <template v-if="maskSensitive">{{ maskName(patient) }}</template>
-                    <template v-else>{{ fullName }}</template>
-                  </InfoRow>
-                  <InfoRow label="Facility Code">
-                    <v-chip size="small" color="primary" variant="tonal" class="font-weight-medium">
-                      {{ patient.patient_facility_code }}
-                    </v-chip>
-                  </InfoRow>
-                  <InfoRow label="Date of Birth">
-                    <template v-if="maskSensitive">••••••••••••</template>
-                    <template v-else>
-                      {{ formatDate(patient.birth_date) }}
-                      <span class="text-caption text-medium-emphasis">
-                        ({{ calculateAge(patient.birth_date) }} years)
-                      </span>
-                    </template>
-                  </InfoRow>
-                  <InfoRow label="Gender">
-                    <span class="text-capitalize">
-                      {{ maskSensitive ? '••••' : (patient.gender || 'N/A') }}
-                    </span>
-                  </InfoRow>
-                  <InfoRow label="Contact Number">
-                    <template v-if="maskSensitive">
-                      {{ maskValue(patient.contact_number) }}
-                    </template>
-                    <template v-else-if="patient.contact_number">
-                      <a
-                        class="link-inline"
-                        :href="`tel:${phoneHref(patient.contact_number)}`"
-                      >
-                        {{ patient.contact_number }}
-                      </a>
-                    </template>
-                    <template v-else>N/A</template>
-                  </InfoRow>
-                  <InfoRow label="Email">
-                    <template v-if="maskSensitive">
-                      {{ maskEmail(patient.email) }}
-                    </template>
-                    <template v-else-if="patient.email">
-                      <a
-                        class="link-inline"
-                        :href="`mailto:${patient.email}`"
-                      >
-                        {{ patient.email }}
-                      </a>
-                    </template>
-                    <template v-else>N/A</template>
-                  </InfoRow>
-                  <InfoRow label="Facebook / Messenger">
-                    <template v-if="maskSensitive">
-                      {{ maskValue(patient.facebook_messenger) }}
-                    </template>
-                    <template v-else-if="patient.facebook_messenger">
-                      <a
-                        class="link-inline"
-                        :href="facebookUrl(patient.facebook_messenger)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <v-icon size="14" color="primary" class="mr-1">
-                          mdi-facebook
-                        </v-icon>
-                        {{ patient.facebook_messenger }}
-                      </a>
-                    </template>
-                    <template v-else>N/A</template>
-                  </InfoRow>
-                </v-card-text>
-              </v-card>
+        <v-btn
+          color="primary"
+          variant="tonal"
+          prepend-icon="mdi-pencil"
+          class="text-none"
+          @click="editPatient"
+        >
+          Edit
+        </v-btn>
+
+        <v-btn
+          v-if="canStartEncounter"
+          color="success"
+          variant="flat"
+          :prepend-icon="encounterIcon"
+          class="text-none"
+          @click="startEncounter"
+        >
+          Start {{ encounterLabel }}
+        </v-btn>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════
+         Patient content
+    ═══════════════════════════════════════════════ -->
+    <template v-if="patient">
+      <!-- Status strip -->
+      <v-card variant="flat" class="stat-strip mb-4">
+        <v-card-text class="pa-4">
+          <v-row dense align="center">
+            <v-col cols="12" sm="6" md="3">
+              <div class="text-caption text-medium-emphasis">Status</div>
+              <v-chip
+                :color="patient.status === 'treatment' ? 'success' : 'info'"
+                size="small"
+                variant="flat"
+                :prepend-icon="patient.status === 'treatment' ? 'mdi-hospital' : 'mdi-test-tube'"
+                class="text-capitalize mt-1"
+              >
+                {{ patient.status }}
+              </v-chip>
             </v-col>
 
-            <v-col cols="12" md="6">
-              <v-card variant="flat" class="info-card h-100">
-                <v-card-title class="d-flex align-center pa-4 pb-2">
-                  <v-icon class="mr-2" color="primary">mdi-map-marker-outline</v-icon>
-                  <span class="text-subtitle-1 font-weight-bold">Addresses</span>
-                </v-card-title>
-                <v-divider />
-                <v-card-text class="pa-4">
-                  <div class="mb-4">
-                    <div class="d-flex align-center mb-1">
-                      <v-icon size="16" color="primary" class="mr-1">mdi-home</v-icon>
-                      <span class="text-caption text-medium-emphasis font-weight-medium">
-                        Current Address
-                      </span>
-                    </div>
-                    <div class="text-body-2">
-                      {{ maskSensitive ? maskAddress(formattedCurrentAddress) : formattedCurrentAddress }}
-                    </div>
-                  </div>
-
-                  <v-divider class="my-3" />
-
-                  <div>
-                    <div class="d-flex align-center mb-1">
-                      <v-icon size="16" color="secondary" class="mr-1">mdi-home-account</v-icon>
-                      <span class="text-caption text-medium-emphasis font-weight-medium">
-                        Permanent Address
-                      </span>
-                      <v-chip
-                        v-if="patient.same_as_current_address"
-                        size="x-small"
-                        color="info"
-                        variant="tonal"
-                        class="ml-2"
-                      >
-                        Same as current
-                      </v-chip>
-                    </div>
-                    <div class="text-body-2">
-                      {{ maskSensitive ? maskAddress(formattedPermanentAddress) : formattedPermanentAddress }}
-                    </div>
-                  </div>
-                </v-card-text>
-              </v-card>
+            <v-col cols="12" sm="6" md="3">
+              <div class="text-caption text-medium-emphasis">Portal Access</div>
+              <v-chip
+                :color="patient.user_id ? 'primary' : 'grey'"
+                size="small"
+                variant="tonal"
+                class="mt-1"
+              >
+                <v-icon start size="14">
+                  {{ patient.user_id ? 'mdi-account-check' : 'mdi-account-off' }}
+                </v-icon>
+                {{ patient.user_id ? 'Enabled' : 'None' }}
+              </v-chip>
             </v-col>
-          </v-row>
 
-          <!-- ─────────────────────────────────────────────
-               Enrollment Info
-          ───────────────────────────────────────────── -->
-          <v-card variant="flat" class="info-card mb-4">
-            <v-card-title class="d-flex align-center pa-4 pb-2">
-              <v-icon class="mr-2" color="primary">mdi-clipboard-text-outline</v-icon>
-              <span class="text-subtitle-1 font-weight-bold">Enrollment Information</span>
-            </v-card-title>
-            <v-divider />
-            <v-card-text class="pa-4">
-              <v-row dense>
-                <v-col cols="12" sm="6" md="4">
-                  <InfoRow label="Enrollment Date" inline>
-                    <v-icon size="14" color="primary" class="mr-1">mdi-calendar-plus</v-icon>
-                    {{ formatDate(patient.enrollment_date) }}
-                  </InfoRow>
-                </v-col>
-                <v-col
-                  v-if="patient.treatment_transition_date"
-                  cols="12"
-                  sm="6"
-                  md="4"
-                >
-                  <InfoRow label="Treatment Transition" inline>
-                    <v-icon size="14" color="success" class="mr-1">mdi-calendar-check</v-icon>
-                    {{ formatDate(patient.treatment_transition_date) }}
-                  </InfoRow>
-                </v-col>
-                <v-col v-if="patient.purpose" cols="12" sm="6" md="4">
-                  <InfoRow label="Purpose" inline>
-                    <span class="text-capitalize">{{ patient.purpose }}</span>
-                  </InfoRow>
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+            <v-col cols="12" sm="6" md="3">
+              <div class="text-caption text-medium-emphasis">Enrolled</div>
+              <div class="text-body-2 font-weight-medium mt-1">
+                {{ formatDate(patient.enrollment_date) }}
+              </div>
+            </v-col>
 
-          <!-- ─────────────────────────────────────────────
-               Blockchain Verification panel
-          ───────────────────────────────────────────── -->
-          <v-card variant="flat" class="info-card mb-4">
-            <v-card-title class="d-flex align-center flex-wrap ga-2 pa-4 pb-2">
-              <v-icon class="mr-2" color="primary">mdi-link-chain</v-icon>
-              <span class="text-subtitle-1 font-weight-bold">Blockchain Verification</span>
-
+            <v-col cols="12" sm="6" md="3">
+              <div class="text-caption text-medium-emphasis">Chain Status</div>
               <v-chip
                 v-if="!loadingChain"
                 :color="chainStatusColor"
                 size="small"
                 variant="tonal"
-                class="ml-2"
+                class="mt-1"
               >
                 {{ chainStatusText }}
               </v-chip>
+              <v-chip v-else size="small" variant="tonal" color="info" class="mt-1">
+                Loading…
+              </v-chip>
+            </v-col>
+          </v-row>
+        </v-card-text>
+      </v-card>
 
-              <v-spacer></v-spacer>
-
-              <v-btn
-                size="small"
-                variant="tonal"
-                color="primary"
-                prepend-icon="mdi-refresh"
-                class="text-none"
-                :loading="loadingChain"
-                @click="loadChainRecords"
-              >
-                Refresh
-              </v-btn>
-
-              <v-btn
-                v-if="chainRecords.length"
-                size="small"
-                variant="tonal"
-                color="secondary"
-                prepend-icon="mdi-shield-check"
-                class="text-none"
-                :loading="verifyingAll"
-                @click="verifyAllRecords"
-              >
-                Verify All
-              </v-btn>
+      <!-- Personal info + addresses -->
+      <v-row dense class="mb-4">
+        <v-col cols="12" md="6">
+          <v-card variant="flat" class="info-card h-100">
+            <v-card-title class="d-flex align-center pa-4 pb-2">
+              <v-icon class="mr-2" color="primary">mdi-account-outline</v-icon>
+              <span class="text-subtitle-1 font-weight-bold">Personal Information</span>
             </v-card-title>
             <v-divider />
             <v-card-text class="pa-4">
-              <!-- TAMPER ALERT -->
-              <v-alert
-                v-if="chainVerifyResult && chainVerifyResult.found && chainVerifyResult.matches === false"
-                type="error"
-                variant="flat"
-                prominent
-                class="mb-3"
-              >
-                <div class="text-subtitle-1 font-weight-bold">
-                  ⚠ Record has been tampered with
-                </div>
-                <div class="text-caption mt-1">
-                  {{ chainVerifyResult.reason || 'Payload hash mismatch between the database and the blockchain.' }}
-                </div>
-                <div class="text-caption mt-2">
-                  <div>
-                    <strong>On-chain hash:</strong>
-                    <code>{{ chainVerifyResult.onChainHash }}</code>
-                  </div>
-                  <div>
-                    <strong>Recomputed from DB:</strong>
-                    <code>{{ chainVerifyResult.recomputedHash }}</code>
-                  </div>
-                  <div>
-                    <strong>Latest anchor txid:</strong>
-                    <code>{{ chainVerifyResult.txid }}</code>
-                  </div>
-                </div>
-              </v-alert>
+              <InfoRow label="Full Name">
+                <template v-if="maskSensitive">{{ maskName(patient) }}</template>
+                <template v-else>{{ fullName }}</template>
+              </InfoRow>
 
-              <!-- VERIFIED BANNER -->
-              <v-alert
-                v-else-if="chainVerifyResult && chainVerifyResult.found && chainVerifyResult.matches === true"
-                type="success"
-                variant="tonal"
-                density="compact"
-                class="mb-3"
-              >
-                <div class="text-subtitle-2 font-weight-bold">
-                  ✓ Record verified against the blockchain
-                </div>
-                <div class="text-caption">
-                  Latest anchor txid:
-                  <code>{{ truncateHash(chainVerifyResult.txid) }}</code>
-                </div>
-              </v-alert>
+              <InfoRow label="Facility Code">
+                <v-chip size="small" color="primary" variant="tonal" class="font-weight-medium">
+                  {{ patient.patient_facility_code }}
+                </v-chip>
+              </InfoRow>
 
-              <!-- NO ANCHORS -->
-              <v-alert
-                v-if="!loadingChain && chainRecords.length === 0"
-                type="info"
-                variant="tonal"
-                density="compact"
-              >
-                No on-chain records found for this patient yet.
-                An anchor is written automatically after each create / update / delete.
-              </v-alert>
-
-              <!-- ANCHOR TABLE -->
-              <v-data-table
-                v-if="chainRecords.length"
-                :headers="chainHeaders"
-                :items="chainRecords"
-                :loading="loadingChain"
-                density="comfortable"
-                item-value="txid"
-                class="modern-table elevation-0"
-                :items-per-page="5"
-              >
-                <template #item.txid="{ item }">
-                  <div class="d-flex align-center">
-                    <span class="text-caption font-monospace">
-                      {{ truncateHash(item.txid) }}
-                    </span>
-                    <v-btn
-                      icon
-                      size="x-small"
-                      variant="text"
-                      class="ml-1"
-                      @click="copyToClipboard(item.txid)"
-                    >
-                      <v-icon size="14">mdi-content-copy</v-icon>
-                    </v-btn>
-                  </div>
+              <InfoRow label="Date of Birth">
+                <template v-if="maskSensitive">••••••••••••</template>
+                <template v-else>
+                  {{ formatDate(patient.birth_date) }}
+                  <span class="text-caption text-medium-emphasis">
+                    ({{ calculateAge(patient.birth_date) }} years)
+                  </span>
                 </template>
+              </InfoRow>
 
-                <template #item.type="{ item }">
-                  <v-chip size="small" variant="tonal" :color="eventTypeColor(item.type)">
-                    {{ item.type }}
-                  </v-chip>
+              <InfoRow label="Gender">
+                <span class="text-capitalize">
+                  {{ maskSensitive ? '••••' : (patient.gender || 'N/A') }}
+                </span>
+              </InfoRow>
+
+              <InfoRow label="Contact Number">
+                <template v-if="maskSensitive">
+                  {{ maskValue(patient.contact_number) }}
                 </template>
-
-                <template #item.ts="{ item }">
-                  <span class="text-caption">{{ formatDateTime(item.ts) }}</span>
+                <template v-else-if="patient.contact_number">
+                  <a class="link-inline" :href="`tel:${phoneHref(patient.contact_number)}`">
+                    {{ patient.contact_number }}
+                  </a>
                 </template>
+                <template v-else>N/A</template>
+              </InfoRow>
 
-                <template #item.confirmations="{ item }">
+              <InfoRow label="Email">
+                <template v-if="maskSensitive">
+                  {{ maskEmail(patient.email) }}
+                </template>
+                <template v-else-if="patient.email">
+                  <a class="link-inline" :href="`mailto:${patient.email}`">
+                    {{ patient.email }}
+                  </a>
+                </template>
+                <template v-else>N/A</template>
+              </InfoRow>
+
+              <InfoRow label="Facebook / Messenger">
+                <template v-if="maskSensitive">
+                  {{ maskValue(patient.facebook_messenger) }}
+                </template>
+                <template v-else-if="patient.facebook_messenger">
+                  <a
+                    class="link-inline"
+                    :href="facebookUrl(patient.facebook_messenger)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <v-icon size="14" color="primary" class="mr-1">mdi-facebook</v-icon>
+                    {{ patient.facebook_messenger }}
+                  </a>
+                </template>
+                <template v-else>N/A</template>
+              </InfoRow>
+            </v-card-text>
+          </v-card>
+        </v-col>
+
+        <v-col cols="12" md="6">
+          <v-card variant="flat" class="info-card h-100">
+            <v-card-title class="d-flex align-center pa-4 pb-2">
+              <v-icon class="mr-2" color="primary">mdi-map-marker-outline</v-icon>
+              <span class="text-subtitle-1 font-weight-bold">Addresses</span>
+            </v-card-title>
+            <v-divider />
+            <v-card-text class="pa-4">
+              <div class="mb-4">
+                <div class="d-flex align-center mb-1">
+                  <v-icon size="16" color="primary" class="mr-1">mdi-home</v-icon>
+                  <span class="text-caption text-medium-emphasis font-weight-medium">
+                    Current Address
+                  </span>
+                </div>
+                <div class="text-body-2">
+                  {{ maskSensitive ? maskAddress(formattedCurrentAddress) : formattedCurrentAddress }}
+                </div>
+              </div>
+
+              <v-divider class="my-3" />
+
+              <div>
+                <div class="d-flex align-center mb-1">
+                  <v-icon size="16" color="secondary" class="mr-1">mdi-home-account</v-icon>
+                  <span class="text-caption text-medium-emphasis font-weight-medium">
+                    Permanent Address
+                  </span>
                   <v-chip
-                    size="small"
-                    :color="item.confirmations > 0 ? 'success' : 'warning'"
+                    v-if="patient.same_as_current_address"
+                    size="x-small"
+                    color="info"
                     variant="tonal"
+                    class="ml-2"
                   >
-                    {{ item.confirmations }}
+                    Same as current
                   </v-chip>
+                </div>
+                <div class="text-body-2">
+                  {{ maskSensitive ? maskAddress(formattedPermanentAddress) : formattedPermanentAddress }}
+                </div>
+              </div>
+            </v-card-text>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- Enrollment info -->
+      <v-card variant="flat" class="info-card mb-4">
+        <v-card-title class="d-flex align-center pa-4 pb-2">
+          <v-icon class="mr-2" color="primary">mdi-clipboard-text-outline</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Enrollment Information</span>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <v-row dense>
+            <v-col cols="12" sm="6" md="4">
+              <InfoRow label="Enrollment Date" inline>
+                <v-icon size="14" color="primary" class="mr-1">mdi-calendar-plus</v-icon>
+                {{ formatDate(patient.enrollment_date) }}
+              </InfoRow>
+            </v-col>
+
+            <v-col v-if="patient.treatment_transition_date" cols="12" sm="6" md="4">
+              <InfoRow label="Treatment Transition" inline>
+                <v-icon size="14" color="success" class="mr-1">mdi-calendar-check</v-icon>
+                {{ formatDate(patient.treatment_transition_date) }}
+              </InfoRow>
+            </v-col>
+
+            <v-col v-if="patient.purpose" cols="12" sm="6" md="4">
+              <InfoRow label="Purpose" inline>
+                <span class="text-capitalize">{{ patient.purpose }}</span>
+              </InfoRow>
+            </v-col>
+          </v-row>
+        </v-card-text>
+      </v-card>
+
+      <!-- Blockchain panel -->
+      <v-card variant="flat" class="info-card mb-4">
+        <v-card-title class="d-flex align-center flex-wrap ga-2 pa-4 pb-2">
+          <v-icon class="mr-2" color="primary">mdi-link-chain</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Blockchain Verification</span>
+
+          <v-chip
+            v-if="!loadingChain"
+            :color="chainStatusColor"
+            size="small"
+            variant="tonal"
+            class="ml-2"
+          >
+            {{ chainStatusText }}
+          </v-chip>
+
+          <v-spacer />
+
+          <v-btn
+            size="small"
+            variant="tonal"
+            color="primary"
+            prepend-icon="mdi-refresh"
+            class="text-none"
+            :loading="loadingChain"
+            @click="loadChainRecords"
+          >
+            Refresh
+          </v-btn>
+
+          <v-btn
+            v-if="chainRecords.length"
+            size="small"
+            variant="tonal"
+            color="secondary"
+            prepend-icon="mdi-shield-check"
+            class="text-none"
+            :loading="verifyingAll"
+            @click="verifyAllRecords"
+          >
+            Verify All
+          </v-btn>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <!-- Tamper alert -->
+          <v-alert
+            v-if="chainVerifyResult && chainVerifyResult.found && chainVerifyResult.matches === false"
+            type="error"
+            variant="flat"
+            prominent
+            class="mb-3"
+          >
+            <div class="text-subtitle-1 font-weight-bold">⚠ Record has been tampered with</div>
+            <div class="text-caption mt-1">
+              {{ chainVerifyResult.reason || 'Payload hash mismatch between the database and the blockchain.' }}
+            </div>
+            <div class="text-caption mt-2">
+              <div><strong>On-chain hash:</strong> <code>{{ chainVerifyResult.onChainHash }}</code></div>
+              <div><strong>Recomputed from DB:</strong> <code>{{ chainVerifyResult.recomputedHash }}</code></div>
+              <div><strong>Latest anchor txid:</strong> <code>{{ chainVerifyResult.txid }}</code></div>
+            </div>
+          </v-alert>
+
+          <!-- Verified -->
+          <v-alert
+            v-else-if="chainVerifyResult && chainVerifyResult.found && chainVerifyResult.matches === true"
+            type="success"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+          >
+            <div class="text-subtitle-2 font-weight-bold">
+              ✓ Record verified against the blockchain
+            </div>
+            <div class="text-caption">
+              Latest anchor txid:
+              <code>{{ truncateHash(chainVerifyResult.txid) }}</code>
+            </div>
+          </v-alert>
+
+          <!-- No anchors -->
+          <v-alert
+            v-if="!loadingChain && chainRecords.length === 0"
+            type="info"
+            variant="tonal"
+            density="compact"
+          >
+            No on-chain records found for this patient yet.
+          </v-alert>
+
+          <!-- Anchor table -->
+          <v-data-table
+            v-if="chainRecords.length"
+            :headers="chainHeaders"
+            :items="chainRecords"
+            :loading="loadingChain"
+            density="comfortable"
+            item-value="txid"
+            class="modern-table elevation-0"
+            :items-per-page="5"
+          >
+            <template #item.txid="{ item }">
+              <div class="d-flex align-center">
+                <span class="text-caption font-monospace">{{ truncateHash(item.txid) }}</span>
+                <v-btn
+                  icon
+                  size="x-small"
+                  variant="text"
+                  class="ml-1"
+                  @click="copyToClipboard(item.txid)"
+                >
+                  <v-icon size="14">mdi-content-copy</v-icon>
+                </v-btn>
+              </div>
+            </template>
+
+            <template #item.type="{ item }">
+              <v-chip size="small" variant="tonal" :color="eventTypeColor(item.type)">
+                {{ item.type }}
+              </v-chip>
+            </template>
+
+            <template #item.ts="{ item }">
+              <span class="text-caption">{{ formatDateTime(item.ts) }}</span>
+            </template>
+
+            <template #item.confirmations="{ item }">
+              <v-chip
+                size="small"
+                :color="item.confirmations > 0 ? 'success' : 'warning'"
+                variant="tonal"
+              >
+                {{ item.confirmations }}
+              </v-chip>
+            </template>
+
+            <template #item.state="{ item }">
+              <v-chip
+                v-if="item._state"
+                size="small"
+                :color="item._state.color"
+                variant="flat"
+              >
+                <v-icon left size="14">{{ item._state.icon }}</v-icon>
+                {{ item._state.label }}
+              </v-chip>
+              <span v-else class="text-caption text-medium-emphasis">—</span>
+            </template>
+
+            <template #item.actions="{ item }">
+              <v-btn
+                size="small"
+                variant="text"
+                color="primary"
+                class="text-none"
+                :loading="item._verifying"
+                @click="verifySingleAnchor(item)"
+              >
+                Inspect
+              </v-btn>
+            </template>
+          </v-data-table>
+        </v-card-text>
+      </v-card>
+
+      <!-- ═══════════════════════════════════════════════
+           History tabs
+      ═══════════════════════════════════════════════ -->
+      <v-card variant="flat" class="info-card">
+        <v-tabs v-model="activeTab" color="primary" density="comfortable">
+          <v-tab value="testing">
+            <v-icon start size="18">mdi-test-tube</v-icon>
+            Testing History
+            <v-chip size="x-small" variant="tonal" class="ml-2">
+              {{ testingEncounters.length }}
+            </v-chip>
+          </v-tab>
+          <v-tab value="treatment">
+            <v-icon start size="18">mdi-pill</v-icon>
+            Treatment History
+            <v-chip size="x-small" variant="tonal" class="ml-2">
+              {{ treatmentEncounters.length }}
+            </v-chip>
+          </v-tab>
+          <v-tab value="appointments">
+            <v-icon start size="18">mdi-calendar</v-icon>
+            Appointments
+            <v-chip size="x-small" variant="tonal" class="ml-2">
+              {{ appointments.length }}
+            </v-chip>
+          </v-tab>
+        </v-tabs>
+        <v-divider />
+
+        <v-window v-model="activeTab">
+          <!-- Testing encounters -->
+          <v-window-item value="testing">
+            <v-card-text class="pa-4">
+              <div v-if="loadingHistory" class="text-center py-8">
+                <v-progress-circular indeterminate color="primary" />
+              </div>
+
+              <div v-else-if="testingEncounters.length === 0" class="empty-state">
+                <v-icon size="48" color="grey-lighten-1">mdi-test-tube-off</v-icon>
+                <div class="text-body-2 text-medium-emphasis mt-2">
+                  No testing encounters recorded yet
+                </div>
+                <v-btn
+                  color="primary"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-plus"
+                  class="mt-3 text-none"
+                  :to="{ name: 'TestingEncounter', params: { patientId: patient.id } }"
+                >
+                  Record first testing encounter
+                </v-btn>
+              </div>
+
+              <v-data-table
+                v-else
+                :headers="encounterHeaders"
+                :items="testingEncounters"
+                density="comfortable"
+                class="modern-table elevation-0"
+                :items-per-page="10"
+                :items-per-page-options="[10, 25, 50]"
+              >
+                <template #item.occurred_at="{ item }">
+                  <div class="d-flex flex-column">
+                    <span class="text-body-2">{{ formatDate(item.occurred_at) }}</span>
+                    <span class="text-caption text-medium-emphasis">
+                      {{ formatTime(item.occurred_at) }}
+                    </span>
+                  </div>
                 </template>
 
-                <template #item.state="{ item }">
-                  <v-chip
-                    v-if="item._state"
-                    size="small"
-                    :color="item._state.color"
-                    variant="flat"
-                  >
-                    <v-icon left size="14">{{ item._state.icon }}</v-icon>
-                    {{ item._state.label }}
-                  </v-chip>
-                  <span v-else class="text-caption text-medium-emphasis">—</span>
+                <template #item.transaction_type="{ item }">
+                  <div class="d-flex align-center">
+                    <span
+                      class="color-dot mr-2"
+                      :style="{ backgroundColor: item.TransactionType?.color_code || '#cbd5e1' }"
+                    />
+                    <span class="text-body-2 font-weight-medium">
+                      {{ item.TransactionType?.name || '—' }}
+                    </span>
+                  </div>
+                </template>
+
+                <template #item.summary="{ item }">
+                  <div class="summary-cell">
+                    <template v-if="encounterSummary(item).length">
+                      <v-chip
+                        v-for="(chip, i) in encounterSummary(item)"
+                        :key="i"
+                        size="small"
+                        variant="tonal"
+                        :color="chip.color"
+                        class="mr-1 mb-1"
+                      >
+                        <strong class="mr-1">{{ chip.label }}:</strong>
+                        <span class="text-truncate" style="max-width: 160px">
+                          {{ chip.value }}
+                        </span>
+                      </v-chip>
+                    </template>
+                    <span v-else class="text-caption text-medium-emphasis">—</span>
+                  </div>
+                </template>
+
+                <template #item.staff="{ item }">
+                  <span class="text-caption">{{ item.Staff?.username || '—' }}</span>
                 </template>
 
                 <template #item.actions="{ item }">
-                  <v-btn
-                    size="small"
-                    variant="text"
-                    color="primary"
-                    class="text-none"
-                    :loading="item._verifying"
-                    @click="verifySingleAnchor(item)"
-                  >
-                    Inspect
-                  </v-btn>
+                  <div class="d-flex justify-end ga-1">
+                    <v-tooltip text="View details" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-eye-outline"
+                          size="small"
+                          variant="text"
+                          color="primary"
+                          @click="openEncounter(item)"
+                        />
+                      </template>
+                    </v-tooltip>
+                    <v-tooltip text="Open history" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-history"
+                          size="small"
+                          variant="text"
+                          color="secondary"
+                          :to="{ name: 'TestingHistory', params: { patientId: patient.id } }"
+                        />
+                      </template>
+                    </v-tooltip>
+                  </div>
                 </template>
               </v-data-table>
             </v-card-text>
-          </v-card>
+          </v-window-item>
 
-          <!-- ─────────────────────────────────────────────
-               History Tabs
-          ───────────────────────────────────────────── -->
-          <v-card variant="flat" class="info-card">
-            <v-tabs v-model="activeTab" color="primary" density="comfortable">
-              <v-tab value="testing">
-                <v-icon start size="18">mdi-test-tube</v-icon>
-                Testing History
-              </v-tab>
-              <v-tab value="treatment">
-                <v-icon start size="18">mdi-pill</v-icon>
-                Treatment History
-              </v-tab>
-              <v-tab value="appointments">
-                <v-icon start size="18">mdi-calendar</v-icon>
-                Appointments
-              </v-tab>
-            </v-tabs>
-            <v-divider />
+          <!-- Treatment encounters -->
+          <v-window-item value="treatment">
+            <v-card-text class="pa-4">
+              <div v-if="loadingHistory" class="text-center py-8">
+                <v-progress-circular indeterminate color="primary" />
+              </div>
 
-            <v-window v-model="activeTab">
-              <!-- Testing History -->
-              <v-window-item value="testing">
-                <v-card-text class="pa-4">
-                  <v-data-table
-                    :headers="testingHeaders"
-                    :items="testingHistory"
-                    :loading="loadingHistory"
-                    items-per-page="10"
-                    class="modern-table elevation-0"
-                  >
-                    <template #item.hiv_test="{ item }">
+              <div v-else-if="treatmentEncounters.length === 0" class="empty-state">
+                <v-icon size="48" color="grey-lighten-1">mdi-pill-off</v-icon>
+                <div class="text-body-2 text-medium-emphasis mt-2">
+                  No treatment encounters recorded yet
+                </div>
+                <v-btn
+                  color="teal-darken-2"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-plus"
+                  class="mt-3 text-none"
+                  :to="{ name: 'TreatmentEncounter', params: { patientId: patient.id } }"
+                >
+                  Record first treatment encounter
+                </v-btn>
+              </div>
+
+              <v-data-table
+                v-else
+                :headers="encounterHeaders"
+                :items="treatmentEncounters"
+                density="comfortable"
+                class="modern-table elevation-0"
+                :items-per-page="10"
+                :items-per-page-options="[10, 25, 50]"
+              >
+                <template #item.occurred_at="{ item }">
+                  <div class="d-flex flex-column">
+                    <span class="text-body-2">{{ formatDate(item.occurred_at) }}</span>
+                    <span class="text-caption text-medium-emphasis">
+                      {{ formatTime(item.occurred_at) }}
+                    </span>
+                  </div>
+                </template>
+
+                <template #item.transaction_type="{ item }">
+                  <div class="d-flex align-center">
+                    <span
+                      class="color-dot mr-2"
+                      :style="{ backgroundColor: item.TransactionType?.color_code || '#cbd5e1' }"
+                    />
+                    <span class="text-body-2 font-weight-medium">
+                      {{ item.TransactionType?.name || '—' }}
+                    </span>
+                  </div>
+                </template>
+
+                <template #item.summary="{ item }">
+                  <div class="summary-cell">
+                    <template v-if="encounterSummary(item).length">
                       <v-chip
-                        :color="item.hiv_test?.result === 'positive'
-                          ? 'error'
-                          : item.hiv_test?.result === 'negative'
-                            ? 'success'
-                            : 'warning'"
+                        v-for="(chip, i) in encounterSummary(item)"
+                        :key="i"
                         size="small"
                         variant="tonal"
+                        :color="chip.color"
+                        class="mr-1 mb-1"
                       >
-                        {{ item.hiv_test?.result || 'N/A' }}
-                      </v-chip>
-                    </template>
-                    <template #item.created_at="{ item }">
-                      {{ formatDate(item.created_at) }}
-                    </template>
-                    <template #item.actions="{ item }">
-                      <v-btn
-                        icon="mdi-eye-outline"
-                        size="small"
-                        variant="text"
-                        color="primary"
-                        @click="viewTestingEncounter(item)"
-                      />
-                    </template>
-                  </v-data-table>
-                </v-card-text>
-              </v-window-item>
-
-              <!-- Treatment History -->
-              <v-window-item value="treatment">
-                <v-card-text class="pa-4">
-                  <v-data-table
-                    :headers="treatmentHeaders"
-                    :items="treatmentHistory"
-                    :loading="loadingHistory"
-                    items-per-page="10"
-                    class="modern-table elevation-0"
-                  >
-                    <template #item.art_prescription="{ item }">
-                      <div v-if="item.art_prescription">
-                        {{ item.art_prescription.medication_name || 'N/A' }}
-                        <span class="text-caption text-medium-emphasis">
-                          ({{ item.art_prescription.dosage }})
+                        <strong class="mr-1">{{ chip.label }}:</strong>
+                        <span class="text-truncate" style="max-width: 160px">
+                          {{ chip.value }}
                         </span>
-                      </div>
-                      <span v-else>N/A</span>
-                    </template>
-                    <template #item.created_at="{ item }">
-                      {{ formatDate(item.created_at) }}
-                    </template>
-                    <template #item.actions="{ item }">
-                      <v-btn
-                        icon="mdi-eye-outline"
-                        size="small"
-                        variant="text"
-                        color="primary"
-                        @click="viewTreatmentEncounter(item)"
-                      />
-                    </template>
-                  </v-data-table>
-                </v-card-text>
-              </v-window-item>
-
-              <!-- Appointments -->
-              <v-window-item value="appointments">
-                <v-card-text class="pa-4">
-                  <v-data-table
-                    :headers="appointmentHeaders"
-                    :items="appointments"
-                    :loading="loadingHistory"
-                    items-per-page="10"
-                    class="modern-table elevation-0"
-                  >
-                    <template #item.time_slot="{ item }">
-                      {{ formatTimeSlot(item.time_slot) }}
-                    </template>
-                    <template #item.status="{ item }">
-                      <v-chip :color="getStatusColor(item.status)" size="small" variant="tonal">
-                        {{ item.status }}
                       </v-chip>
                     </template>
-                  </v-data-table>
-                </v-card-text>
-              </v-window-item>
-            </v-window>
-          </v-card>
-        </template>
+                    <span v-else class="text-caption text-medium-emphasis">—</span>
+                  </div>
+                </template>
 
-        <!-- Loading / not found -->
-        <v-card v-else variant="flat" class="info-card">
-          <v-card-text class="text-center py-8">
-            <v-progress-circular v-if="loading" indeterminate color="primary" />
-            <template v-else>
-              <v-icon size="48" color="grey-lighten-1">mdi-account-off-outline</v-icon>
-              <p class="text-body-2 text-medium-emphasis mt-3 mb-0">Patient not found</p>
-              <v-btn
-                variant="tonal"
-                color="primary"
-                size="small"
-                prepend-icon="mdi-arrow-left"
-                class="mt-3 text-none"
-                @click="goBack"
+                <template #item.staff="{ item }">
+                  <span class="text-caption">{{ item.Staff?.username || '—' }}</span>
+                </template>
+
+                <template #item.actions="{ item }">
+                  <div class="d-flex justify-end ga-1">
+                    <v-tooltip text="View details" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-eye-outline"
+                          size="small"
+                          variant="text"
+                          color="primary"
+                          @click="openEncounter(item)"
+                        />
+                      </template>
+                    </v-tooltip>
+                    <v-tooltip text="Open history" location="top">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon="mdi-history"
+                          size="small"
+                          variant="text"
+                          color="secondary"
+                          :to="{ name: 'TreatmentHistory', params: { patientId: patient.id } }"
+                        />
+                      </template>
+                    </v-tooltip>
+                  </div>
+                </template>
+              </v-data-table>
+            </v-card-text>
+          </v-window-item>
+
+          <!-- Appointments -->
+          <v-window-item value="appointments">
+            <v-card-text class="pa-4">
+              <div v-if="loadingHistory" class="text-center py-8">
+                <v-progress-circular indeterminate color="primary" />
+              </div>
+
+              <div v-else-if="appointments.length === 0" class="empty-state">
+                <v-icon size="48" color="grey-lighten-1">mdi-calendar-blank</v-icon>
+                <div class="text-body-2 text-medium-emphasis mt-2">
+                  No appointments scheduled
+                </div>
+              </div>
+
+              <v-data-table
+                v-else
+                :headers="appointmentHeaders"
+                :items="appointments"
+                density="comfortable"
+                class="modern-table elevation-0"
+                :items-per-page="10"
               >
-                Back to list
-              </v-btn>
-            </template>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- ═══════════════ Testing Encounter Dialog ═══════════════ -->
-    <v-dialog v-model="testingDialog" max-width="800px">
-      <v-card variant="flat" class="dialog-card">
-        <v-card-title class="d-flex align-center pa-4">
-          <v-icon class="mr-2" color="primary">mdi-test-tube</v-icon>
-          <span class="text-subtitle-1 font-weight-bold">Testing Encounter Details</span>
-          <v-spacer></v-spacer>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="testingDialog = false" />
-        </v-card-title>
-        <v-divider />
-        <v-card-text v-if="selectedTesting" class="pa-4">
-          <v-row dense>
-            <v-col cols="12" md="6">
-              <div class="text-subtitle-2 font-weight-bold mb-1">Pre-test Counseling</div>
-              <div class="text-body-2">
-                <span class="text-medium-emphasis">Conducted:</span>
-                {{ selectedTesting.pretest_counseling?.conducted ? 'Yes' : 'No' }}
-              </div>
-              <div class="text-body-2">
-                <span class="text-medium-emphasis">Notes:</span>
-                {{ selectedTesting.pretest_counseling?.notes || 'N/A' }}
-              </div>
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="text-subtitle-2 font-weight-bold mb-1">HIV Test</div>
-              <div class="text-body-2">
-                <span class="text-medium-emphasis">Result:</span>
-                {{ selectedTesting.hiv_test?.result || 'N/A' }}
-              </div>
-              <div class="text-body-2">
-                <span class="text-medium-emphasis">Kit Lot:</span>
-                {{ selectedTesting.hiv_test?.kit_lot_number || 'N/A' }}
-              </div>
-              <div class="text-body-2">
-                <span class="text-medium-emphasis">Test Date:</span>
-                {{ selectedTesting.hiv_test?.test_date || 'N/A' }}
-              </div>
-            </v-col>
-          </v-row>
-          <v-divider class="my-3" />
-          <div class="text-subtitle-2 font-weight-bold mb-1">Post-test Counseling</div>
-          <div class="text-body-2">
-            <span class="text-medium-emphasis">Conducted:</span>
-            {{ selectedTesting.posttest_counseling?.conducted ? 'Yes' : 'No' }}
-          </div>
-          <div class="text-body-2">
-            <span class="text-medium-emphasis">Notes:</span>
-            {{ selectedTesting.posttest_counseling?.notes || 'N/A' }}
-          </div>
-        </v-card-text>
+                <template #item.appointment_date="{ item }">
+                  {{ formatDate(item.appointment_date) }}
+                </template>
+                <template #item.time_slot="{ item }">
+                  {{ formatTimeSlot(item.time_slot) }}
+                </template>
+                <template #item.office="{ item }">
+                  <v-chip
+                    size="small"
+                    variant="tonal"
+                    :color="item.office === 'testing' ? 'info' : 'deep-purple'"
+                    class="text-capitalize"
+                  >
+                    {{ item.office }}
+                  </v-chip>
+                </template>
+                <template #item.transaction_type="{ item }">
+                  <span class="text-body-2">
+                    {{ item.TransactionType?.name || '—' }}
+                  </span>
+                </template>
+                <template #item.status="{ item }">
+                  <v-chip :color="getStatusColor(item.status)" size="small" variant="tonal">
+                    {{ item.status }}
+                  </v-chip>
+                </template>
+                <template #item.notes="{ item }">
+                  <span v-if="item.notes" class="text-caption">
+                    <v-icon size="12" class="mr-1">mdi-note-text-outline</v-icon>
+                    {{ item.notes }}
+                  </span>
+                  <span v-else class="text-caption text-medium-emphasis">—</span>
+                </template>
+              </v-data-table>
+            </v-card-text>
+          </v-window-item>
+        </v-window>
       </v-card>
-    </v-dialog>
+    </template>
 
-    <!-- ═══════════════ Treatment Encounter Dialog ═══════════════ -->
-    <v-dialog v-model="treatmentDialog" max-width="800px">
-      <v-card variant="flat" class="dialog-card">
-        <v-card-title class="d-flex align-center pa-4">
-          <v-icon class="mr-2" color="primary">mdi-pill</v-icon>
-          <span class="text-subtitle-1 font-weight-bold">Treatment Encounter Details</span>
-          <v-spacer></v-spacer>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="treatmentDialog = false" />
-        </v-card-title>
-        <v-divider />
-        <v-card-text v-if="selectedTreatment" class="pa-4">
-          <v-row dense>
-            <v-col cols="12" md="6">
-              <div class="text-subtitle-2 font-weight-bold mb-1">Consultation</div>
-              <div class="text-body-2">
-                {{ selectedTreatment.consultation_notes?.subjective || 'N/A' }}
-              </div>
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="text-subtitle-2 font-weight-bold mb-1">Prescription</div>
-              <div v-if="selectedTreatment.art_prescription" class="text-body-2">
-                {{ selectedTreatment.art_prescription.medication_name }}
-                {{ selectedTreatment.art_prescription.dosage }}
-                <br />
-                <span class="text-caption text-medium-emphasis">
-                  Refill: {{ selectedTreatment.art_prescription.refill_date || 'N/A' }}
-                </span>
-              </div>
-              <div v-else class="text-body-2">No prescription</div>
-            </v-col>
-          </v-row>
-          <v-divider class="my-3" />
-          <div class="text-subtitle-2 font-weight-bold mb-1">Lab Results</div>
-          <div v-if="selectedTreatment.lab_results && selectedTreatment.lab_results.length">
-            <v-chip
-              v-for="lab in selectedTreatment.lab_results"
-              :key="lab.type"
-              size="small"
-              variant="tonal"
-              class="mr-2 mb-1"
-            >
-              {{ lab.type }}: {{ lab.value }}
-            </v-chip>
-          </div>
-          <div v-else class="text-body-2">No lab results recorded</div>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <!-- Loading / not found -->
+    <v-card v-else variant="flat" class="info-card">
+      <v-card-text class="text-center py-8">
+        <v-progress-circular v-if="loading" indeterminate color="primary" />
+        <template v-else>
+          <v-icon size="48" color="grey-lighten-1">mdi-account-off-outline</v-icon>
+          <p class="text-body-2 text-medium-emphasis mt-3 mb-0">Patient not found</p>
+          <v-btn
+            variant="tonal"
+            color="primary"
+            size="small"
+            prepend-icon="mdi-arrow-left"
+            class="mt-3 text-none"
+            @click="goBack"
+          >
+            Back to list
+          </v-btn>
+        </template>
+      </v-card-text>
+    </v-card>
+
+    <!-- Encounter detail dialog -->
+    <EncounterDetailDialog
+      v-model="encounterDialog"
+      :encounter="selectedEncounter"
+    />
 
     <!-- Snackbar -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000" location="top" rounded="lg">
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="3000"
+      location="top"
+      rounded="lg"
+    >
       <div class="d-flex align-center">
         <v-icon class="mr-2">
           {{ snackbar.color === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
@@ -740,11 +819,13 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import patientService from '@/services/patientService'
 import appointmentService from '@/services/appointmentService'
+import encounterService from '@/services/encounterService'
 import locationService from '@/services/locationService'
 import api from '@/plugins/axios'
 import { useAuthStore } from '@/stores/authStore'
+import EncounterDetailDialog from '@/components/encounters/EncounterDetailDialog.vue'
 
-/* ─────────────── Reusable InfoRow component ─────────────── */
+/* ─────────────── Reusable InfoRow ─────────────── */
 const InfoRow = {
   name: 'InfoRow',
   props: {
@@ -766,7 +847,7 @@ const InfoRow = {
 
 export default {
   name: 'PatientDetail',
-  components: { InfoRow },
+  components: { InfoRow, EncounterDetailDialog },
   setup() {
     const router = useRouter()
     const route = useRoute()
@@ -774,66 +855,45 @@ export default {
 
     const MASK_STORAGE_KEY = 'patient-list:maskSensitive'
 
+    /* ─── State ─── */
     const patient = ref(null)
     const loading = ref(false)
     const loadingHistory = ref(false)
     const activeTab = ref('testing')
-    const testingHistory = ref([])
-    const treatmentHistory = ref([])
+
+    const encounters = ref([])
     const appointments = ref([])
-    const testingDialog = ref(false)
-    const treatmentDialog = ref(false)
-    const selectedTesting = ref(null)
-    const selectedTreatment = ref(null)
+
+    const encounterDialog = ref(false)
+    const selectedEncounter = ref(null)
 
     const maskSensitive = ref(localStorage.getItem(MASK_STORAGE_KEY) === 'true')
 
-    const currentAddressNames = ref({
-      region: null,
-      province: null,
-      city: null,
-      barangay: null
-    })
-
-    const permanentAddressNames = ref({
-      region: null,
-      province: null,
-      city: null,
-      barangay: null
-    })
+    const currentAddressNames = ref({ region: null, province: null, city: null, barangay: null })
+    const permanentAddressNames = ref({ region: null, province: null, city: null, barangay: null })
 
     const chainRecords = ref([])
     const loadingChain = ref(false)
     const verifyingAll = ref(false)
     const chainVerifyResult = ref(null)
 
-    const snackbar = ref({
-      show: false,
-      message: '',
-      color: 'success'
-    })
+    const snackbar = ref({ show: false, message: '', color: 'success' })
 
-    /* ─────────────── Table headers ─────────────── */
-    const testingHeaders = [
-      { title: 'Date', key: 'created_at' },
-      { title: 'Pre-test', key: 'pretest_counseling.conducted', align: 'center' },
-      { title: 'Result', key: 'hiv_test', align: 'center' },
-      { title: 'Post-test', key: 'posttest_counseling.conducted', align: 'center' },
-      { title: 'Actions', key: 'actions', align: 'center', sortable: false, width: '100px' }
-    ]
-
-    const treatmentHeaders = [
-      { title: 'Date', key: 'created_at' },
-      { title: 'Prescription', key: 'art_prescription' },
-      { title: 'Next Appointment', key: 'next_appointment_date', align: 'center' },
-      { title: 'Actions', key: 'actions', align: 'center', sortable: false, width: '100px' }
+    /* ─── Table headers ─── */
+    const encounterHeaders = [
+      { title: 'Date', key: 'occurred_at', width: '160px' },
+      { title: 'Transaction Type', key: 'transaction_type', width: '220px' },
+      { title: 'Summary', key: 'summary', sortable: false },
+      { title: 'Recorded By', key: 'staff', width: '140px' },
+      { title: '', key: 'actions', sortable: false, align: 'end', width: '110px' }
     ]
 
     const appointmentHeaders = [
       { title: 'Date', key: 'appointment_date' },
       { title: 'Time', key: 'time_slot', align: 'center' },
       { title: 'Office', key: 'office', align: 'center' },
-      { title: 'Transaction Type', key: 'TransactionType.name', align: 'center' },
+      { title: 'Transaction Type', key: 'transaction_type', align: 'center' },
+      { title: 'Notes', key: 'notes' },
       { title: 'Status', key: 'status', align: 'center' }
     ]
 
@@ -846,7 +906,7 @@ export default {
       { title: '', key: 'actions', sortable: false, align: 'end' }
     ]
 
-    /* ─────────────── Computeds ─────────────── */
+    /* ─── Computeds ─── */
     const fullName = computed(() => {
       if (!patient.value) return 'N/A'
       const parts = [
@@ -876,9 +936,7 @@ export default {
 
     const formattedPermanentAddress = computed(() => {
       if (!patient.value) return 'N/A'
-      if (patient.value.same_as_current_address) {
-        return formattedCurrentAddress.value
-      }
+      if (patient.value.same_as_current_address) return formattedCurrentAddress.value
       return joinAddressParts([
         patient.value.permanent_sitio_street,
         permanentAddressNames.value.barangay,
@@ -904,6 +962,14 @@ export default {
       authStore.userOffice === 'testing' ? 'mdi-test-tube' : 'mdi-pill'
     )
 
+    const testingEncounters = computed(() =>
+      encounters.value.filter((e) => e.office === 'testing')
+    )
+
+    const treatmentEncounters = computed(() =>
+      encounters.value.filter((e) => e.office === 'treatment')
+    )
+
     const chainStatusColor = computed(() => {
       if (loadingChain.value) return 'info'
       if (!chainRecords.value.length) return 'warning'
@@ -920,7 +986,7 @@ export default {
       return r.matches ? 'Verified' : 'TAMPERED'
     })
 
-    /* ─────────────── Mask toggle ─────────────── */
+    /* ─── Mask toggle ─── */
     function toggleMask() {
       maskSensitive.value = !maskSensitive.value
     }
@@ -929,7 +995,7 @@ export default {
       localStorage.setItem(MASK_STORAGE_KEY, String(val))
     })
 
-    /* ─────────────── Keyboard shortcut ─────────────── */
+    /* ─── Keyboard shortcut ─── */
     function isTypingTarget(el) {
       if (!el) return false
       const tag = el.tagName?.toLowerCase()
@@ -947,7 +1013,7 @@ export default {
       }
     }
 
-    /* ─────────────── Masking helpers ─────────────── */
+    /* ─── Masking ─── */
     function maskValue(value) {
       if (!value) return 'N/A'
       const str = String(value)
@@ -970,9 +1036,10 @@ export default {
       if (!email) return 'N/A'
       const [local, domain] = String(email).split('@')
       if (!domain) return '••••'
-      const maskedLocal = local.length <= 2
-        ? '••'
-        : local.charAt(0) + '•'.repeat(local.length - 2) + local.slice(-1)
+      const maskedLocal =
+        local.length <= 2
+          ? '••'
+          : local.charAt(0) + '•'.repeat(local.length - 2) + local.slice(-1)
       return `${maskedLocal}@${domain}`
     }
 
@@ -981,31 +1048,22 @@ export default {
       return '••••••••••••••••'
     }
 
-    /* ─────────────── Link helpers ─────────────── */
-    /**
-     * Strip everything except digits and a leading "+" so tel: links
-     * work across dialers that don't tolerate spaces or parentheses.
-     */
+    /* ─── Link helpers ─── */
     function phoneHref(phone) {
       if (!phone) return ''
       return String(phone).replace(/[^\d+]/g, '')
     }
 
-    /**
-     * Build a Facebook URL from either a username, a full URL, or a
-     * "facebook.com/..." style handle.
-     */
     function facebookUrl(value) {
       if (!value) return ''
       const v = String(value).trim()
       if (/^https?:\/\//i.test(v)) return v
       if (/^(www\.)?facebook\.com\//i.test(v)) return `https://${v.replace(/^www\./, '')}`
       if (/^(www\.)?m\.me\//i.test(v)) return `https://${v.replace(/^www\./, '')}`
-      // Bare username / handle
       return `https://facebook.com/${v.replace(/^@/, '')}`
     }
 
-    /* ─────────────── Patient + history loading ─────────────── */
+    /* ─── Loaders ─── */
     const loadPatient = async () => {
       const patientId = route.params.id
       if (!patientId) return
@@ -1019,27 +1077,44 @@ export default {
       }
     }
 
-    const loadHistory = async () => {
+    const loadEncounters = async () => {
       const patientId = route.params.id
       if (!patientId) return
+      try {
+        const list = await encounterService.list({
+          patient_id: patientId,
+          include_voided: true
+        })
+        encounters.value = Array.isArray(list) ? list : []
+      } catch (error) {
+        console.error('Failed to load encounters:', error)
+        showSnackbar('Failed to load encounters', 'error')
+        encounters.value = []
+      }
+    }
+
+    const loadAppointments = async () => {
+      const patientId = route.params.id
+      if (!patientId) return
+      try {
+        const rows = await appointmentService.getAppointmentsByPatient(patientId)
+        appointments.value = Array.isArray(rows) ? rows : []
+      } catch (error) {
+        console.error('Failed to load appointments:', error)
+        appointments.value = []
+      }
+    }
+
+    const loadHistory = async () => {
       loadingHistory.value = true
       try {
-        const history = await patientService.getPatientHistory(patientId)
-        testingHistory.value = history.testing || []
-        treatmentHistory.value = history.treatment || []
-
-        const appointmentData =
-          await appointmentService.getAppointmentsByPatient(patientId)
-        appointments.value = appointmentData || []
-      } catch (error) {
-        console.error('Failed to load history:', error)
-        showSnackbar('Failed to load patient history: ' + error.message, 'error')
+        await Promise.all([loadEncounters(), loadAppointments()])
       } finally {
         loadingHistory.value = false
       }
     }
 
-    /* ─────────────── Address name resolution ─────────────── */
+    /* ─── Address name resolution ─── */
     const resolveAddressNames = async ({ barangay_id, city_municipality_id, province_id }) => {
       const empty = { region: null, province: null, city: null, barangay: null }
       if (!barangay_id && !city_municipality_id && !province_id) return empty
@@ -1058,7 +1133,7 @@ export default {
           ) {
             return resolved
           }
-        } catch (e) {
+        } catch {
           /* fall through */
         }
       }
@@ -1134,7 +1209,7 @@ export default {
       }
     }
 
-    /* ─────────────── Blockchain loading ─────────────── */
+    /* ─── Blockchain ─── */
     const loadChainRecords = async () => {
       const patientId = patient.value?.id
       if (!patientId) return
@@ -1164,7 +1239,7 @@ export default {
           .sort((a, b) => new Date(b.ts) - new Date(a.ts))
 
         chainVerifyResult.value = null
-      } catch (e) {
+      } catch {
         showSnackbar('Failed to load blockchain records', 'error')
         chainRecords.value = []
       } finally {
@@ -1172,7 +1247,6 @@ export default {
       }
     }
 
-    /* ─────────────── Verification ─────────────── */
     const verifyPatient = async () => {
       const patientId = patient.value?.id
       if (!patientId) return null
@@ -1208,10 +1282,7 @@ export default {
           data.matches ? 'success' : 'error'
         )
       } catch (e) {
-        showSnackbar(
-          'Verification failed: ' + (e?.response?.data?.error || e.message),
-          'error'
-        )
+        showSnackbar('Verification failed: ' + (e?.response?.data?.error || e.message), 'error')
       } finally {
         verifyingAll.value = false
       }
@@ -1228,14 +1299,14 @@ export default {
         } else {
           showSnackbar('⚠ Record has been tampered with', 'error')
         }
-      } catch (e) {
+      } catch {
         showSnackbar('Verification failed', 'error')
       } finally {
         row._verifying = false
       }
     }
 
-    /* ─────────────── Helpers ─────────────── */
+    /* ─── Helpers ─── */
     const decodeStreamItem = (raw) => {
       if (!raw) return null
       let record = null
@@ -1244,9 +1315,7 @@ export default {
         if (typeof Buffer !== 'undefined') {
           record = JSON.parse(Buffer.from(hex, 'hex').toString('utf8'))
         } else {
-          const bytes = new Uint8Array(
-            hex.match(/.{1,2}/g).map((b) => parseInt(b, 16))
-          )
+          const bytes = new Uint8Array(hex.match(/.{1,2}/g).map((b) => parseInt(b, 16)))
           record = JSON.parse(new TextDecoder('utf-8').decode(bytes))
         }
       } catch {
@@ -1261,7 +1330,84 @@ export default {
       }
     }
 
-    const goBack = () => router.push('/patients')
+    /* Compact chips for a table row (schema-driven) */
+    function encounterSummary(encounter) {
+      const schema = encounter?.TransactionType?.checklist_schema?.fields || []
+      const data = encounter?.data || {}
+
+      const score = (type) => {
+        if (type === 'enum') return 3
+        if (type === 'boolean') return 2
+        if (type === 'number') return 2
+        if (type === 'text') return 1
+        return 0
+      }
+
+      const candidates = schema
+        .filter((f) => {
+          const v = data[f.key]
+          if (v === undefined || v === null || v === '') return false
+          if (Array.isArray(v) && v.length === 0) return false
+          return true
+        })
+        .map((f) => ({ ...f, value: data[f.key] }))
+
+      if (candidates.length === 0) {
+        return Object.entries(data)
+          .slice(0, 3)
+          .map(([key, value]) => ({
+            label: humanize(key),
+            value: formatScalar(value),
+            color: 'primary'
+          }))
+      }
+
+      return candidates
+        .sort((a, b) => score(b.type) - score(a.type))
+        .slice(0, 3)
+        .map((f) => ({
+          label: f.label || humanize(f.key),
+          value: formatScalar(f.value, f.type),
+          color: chipColor(f)
+        }))
+    }
+
+    function chipColor(field) {
+      if (field.type === 'boolean') return field.value ? 'success' : 'grey'
+      const v = String(field.value || '').toLowerCase()
+      if (v.includes('positive') || v.includes('reactive')) return 'error'
+      if (v.includes('negative') || v.includes('non-reactive')) return 'success'
+      if (v.includes('inconclusive') || v.includes('invalid')) return 'warning'
+      return 'primary'
+    }
+
+    function formatScalar(value, type) {
+      if (value === null || value === undefined || value === '') return '—'
+      if (type === 'boolean' || typeof value === 'boolean') return value ? 'Yes' : 'No'
+      if (Array.isArray(value)) return value.join(', ')
+      if (typeof value === 'object') return JSON.stringify(value)
+      const s = String(value)
+      return s.length > 40 ? s.slice(0, 40) + '…' : s
+    }
+
+    function humanize(key) {
+      return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    }
+
+    const openEncounter = (encounter) => {
+      selectedEncounter.value = encounter
+      encounterDialog.value = true
+    }
+
+    /* ─── Navigation ─── */
+    const goBack = () => {
+      if (window.history.length > 1) {
+        router.back()
+      } else {
+        router.push({ name: 'PatientList' })
+      }
+    }
+
     const editPatient = () => router.push(`/patients/${patient.value.id}/edit`)
 
     const startEncounter = () => {
@@ -1269,16 +1415,7 @@ export default {
       router.push(`/${office}/encounter/${patient.value.id}`)
     }
 
-    const viewTestingEncounter = (encounter) => {
-      selectedTesting.value = encounter
-      testingDialog.value = true
-    }
-
-    const viewTreatmentEncounter = (encounter) => {
-      selectedTreatment.value = encounter
-      treatmentDialog.value = true
-    }
-
+    /* ─── Formatting ─── */
     const calculateAge = (birthDate) => {
       if (!birthDate) return 'N/A'
       const today = new Date()
@@ -1309,6 +1446,14 @@ export default {
       })
     }
 
+    const formatTime = (iso) => {
+      if (!iso) return ''
+      return new Date(iso).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit'
+      })
+    }
+
     const formatTimeSlot = (time) => {
       if (!time) return 'N/A'
       const parts = time.split(':')
@@ -1322,6 +1467,7 @@ export default {
     const getStatusColor = (status) => {
       const colors = {
         pending: 'info',
+        queued: 'warning',
         'checked-in': 'warning',
         completed: 'success',
         cancelled: 'error',
@@ -1362,19 +1508,15 @@ export default {
       snackbar.value = { show: true, message, color }
     }
 
-    /* ─────────────── Lifecycle ─────────────── */
+    /* ─── Lifecycle ─── */
     onMounted(async () => {
       await loadPatient()
-      await Promise.all([
-        loadHistory(),
-        loadChainRecords(),
-        loadAddressNames()
-      ])
+      await Promise.all([loadHistory(), loadChainRecords(), loadAddressNames()])
       if (chainRecords.value.length) {
         try {
           await verifyPatient()
         } catch {
-          /* verification errors are surfaced via the panel state */
+          /* surfaced via panel state */
         }
       }
       window.addEventListener('keydown', handleKeydown)
@@ -1385,56 +1527,66 @@ export default {
     })
 
     return {
+      /* State */
       patient,
       loading,
       loadingHistory,
       activeTab,
-      testingHistory,
-      treatmentHistory,
+      encounters,
+      testingEncounters,
+      treatmentEncounters,
       appointments,
-      testingDialog,
-      treatmentDialog,
-      selectedTesting,
-      selectedTreatment,
 
+      /* Dialog */
+      encounterDialog,
+      selectedEncounter,
+      openEncounter,
+
+      /* Masking */
       maskSensitive,
       toggleMask,
       maskValue,
       maskName,
       maskEmail,
       maskAddress,
+
+      /* Links */
       phoneHref,
       facebookUrl,
 
+      /* Computed */
       fullName,
       formattedCurrentAddress,
       formattedPermanentAddress,
-      currentAddressNames,
-      permanentAddressNames,
-
-      testingHeaders,
-      treatmentHeaders,
-      appointmentHeaders,
-      chainHeaders,
-
       canStartEncounter,
       encounterLabel,
       encounterIcon,
+
+      /* Headers */
+      encounterHeaders,
+      appointmentHeaders,
+      chainHeaders,
+
+      /* Actions */
       editPatient,
       startEncounter,
-      viewTestingEncounter,
-      viewTreatmentEncounter,
       goBack,
 
+      /* Formatting */
       calculateAge,
       formatDate,
       formatDateTime,
+      formatTime,
       formatTimeSlot,
       getStatusColor,
       truncateHash,
       eventTypeColor,
       copyToClipboard,
 
+      /* Encounter helpers */
+      encounterSummary,
+
+      /* Blockchain */
       chainRecords,
       loadingChain,
       verifyingAll,
@@ -1445,6 +1597,7 @@ export default {
       verifyAllRecords,
       verifySingleAnchor,
 
+      /* Snackbar */
       snackbar
     }
   }
@@ -1468,13 +1621,12 @@ export default {
 
 /* ─── Cards ─── */
 .info-card,
-.stat-strip,
-.dialog-card {
+.stat-strip {
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
 }
 
-/* ─── Modern table styling ─── */
+/* ─── Modern table ─── */
 .modern-table :deep(thead th) {
   font-weight: 600 !important;
   text-transform: uppercase;
@@ -1492,7 +1644,7 @@ export default {
   padding-bottom: 14px !important;
 }
 
-/* ─── Inline links (email / phone / facebook) ─── */
+/* ─── Inline links ─── */
 .link-inline {
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
@@ -1503,6 +1655,32 @@ export default {
 .link-inline:hover {
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ─── Color dot ─── */
+.color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.06);
+  display: inline-block;
+}
+
+/* ─── Summary column ─── */
+.summary-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 620px;
+}
+
+/* ─── Empty state ─── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px;
 }
 
 /* ─── Responsive ─── */

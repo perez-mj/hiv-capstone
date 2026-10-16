@@ -119,8 +119,9 @@ module.exports = (sequelize) => {
         type: DataTypes.TEXT,
         allowNull: false,
         set(value) {
-          this.setDataValue('contact_number', safeEncrypt(value));
-          this.setDataValue('contact_number_hash', safeHmac(value));
+          const normalized = value == null ? null : String(value).trim();
+          this.setDataValue('contact_number', safeEncrypt(normalized));
+          this.setDataValue('contact_number_hash', safeHmac(normalized));
         },
         get() { return safeDecrypt(this.getDataValue('contact_number')); },
       },

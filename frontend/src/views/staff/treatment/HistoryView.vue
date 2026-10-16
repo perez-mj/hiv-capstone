@@ -1,29 +1,47 @@
+<!-- frontend/src/views/staff/treatment/HistoryView.vue -->
 <template>
   <v-container fluid class="pa-4">
     <!-- Header -->
     <v-row align="center" class="mb-4">
       <v-col cols="12" md="8">
         <div class="d-flex align-center">
-          <v-btn icon variant="text" @click="goBack" class="mr-2">
+          <v-btn
+            icon
+            variant="text"
+            class="mr-2"
+            :to="backToPatientRoute"
+            @click.prevent="goBack"
+          >
             <v-icon>mdi-arrow-left</v-icon>
           </v-btn>
           <div>
             <h1 class="text-h5 font-weight-bold mb-0">Treatment History</h1>
             <div class="text-caption text-medium-emphasis">
-              Past treatment encounters for {{ patientFullName || 'patient' }}
+              Past treatment encounters for
+              <strong>{{ patientFullName || 'patient' }}</strong>
             </div>
           </div>
         </div>
       </v-col>
       <v-col cols="12" md="4" class="text-md-right">
-        <v-btn
-          color="teal-darken-2"
-          variant="flat"
-          prepend-icon="mdi-plus"
-          :to="{ name: 'TreatmentEncounter', params: { patientId } }"
-        >
-          New Encounter
-        </v-btn>
+        <div class="d-flex ga-2 justify-end flex-wrap">
+          <v-btn
+            variant="tonal"
+            color="teal-darken-2"
+            prepend-icon="mdi-account-outline"
+            :to="backToPatientRoute"
+          >
+            Patient
+          </v-btn>
+          <v-btn
+            color="teal-darken-2"
+            variant="flat"
+            prepend-icon="mdi-plus"
+            :to="{ name: 'TreatmentEncounter', params: { patientId } }"
+          >
+            New Encounter
+          </v-btn>
+        </div>
       </v-col>
     </v-row>
 
@@ -32,24 +50,77 @@
       <v-card-text>
         <v-row dense align="center">
           <v-col cols="12" sm="4">
-            <v-text-field v-model="filters.from" label="From" type="date" variant="outlined" density="comfortable" hide-details />
+            <v-text-field
+              v-model="filters.from"
+              label="From"
+              type="date"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+            />
           </v-col>
           <v-col cols="12" sm="4">
-            <v-text-field v-model="filters.to" label="To" type="date" variant="outlined" density="comfortable" hide-details />
+            <v-text-field
+              v-model="filters.to"
+              label="To"
+              type="date"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+              clearable
+            />
           </v-col>
-          <v-col cols="12" sm="4">
-            <v-checkbox v-model="filters.includeVoided" label="Include voided" hide-details density="comfortable" />
+          <v-col cols="12" sm="4" class="d-flex align-center">
+            <v-checkbox
+              v-model="filters.includeVoided"
+              label="Include voided"
+              hide-details
+              density="comfortable"
+              color="teal-darken-2"
+            />
           </v-col>
         </v-row>
       </v-card-text>
       <v-divider />
       <v-card-actions class="pa-3">
         <v-spacer />
-        <v-btn variant="text" @click="resetFilters">Reset</v-btn>
-        <v-btn color="teal-darken-2" variant="flat" prepend-icon="mdi-magnify" :loading="loading" @click="loadHistory">
+        <v-btn variant="text" class="text-none" @click="resetFilters">Reset</v-btn>
+        <v-btn
+          color="teal-darken-2"
+          variant="flat"
+          class="text-none"
+          prepend-icon="mdi-magnify"
+          :loading="loading"
+          @click="loadHistory"
+        >
           Apply
         </v-btn>
       </v-card-actions>
+    </v-card>
+
+    <!-- Summary strip -->
+    <v-card variant="flat" class="mb-4 summary-strip">
+      <v-card-text class="pa-4">
+        <v-row dense>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Total encounters</div>
+            <div class="text-h6 font-weight-bold">{{ encounters.length }}</div>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Active</div>
+            <div class="text-h6 font-weight-bold text-success">
+              {{ encounters.filter((e) => !e.voided_at).length }}
+            </div>
+          </v-col>
+          <v-col cols="12" sm="4">
+            <div class="text-caption text-medium-emphasis">Voided</div>
+            <div class="text-h6 font-weight-bold text-error">
+              {{ encounters.filter((e) => e.voided_at).length }}
+            </div>
+          </v-col>
+        </v-row>
+      </v-card-text>
     </v-card>
 
     <!-- Table -->
@@ -59,114 +130,199 @@
         :items="encounters"
         :loading="loading"
         item-value="id"
-        class="elevation-0"
+        class="modern-table elevation-0"
         :items-per-page="15"
+        :items-per-page-options="[10, 15, 25, 50]"
         no-data-text="No treatment encounters found."
       >
         <template #item.occurred_at="{ item }">
-          {{ formatDateTime(item.occurred_at) }}
-        </template>
-        <template #item.transaction_type="{ item }">
-          <div class="d-flex align-center">
-            <v-avatar size="12" :color="item.TransactionType?.color_code || 'grey'" class="mr-2" />
-            <span>{{ item.TransactionType?.name || '—' }}</span>
+          <div class="d-flex flex-column">
+            <span class="text-body-2">{{ formatDate(item.occurred_at) }}</span>
+            <span class="text-caption text-medium-emphasis">
+              {{ formatTime(item.occurred_at) }}
+            </span>
           </div>
         </template>
-        <template #item.staff="{ item }">{{ item.Staff?.username || '—' }}</template>
-        <template #item.status="{ item }">
-          <v-chip v-if="item.voided_at" color="error" size="small" variant="flat">Voided</v-chip>
-          <v-chip v-else color="success" size="small" variant="flat">Active</v-chip>
+
+        <template #item.transaction_type="{ item }">
+          <div class="d-flex align-center">
+            <span
+              class="color-dot mr-2"
+              :style="{ backgroundColor: item.TransactionType?.color_code || '#cbd5e1' }"
+            />
+            <div class="d-flex flex-column">
+              <span class="text-body-2 font-weight-medium">
+                {{ item.TransactionType?.name || '—' }}
+              </span>
+              <span
+                v-if="item.schema_version"
+                class="text-caption text-medium-emphasis"
+              >
+                schema v{{ item.schema_version }}
+              </span>
+            </div>
+          </div>
         </template>
+
+        <template #item.summary="{ item }">
+          <div class="summary-cell">
+            <template v-if="summaryChips(item).length">
+              <v-chip
+                v-for="(chip, i) in summaryChips(item)"
+                :key="i"
+                size="small"
+                variant="tonal"
+                :color="chip.color"
+                class="mr-1 mb-1"
+              >
+                <strong class="mr-1">{{ chip.label }}:</strong>
+                <span class="text-truncate" style="max-width: 160px">
+                  {{ chip.value }}
+                </span>
+              </v-chip>
+            </template>
+            <span v-else class="text-caption text-medium-emphasis">—</span>
+          </div>
+        </template>
+
+        <template #item.staff="{ item }">
+          <span class="text-caption">
+            {{ item.Staff?.username || '—' }}
+          </span>
+        </template>
+
+        <template #item.status="{ item }">
+          <v-chip
+            v-if="item.voided_at"
+            color="error"
+            size="small"
+            variant="tonal"
+            prepend-icon="mdi-cancel"
+          >
+            Voided
+          </v-chip>
+          <v-chip
+            v-else
+            color="success"
+            size="small"
+            variant="tonal"
+            prepend-icon="mdi-check-circle"
+          >
+            Active
+          </v-chip>
+        </template>
+
         <template #item.actions="{ item }">
-          <v-btn icon size="small" variant="text" color="primary" @click="openDetail(item)">
-            <v-icon>mdi-eye</v-icon>
-          </v-btn>
-          <v-btn v-if="!item.voided_at" icon size="small" variant="text" color="error" @click="openVoidDialog(item)">
-            <v-icon>mdi-cancel</v-icon>
-          </v-btn>
+          <div class="d-flex justify-end ga-1">
+            <v-tooltip text="View details" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-eye-outline"
+                  size="small"
+                  variant="text"
+                  color="primary"
+                  @click="openDetail(item)"
+                />
+              </template>
+            </v-tooltip>
+
+            <v-tooltip v-if="!item.voided_at" text="Void encounter" location="top">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-cancel"
+                  size="small"
+                  variant="text"
+                  color="error"
+                  @click="openVoidDialog(item)"
+                />
+              </template>
+            </v-tooltip>
+          </div>
         </template>
       </v-data-table>
     </v-card>
 
     <!-- Detail Dialog -->
-    <v-dialog v-model="detailDialog" max-width="720">
-      <v-card v-if="selectedEncounter">
-        <v-card-title class="d-flex align-center">
-          <v-icon class="mr-2">mdi-medical-bag</v-icon>
-          Treatment Encounter #{{ selectedEncounter.id }}
-          <v-spacer />
-          <v-btn icon variant="text" @click="detailDialog = false"><v-icon>mdi-close</v-icon></v-btn>
-        </v-card-title>
-        <v-divider />
-        <v-card-text>
-          <v-row dense>
-            <v-col cols="12" sm="6">
-              <div class="text-caption text-medium-emphasis">Occurred At</div>
-              <div>{{ formatDateTime(selectedEncounter.occurred_at) }}</div>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <div class="text-caption text-medium-emphasis">Transaction Type</div>
-              <div>{{ selectedEncounter.TransactionType?.name }}</div>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <div class="text-caption text-medium-emphasis">Staff</div>
-              <div>{{ selectedEncounter.Staff?.username }}</div>
-            </v-col>
-            <v-col cols="12" sm="6">
-              <div class="text-caption text-medium-emphasis">Recorded</div>
-              <div>{{ formatDateTime(selectedEncounter.created_at) }}</div>
-            </v-col>
-          </v-row>
-
-          <v-divider class="my-4" />
-          <div class="text-subtitle-2 font-weight-bold mb-2">Clinical Data</div>
-          <v-table density="compact">
-            <tbody>
-              <tr v-for="(value, key) in selectedEncounter.data" :key="key">
-                <td class="text-medium-emphasis" style="width: 40%">{{ humanize(key) }}</td>
-                <td>{{ formatValue(value) }}</td>
-              </tr>
-              <tr v-if="!selectedEncounter.data || Object.keys(selectedEncounter.data).length === 0">
-                <td colspan="2" class="text-medium-emphasis">No data recorded.</td>
-              </tr>
-            </tbody>
-          </v-table>
-
-          <template v-if="selectedEncounter.notes">
-            <v-divider class="my-4" />
-            <div class="text-subtitle-2 font-weight-bold mb-2">Notes</div>
-            <div class="text-body-2" style="white-space: pre-wrap">{{ selectedEncounter.notes }}</div>
-          </template>
-
-          <template v-if="selectedEncounter.voided_at">
-            <v-alert type="error" variant="tonal" class="mt-4">
-              <strong>Voided:</strong> {{ selectedEncounter.void_reason }}
-              <div class="text-caption">at {{ formatDateTime(selectedEncounter.voided_at) }}</div>
-            </v-alert>
-          </template>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <EncounterDetailDialog
+      v-model="detailDialog"
+      :encounter="selectedEncounter"
+    />
 
     <!-- Void Dialog -->
-    <v-dialog v-model="voidDialog" max-width="480">
-      <v-card>
-        <v-card-title>Void Encounter</v-card-title>
-        <v-card-text>
-          <p class="mb-3">Are you sure you want to void encounter #{{ voidTarget?.id }}?</p>
-          <v-textarea v-model="voidReason" label="Reason for voiding *" variant="outlined" rows="3" auto-grow />
-        </v-card-text>
-        <v-card-actions>
+    <v-dialog v-model="voidDialog" max-width="480" persistent>
+      <v-card class="dialog-card">
+        <v-card-title class="d-flex align-center pa-4">
+          <v-icon class="mr-2" color="error">mdi-cancel</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Void Encounter</span>
           <v-spacer />
-          <v-btn variant="text" @click="voidDialog = false">Cancel</v-btn>
-          <v-btn color="error" variant="flat" :loading="voiding" :disabled="!voidReason.trim()" @click="confirmVoid">Void</v-btn>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="small"
+            :disabled="voiding"
+            @click="voidDialog = false"
+          />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pa-4">
+          <p class="text-body-2 mb-3">
+            Are you sure you want to void encounter
+            <strong>#{{ voidTarget?.id }}</strong>?
+            This action is recorded in the audit log.
+          </p>
+          <v-textarea
+            v-model="voidReason"
+            label="Reason for voiding *"
+            variant="outlined"
+            rows="3"
+            auto-grow
+            :rules="[(v) => !!v.trim() || 'Reason is required']"
+          />
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="pa-4">
+          <v-spacer />
+          <v-btn
+            variant="text"
+            class="text-none"
+            :disabled="voiding"
+            @click="voidDialog = false"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            class="text-none"
+            :loading="voiding"
+            :disabled="!voidReason.trim()"
+            @click="confirmVoid"
+          >
+            Void Encounter
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <!-- Snackbar -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
-      {{ snackbar.message }}
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      timeout="3000"
+      location="top right"
+      rounded="lg"
+    >
+      <div class="d-flex align-center">
+        <v-icon class="mr-2">
+          {{ snackbar.color === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}
+        </v-icon>
+        {{ snackbar.message }}
+      </div>
+      <template #actions>
+        <v-btn icon="mdi-close" variant="text" size="small" @click="snackbar.show = false" />
+      </template>
     </v-snackbar>
   </v-container>
 </template>
@@ -176,23 +332,30 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import treatmentService from '@/services/treatmentService';
 import patientService from '@/services/patientService';
+import EncounterDetailDialog from '@/components/encounters/EncounterDetailDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
 
 const patientId = Number(route.params.patientId);
 const patient = ref(null);
+
 const encounters = ref([]);
 const loading = ref(false);
 
-const filters = reactive({ from: '', to: '', includeVoided: false });
+const filters = reactive({
+  from: '',
+  to: '',
+  includeVoided: true,
+});
 
 const headers = [
-  { title: 'Date', key: 'occurred_at', sortable: true },
-  { title: 'Transaction Type', key: 'transaction_type', sortable: false },
-  { title: 'Staff', key: 'staff', sortable: false },
-  { title: 'Status', key: 'status', sortable: false },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end' },
+  { title: 'Date', key: 'occurred_at', sortable: true, width: '160px' },
+  { title: 'Transaction Type', key: 'transaction_type', sortable: false, width: '220px' },
+  { title: 'Summary', key: 'summary', sortable: false },
+  { title: 'Staff', key: 'staff', sortable: false, width: '140px' },
+  { title: 'Status', key: 'status', sortable: false, width: '130px' },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: '110px' },
 ];
 
 const detailDialog = ref(false);
@@ -216,25 +379,97 @@ const patientFullName = computed(() => {
   return [p.first_name, p.middle_name, p.last_name, p.suffix].filter(Boolean).join(' ');
 });
 
-function goBack() { router.back(); }
+const backToPatientRoute = computed(() => ({
+  name: 'PatientDetail',
+  params: { id: patientId },
+}));
 
-function formatDateTime(value) {
+function goBack() {
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push(backToPatientRoute.value);
+  }
+}
+
+function formatDate(value) {
   if (!value) return '—';
-  return new Date(value).toLocaleString(undefined, {
-    year: 'numeric', month: 'short', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
+  return new Date(value).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
   });
 }
 
-function humanize(key) {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+function formatTime(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-function formatValue(value) {
+function summaryChips(encounter) {
+  const schema = encounter?.TransactionType?.checklist_schema?.fields || [];
+  const data = encounter?.data || {};
+
+  const score = (type) => {
+    if (type === 'enum') return 3;
+    if (type === 'boolean') return 2;
+    if (type === 'number') return 2;
+    if (type === 'text') return 1;
+    return 0;
+  };
+
+  const candidates = schema
+    .filter((f) => {
+      const v = data[f.key];
+      if (v === undefined || v === null || v === '') return false;
+      if (Array.isArray(v) && v.length === 0) return false;
+      return true;
+    })
+    .map((f) => ({ ...f, value: data[f.key] }));
+
+  if (candidates.length === 0) {
+    return Object.entries(data)
+      .slice(0, 3)
+      .map(([key, value]) => ({
+        label: humanize(key),
+        value: formatScalar(value),
+        color: 'primary',
+      }));
+  }
+
+  return candidates
+    .sort((a, b) => score(b.type) - score(a.type))
+    .slice(0, 3)
+    .map((f) => ({
+      label: f.label || humanize(f.key),
+      value: formatScalar(f.value, f.type),
+      color: chipColor(f),
+    }));
+}
+
+function chipColor(field) {
+  if (field.type === 'boolean') return field.value ? 'success' : 'grey';
+  const v = String(field.value || '').toLowerCase();
+  if (v.includes('positive') || v.includes('reactive')) return 'error';
+  if (v.includes('negative') || v.includes('non-reactive')) return 'success';
+  if (v.includes('inconclusive') || v.includes('invalid')) return 'warning';
+  return 'primary';
+}
+
+function formatScalar(value, type) {
   if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (type === 'boolean' || typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
+  const s = String(value);
+  return s.length > 40 ? s.slice(0, 40) + '…' : s;
+}
+
+function humanize(key) {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 async function loadPatient() {
@@ -252,9 +487,12 @@ async function loadHistory() {
     if (filters.from) params.from = filters.from;
     if (filters.to) params.to = filters.to;
     if (filters.includeVoided) params.include_voided = 'true';
-    encounters.value = await treatmentService.getEncounters(params);
+
+    const result = await treatmentService.getEncounters(params);
+    encounters.value = Array.isArray(result) ? result : [];
   } catch (e) {
     notify('Failed to load history: ' + (e.response?.data?.error || e.message), 'error');
+    encounters.value = [];
   } finally {
     loading.value = false;
   }
@@ -263,11 +501,14 @@ async function loadHistory() {
 function resetFilters() {
   filters.from = '';
   filters.to = '';
-  filters.includeVoided = false;
+  filters.includeVoided = true;
   loadHistory();
 }
 
-function openDetail(item) { selectedEncounter.value = item; detailDialog.value = true; }
+function openDetail(item) {
+  selectedEncounter.value = item;
+  detailDialog.value = true;
+}
 
 function openVoidDialog(item) {
   voidTarget.value = item;
@@ -282,7 +523,7 @@ async function confirmVoid() {
     await treatmentService.voidEncounter(voidTarget.value.id, voidReason.value.trim());
     notify('Encounter voided.', 'success');
     voidDialog.value = false;
-    loadHistory();
+    await loadHistory();
   } catch (e) {
     notify('Failed to void encounter: ' + (e.response?.data?.error || e.message), 'error');
   } finally {
@@ -296,4 +537,37 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.modern-table :deep(thead th) {
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+.modern-table :deep(tbody td) {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+.summary-strip {
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+}
+.dialog-card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+.color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0, 0, 0, 0.06);
+  display: inline-block;
+}
+.summary-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 620px;
+}
 </style>

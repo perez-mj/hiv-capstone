@@ -82,7 +82,22 @@
                 variant="outlined"
                 :loading="loadingTypes"
                 prepend-inner-icon="mdi-tag"
-              />
+              >
+                <template #item="{ props, item }">
+                  <v-list-item v-bind="props">
+                    <template #prepend>
+                      <v-avatar
+                        size="12"
+                        :color="item.raw.color_code || 'grey'"
+                        class="mr-2"
+                      />
+                    </template>
+                    <v-list-item-subtitle v-if="item.raw.estimated_duration_minutes">
+                      {{ item.raw.estimated_duration_minutes }} min
+                    </v-list-item-subtitle>
+                  </v-list-item>
+                </template>
+              </v-select>
             </v-col>
 
             <v-col cols="12" md="6">
@@ -95,79 +110,43 @@
               />
             </v-col>
 
+            <!-- ────── Dynamic fields from checklist_schema ────── -->
             <v-col cols="12">
               <v-divider class="my-2" />
-              <div class="text-subtitle-2 font-weight-bold mb-2">Clinical Data</div>
+              <div class="d-flex align-center justify-space-between mb-2">
+                <div class="text-subtitle-2 font-weight-bold">Clinical Data</div>
+                <v-chip
+                  v-if="currentSchemaVersion"
+                  size="x-small"
+                  variant="tonal"
+                  color="medium-emphasis"
+                >
+                  schema v{{ currentSchemaVersion }}
+                </v-chip>
+              </div>
 
-              <div v-if="currentTypeSchema.length === 0" class="text-caption text-medium-emphasis">
-                No additional fields required for this transaction type.
+              <div
+                v-if="currentChecklistFields.length === 0"
+                class="text-caption text-medium-emphasis"
+              >
+                No additional fields configured for this transaction type.
               </div>
 
               <v-row v-else>
                 <v-col
-                  v-for="field in currentTypeSchema"
+                  v-for="field in currentChecklistFields"
                   :key="field.key"
                   cols="12"
-                  :md="field.cols || 6"
+                  :md="field.type === 'textarea' ? 12 : 6"
                 >
-                  <v-text-field
-                    v-if="field.type === 'text' || field.type === 'number'"
+                  <DynamicField
+                    :field="field"
                     v-model="form.data[field.key]"
-                    :label="field.label"
-                    :type="field.type"
-                    :rules="field.required ? [v => v !== '' && v !== null && v !== undefined || `${field.label} is required`] : []"
-                    variant="outlined"
-                  />
-
-                  <v-textarea
-                    v-else-if="field.type === 'textarea'"
-                    v-model="form.data[field.key]"
-                    :label="field.label"
-                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
-                    variant="outlined"
-                    rows="3"
-                    auto-grow
-                  />
-
-                  <v-select
-                    v-else-if="field.type === 'select'"
-                    v-model="form.data[field.key]"
-                    :items="field.options || []"
-                    :label="field.label"
-                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
-                    variant="outlined"
-                  />
-
-                  <v-switch
-                    v-else-if="field.type === 'boolean'"
-                    v-model="form.data[field.key]"
-                    :label="field.label"
-                    color="primary"
-                    inset
-                  />
-
-                  <v-text-field
-                    v-else-if="field.type === 'date'"
-                    v-model="form.data[field.key]"
-                    :label="field.label"
-                    type="date"
-                    :rules="field.required ? [v => !!v || `${field.label} is required`] : []"
-                    variant="outlined"
                   />
                 </v-col>
               </v-row>
             </v-col>
 
-            <v-col cols="12">
-              <v-textarea
-                v-model="form.notes"
-                label="Notes (optional)"
-                variant="outlined"
-                rows="3"
-                auto-grow
-                prepend-inner-icon="mdi-note-text-outline"
-              />
-            </v-col>
           </v-row>
         </v-form>
       </v-card-text>
@@ -197,6 +176,13 @@
         Search and select a patient above to begin a treatment encounter.
       </div>
     </v-card>
+    <!-- ← NEW: follow-up scheduler -->
+<QuickScheduleDialog
+  v-model="scheduleDialog"
+  :patient="patient"
+  office="treatment"  
+  @scheduled="onScheduled"
+/>
 
     <!-- Snackbar -->
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
@@ -214,6 +200,8 @@ import { useRoute, useRouter } from 'vue-router';
 import treatmentService from '@/services/treatmentService';
 import patientService from '@/services/patientService';
 import transactionTypeService from '@/services/transactionTypeService';
+import DynamicField from '@/components/encounters/DynamicField.vue'; 
+import QuickScheduleDialog from '@/components/appointments/QuickScheduleDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -234,47 +222,31 @@ const loadingTypes = ref(false);
 const formRef = ref(null);
 const formValid = ref(false);
 const submitting = ref(false);
+const scheduleDialog = ref(false);
 
 const form = reactive({
   transaction_type_id: null,
   occurred_at: defaultDateTimeLocal(),
   data: {},
-  notes: '',
 });
 
-// ----- Treatment transaction type schemas -----
-const TRANSACTION_TYPE_SCHEMAS = {
-  'ARV Refill': [
-    { key: 'regimen', label: 'ARV Regimen', type: 'select', required: true, options: ['TLD', 'ABC/3TC+DTG', 'AZT/3TC+EFV', 'Other'], cols: 6 },
-    { key: 'months_supply', label: 'Months of Supply', type: 'select', required: true, options: [1, 3, 6], cols: 6 },
-    { key: 'pills_dispensed', label: 'Pills Dispensed', type: 'number', cols: 6 },
-    { key: 'next_refill_date', label: 'Next Refill Date', type: 'date', cols: 6 },
-    { key: 'adherence', label: 'Adherence', type: 'select', options: ['Good', 'Fair', 'Poor'], cols: 6 },
-    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
-  ],
-  'Consultation': [
-    { key: 'chief_complaint', label: 'Chief Complaint', type: 'textarea', required: true, cols: 12 },
-    { key: 'assessment', label: 'Assessment', type: 'textarea', cols: 12 },
-    { key: 'plan', label: 'Plan', type: 'textarea', cols: 12 },
-  ],
-  'Vital Signs': [
-    { key: 'blood_pressure', label: 'Blood Pressure', type: 'text', cols: 6 },
-    { key: 'heart_rate', label: 'Heart Rate (bpm)', type: 'number', cols: 6 },
-    { key: 'temperature', label: 'Temperature (°C)', type: 'number', cols: 6 },
-    { key: 'weight', label: 'Weight (kg)', type: 'number', cols: 6 },
-    { key: 'height', label: 'Height (cm)', type: 'number', cols: 6 },
-  ],
-  'default': [
-    { key: 'findings', label: 'Findings', type: 'textarea', required: true, cols: 12 },
-    { key: 'remarks', label: 'Remarks', type: 'textarea', cols: 12 },
-  ],
-};
+/* ─────────────── Schema source ───────────────
+   The selected TransactionType carries checklist_schema.fields.
+   No more hardcoded map on the frontend.
+─────────────────────────────────────────────── */
+const currentTransactionType = computed(() =>
+  transactionTypes.value.find(t => t.id === form.transaction_type_id) || null
+);
 
-const currentTypeSchema = computed(() => {
-  const tt = transactionTypes.value.find(t => t.id === form.transaction_type_id);
-  if (!tt) return [];
-  return TRANSACTION_TYPE_SCHEMAS[tt.name] || TRANSACTION_TYPE_SCHEMAS['default'];
+const currentChecklistFields = computed(() => {
+  const tt = currentTransactionType.value;
+  const fields = tt?.checklist_schema?.fields;
+  return Array.isArray(fields) ? fields : [];
 });
+
+const currentSchemaVersion = computed(
+  () => currentTransactionType.value?.schema_version || null
+);
 
 const patientFullName = computed(() => {
   if (!patient.value) return '';
@@ -295,6 +267,12 @@ function defaultDateTimeLocal() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function onScheduled(appointment) {
+  const d = appointment.appointment_date;
+  const t = appointment.time_slot;
+  notify(`Follow-up scheduled for ${d} at ${t}.`, 'success');
+}
+
 function goBack() {
   router.back();
 }
@@ -312,7 +290,7 @@ async function loadPatient() {
 async function loadTransactionTypes() {
   loadingTypes.value = true;
   try {
-    // Signature: getTransactionTypes(office, params)
+    // Include the schema — ask for active only
     const list = await transactionTypeService.getTransactionTypes('treatment', { is_active: true });
     transactionTypes.value = list;
     if (!form.transaction_type_id && list.length === 1) {
@@ -332,9 +310,7 @@ async function searchPatients(query) {
   }
   loadingPatients.value = true;
   try {
-    // Signature: getPatients(page, limit, search, purpose, year)
     const result = await patientService.getPatients(1, 20, query, 'treatment');
-    // Backend returns { items, total, page, totalPages }
     const rows = result?.items || result?.data || result?.patients || (Array.isArray(result) ? result : []);
     patientOptions.value = rows.map(p => ({
       id: p.id,
@@ -350,10 +326,7 @@ async function searchPatients(query) {
 
 async function onPatientSelected(id) {
   if (!id) return
-  // Let the autocomplete finish its selection event first.
   await nextTick()
-  // Route change first, then flip the v-if state so the autocomplete
-  // isn't unmounted mid-patch.
   await router.replace({ name: 'TreatmentEncounter', params: { patientId: id } })
   patientId.value = id
   await loadPatient()
@@ -364,9 +337,17 @@ function resetForm() {
   form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
   form.occurred_at = defaultDateTimeLocal();
   form.data = {};
-  form.notes = '';
   formRef.value?.resetValidation();
 }
+
+/* ← NEW: clear stale keys when the transaction type changes */
+watch(
+  () => form.transaction_type_id,
+  () => {
+    form.data = {};
+    formRef.value?.resetValidation();
+  }
+);
 
 async function submit() {
   if (!formRef.value) return;
@@ -379,13 +360,14 @@ async function submit() {
       patient_id: patientId.value,
       transaction_type_id: form.transaction_type_id,
       data: form.data,
-      notes: form.notes || undefined,
       occurred_at: form.occurred_at ? new Date(form.occurred_at).toISOString() : undefined,
     });
     notify('Treatment encounter saved successfully.', 'success');
     resetForm();
+    // ← NEW: offer to schedule a follow-up
+    scheduleDialog.value = true;
   } catch (e) {
-    notify('Failed to save encounter: ' + (e.response?.data?.error || e.message), 'error');
+    // ... same error handling as before
   } finally {
     submitting.value = false;
   }

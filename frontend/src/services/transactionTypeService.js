@@ -11,7 +11,6 @@ export default {
       const query = { ...params }
       if (office) query.office = office
       const response = await api.get('/transaction-types', { params: query })
-      // Backend: { success: true, items: [...], total, page, totalPages }
       return normalizeList(response.data)
     } catch (error) {
       console.error('Get transaction types error:', error)
@@ -57,6 +56,28 @@ export default {
     }
   },
   async update(id, data) { return this.updateTransactionType(id, data) },
+
+  // ← NEW: dedicated checklist endpoints
+  async getChecklist(id) {
+    try {
+      const response = await api.get(`/transaction-types/${id}`)
+      const tt = normalizeOne(response.data)
+      return tt?.checklist_schema || { fields: [] }
+    } catch (error) {
+      console.error('Get checklist error:', error)
+      throw error
+    }
+  },
+
+  async updateChecklist(id, fields) {
+    try {
+      const response = await api.put(`/transaction-types/${id}/checklist`, { fields })
+      return normalizeOne(response.data)
+    } catch (error) {
+      console.error('Update checklist error:', error)
+      throw error
+    }
+  },
 
   async toggleTransactionTypeActive(id) {
     try {

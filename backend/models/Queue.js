@@ -60,19 +60,16 @@ module.exports = (sequelize) => {
 
   // Instance method to calculate wait time
   Queue.prototype.calculateWaitTime = function(queueEntries) {
-    if (!queueEntries || queueEntries.length === 0) return 0;
-    
-    let totalWait = 0;
-    let waitTime = 0;
-    
-    for (const entry of queueEntries) {
-      if (entry.status === 'waiting' || entry.status === 'in-progress') {
-        waitTime += entry.estimated_duration_minutes || 15;
-      }
+  if (!queueEntries || queueEntries.length === 0) return 0;
+
+  let waitTime = 0;
+  for (const entry of queueEntries) {
+    if (entry.status === 'waiting' || entry.status === 'in-progress') {
+      waitTime += entry.estimated_duration_minutes || 15;
     }
-    
-    return waitTime;
-  };
+  }
+  return waitTime;
+};
 
   return Queue;
 };

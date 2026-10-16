@@ -550,12 +550,9 @@ import transactionTypeService from '@/services/transactionTypeService'
 // ============== STORE ==============
 const kioskStore = useKioskStore()
 
-// ✅ Only pull refs we actually use in template
-const { loading } = storeToRefs(kioskStore)
-
 // ============== CONFIG ==============
-const API_BASE_URL = import.meta.env.VITE_KIOSK_API_URL || 'http://localhost:5000'
-const SHUTDOWN_TOKEN = import.meta.env.VITE_SHUTDOWN_TOKEN || 'your_secure_token_here'
+const API_BASE_URL = import.meta.env.VITE_KIOSK_API_URL
+const SHUTDOWN_TOKEN = import.meta.env.VITE_SHUTDOWN_TOKEN
 
 // ============== LOCAL STATE ==============
 const showAppointmentDialog = ref(false)
@@ -594,7 +591,6 @@ const keyboardVisible = ref(false)
 const keyboardValue = ref('')
 const keyboardField = ref('')
 const keyboardLabel = ref('')
-const tempInput = ref('')
 
 const walkinData = reactive({
   phoneNumber: '',
@@ -626,49 +622,23 @@ const fetchTransactionTypes = async () => {
   loadingTransactionTypes.value = true
   try {
     const response = await transactionTypeService.getTransactionTypes()
-
     const list = response?.data || (Array.isArray(response) ? response : null)
 
     if (list) {
       transactionTypes.value = list
       const testingType = list.find(
-        (t) =>
-          t.name?.toLowerCase().includes('testing') ||
-          t.office === 'testing'
+        (t) => t.name?.toLowerCase().includes('testing') || t.office === 'testing'
       )
-      if (testingType) testingTransactionTypeId.value = testingType.id
+      testingTransactionTypeId.value = testingType?.id ?? 1
     } else {
       console.error('Failed to fetch transaction types:', response)
-      setDefaultTransactionTypes()
     }
   } catch (error) {
     console.error('Error fetching transaction types:', error)
-    setDefaultTransactionTypes()
+
   } finally {
     loadingTransactionTypes.value = false
   }
-}
-
-const setDefaultTransactionTypes = () => {
-  transactionTypes.value = [
-    {
-      id: 1,
-      name: 'Testing',
-      office: 'testing',
-      description: 'General testing',
-      color_code: '#4CAF50',
-      estimated_duration_minutes: 15
-    },
-    {
-      id: 2,
-      name: 'Treatment',
-      office: 'treatment',
-      description: 'Treatment consultation',
-      color_code: '#2196F3',
-      estimated_duration_minutes: 30
-    }
-  ]
-  testingTransactionTypeId.value = 1
 }
 
 const checkReturningPatient = async (phoneNumber) => {
@@ -716,24 +686,23 @@ const openKeyboard = (field) => {
       break
   }
 
-  tempInput.value = keyboardValue.value
   keyboardVisible.value = true
 }
 
 const handleKeyboardInput = (value) => {
-  tempInput.value = value
+  keyboardValue.value = value
 }
 
 const handleKeyboardDone = (value) => {
+  const finalValue = value ?? keyboardValue.value
   switch (keyboardField.value) {
     case 'appointment':
-      appointmentPhone.value = value
+      appointmentPhone.value = finalValue
       break
     case 'walkin':
-      walkinData.phoneNumber = value
+      walkinData.phoneNumber = finalValue
       break
   }
-
   keyboardVisible.value = false
 }
 
@@ -758,6 +727,8 @@ const resetAll = () => {
   storedFacilityCode.value = null
   printSkipped.value = false
   printStatus.value = ''
+  isReturningPatient.value = false
+  walkinData.transactionType = null
   kioskStore.resetQueueState()
   closeAppointmentDialog()
   closeWalkin()
@@ -797,6 +768,8 @@ const processWalkin = async () => {
     return
   }
 
+  // Only returning patients pick a service type. New patients get the
+  // default Testing transaction type (id 1) — staff will update later.
   if (isReturningPatient.value && !walkinData.transactionType) {
     walkinError.value = 'Please select a service type.'
     return
@@ -805,29 +778,21 @@ const processWalkin = async () => {
   walkinError.value = ''
 
   try {
-    // For new patients: placeholder values that staff will update later
+    // The kiosk only collects the phone number. The backend creates the
+    // patient with placeholder values if they don't already exist.
     const patientData = {
-      first_name: 'Walk-in',
-      last_name: 'Patient',
-      middle_name: '',
-      gender: 'other',
       contact_number: walkinData.phoneNumber,
-      address: 'To be updated by staff',
-      transaction_type_id:
-        walkinData.transactionType || testingTransactionTypeId.value,
-      is_returning: isReturningPatient.value
+      transaction_type_id: isReturningPatient.value
+        ? walkinData.transactionType
+        : testingTransactionTypeId.value // defaults to 1
     }
 
     await kioskStore.registerWalkIn(patientData)
 
-    // Close input dialog
     showWalkinDialog.value = false
     await nextTick()
 
-    // 🖨️ Print FIRST — modal opens only after printing resolves
     await printTicket()
-
-    // ✅ Show success modal
     showSuccess.value = true
   } catch (error) {
     walkinError.value =

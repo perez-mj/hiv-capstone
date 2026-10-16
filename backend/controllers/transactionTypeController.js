@@ -1,13 +1,13 @@
 // backend/controllers/transactionTypeController.js
 const transactionTypeService = require('../services/transactionTypeService');
 
-// Small helper to unify error responses
 function handleError(res, error, fallbackMessage) {
   const status = error.status || 500;
   if (status >= 500) console.error(fallbackMessage, error);
   return res.status(status).json({
     success: false,
-    error: error.message || fallbackMessage
+    error: error.message || fallbackMessage,
+    ...(error.details ? { details: error.details } : {}),
   });
 }
 
@@ -15,11 +15,7 @@ const transactionTypeController = {
   async getAllTransactionTypes(req, res) {
     try {
       const { office, is_active, include_inactive } = req.query;
-      const result = await transactionTypeService.getAll({
-        office,
-        is_active,
-        include_inactive
-      });
+      const result = await transactionTypeService.getAll({ office, is_active, include_inactive });
       res.status(200).json({ success: true, ...result });
     } catch (error) {
       handleError(res, error, 'Failed to fetch transaction types');
@@ -41,7 +37,7 @@ const transactionTypeController = {
       res.status(201).json({
         success: true,
         data,
-        message: 'Transaction type created successfully'
+        message: 'Transaction type created successfully',
       });
     } catch (error) {
       handleError(res, error, 'Failed to create transaction type');
@@ -54,10 +50,26 @@ const transactionTypeController = {
       res.status(200).json({
         success: true,
         data,
-        message: 'Transaction type updated successfully'
+        message: 'Transaction type updated successfully',
       });
     } catch (error) {
       handleError(res, error, 'Failed to update transaction type');
+    }
+  },
+
+  // ← NEW
+  async updateTransactionTypeChecklist(req, res) {
+    try {
+      const { fields } = req.body;
+      const checklist_schema = { fields };
+      const data = await transactionTypeService.updateChecklist(req.params.id, checklist_schema);
+      res.status(200).json({
+        success: true,
+        data,
+        message: 'Checklist updated successfully',
+      });
+    } catch (error) {
+      handleError(res, error, 'Failed to update checklist');
     }
   },
 
@@ -67,7 +79,7 @@ const transactionTypeController = {
       res.status(200).json({
         success: true,
         data,
-        message: `Transaction type ${data.is_active ? 'activated' : 'deactivated'} successfully`
+        message: `Transaction type ${data.is_active ? 'activated' : 'deactivated'} successfully`,
       });
     } catch (error) {
       handleError(res, error, 'Failed to toggle transaction type status');
@@ -79,7 +91,7 @@ const transactionTypeController = {
       await transactionTypeService.delete(req.params.id);
       res.status(200).json({
         success: true,
-        message: 'Transaction type deleted successfully'
+        message: 'Transaction type deleted successfully',
       });
     } catch (error) {
       handleError(res, error, 'Failed to delete transaction type');

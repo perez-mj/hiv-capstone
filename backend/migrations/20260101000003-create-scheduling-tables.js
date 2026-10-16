@@ -19,7 +19,7 @@ module.exports = {
         onUpdate: 'CASCADE', onDelete: 'CASCADE',
       },
       transaction_type_id: {
-        type: S.INTEGER, allowNull: false,
+        type: S.INTEGER, allowNull: true,
         references: { model: 'transaction_types', key: 'id' },
         onUpdate: 'CASCADE', onDelete: 'RESTRICT',
       },

@@ -125,23 +125,129 @@ class DevSeeder {
   async seedTransactionTypes() {
     this.log('\nSeeding transaction types...');
 
-    const types = [
-      { name: 'Testing',                office: 'testing',   estimated_duration_minutes: 30, color_code: '#4CAF50', is_active: true },
-      { name: 'Testing Result',         office: 'testing',   estimated_duration_minutes: 15, color_code: '#a0e999', is_active: true },
-      { name: 'New - STI Consultation', office: 'treatment', estimated_duration_minutes: 35, color_code: '#ab65c7', is_active: true },
-      { name: 'Old - STI Consultation', office: 'treatment', estimated_duration_minutes: 30, color_code: '#80128f', is_active: true },
-      { name: 'Consultation',           office: 'treatment', estimated_duration_minutes: 45, color_code: '#c76bfc', is_active: true },
-      { name: 'Refill',                 office: 'treatment', estimated_duration_minutes: 15, color_code: '#63497a', is_active: true },
-      { name: 'Other',                  office: 'treatment', estimated_duration_minutes: 20, color_code: '#b0277b', is_active: true },
-    ];
+    // in your seeder, replace `types = [...]` with:
 
-    for (const t of types) {
-      const [, created] = await db.TransactionType.findOrCreate({
-        where: { name: t.name },
-        defaults: t,
-      });
-      if (created) this.stats.transactionTypes++;
-    }
+const types = [
+  {
+    name: 'Testing',
+    office: 'testing',
+    estimated_duration_minutes: 30,
+    color_code: '#4CAF50',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'test_type',   label: 'Test Type',   type: 'enum',    required: true,
+          options: ['HIV', 'Syphilis', 'Hepatitis B', 'Hepatitis C'] },
+        { key: 'specimen',    label: 'Specimen',    type: 'enum',    required: true,
+          options: ['blood', 'urine', 'swab', 'other'] },
+        { key: 'notes',       label: 'Notes',       type: 'textarea', required: false, maxLength: 1000 },
+      ],
+    },
+  },
+  {
+    name: 'Testing Result',
+    office: 'testing',
+    estimated_duration_minutes: 15,
+    color_code: '#a0e999',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'result',      label: 'Result',      type: 'enum',    required: true,
+          options: ['negative', 'positive', 'inconclusive'] },
+        { key: 'confirmed',   label: 'Confirmed',   type: 'boolean', required: true },
+        { key: 'notes',       label: 'Notes',       type: 'textarea', required: false, maxLength: 1000 },
+      ],
+    },
+  },
+  {
+    name: 'Other',
+    office: 'testing',
+    estimated_duration_minutes: 20,
+    color_code: '#82a785',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'notes', label: 'Notes', type: 'textarea', required: true, maxLength: 2000 },
+      ],
+    },
+  },
+  {
+    name: 'New - STI Consultation',
+    office: 'treatment',
+    estimated_duration_minutes: 35,
+    color_code: '#ab65c7',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'symptoms',    label: 'Symptoms',    type: 'multiselect', required: false,
+          options: ['discharge', 'pain', 'rash', 'fever', 'lesion'] },
+        { key: 'diagnosis',   label: 'Diagnosis',   type: 'text', required: true, maxLength: 200 },
+        { key: 'notes',       label: 'Notes',       type: 'textarea', required: false, maxLength: 2000 },
+      ],
+    },
+  },
+  {
+    name: 'Old - STI Consultation',
+    office: 'treatment',
+    estimated_duration_minutes: 30,
+    color_code: '#80128f',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'followup_status', label: 'Follow-up Status', type: 'enum', required: true,
+          options: ['improved', 'unchanged', 'worsened'] },
+        { key: 'notes',           label: 'Notes',            type: 'textarea', required: false, maxLength: 2000 },
+      ],
+    },
+  },
+  {
+    name: 'Consultation',
+    office: 'treatment',
+    estimated_duration_minutes: 45,
+    color_code: '#c76bfc',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'chief_complaint', label: 'Chief Complaint', type: 'textarea', required: true, maxLength: 500 },
+        { key: 'assessment',      label: 'Assessment',      type: 'textarea', required: false, maxLength: 2000 },
+        { key: 'plan',            label: 'Plan',            type: 'textarea', required: false, maxLength: 2000 },
+      ],
+    },
+  },
+  {
+    name: 'Refill',
+    office: 'treatment',
+    estimated_duration_minutes: 15,
+    color_code: '#63497a',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'medication', label: 'Medication', type: 'text',   required: true, maxLength: 200 },
+        { key: 'quantity',   label: 'Quantity',   type: 'number', required: true, min: 1, max: 365 },
+      ],
+    },
+  },
+  {
+    name: 'Other',
+    office: 'treatment',
+    estimated_duration_minutes: 20,
+    color_code: '#b0277b',
+    is_active: true,
+    checklist_schema: {
+      fields: [
+        { key: 'notes', label: 'Notes', type: 'textarea', required: true, maxLength: 2000 },
+      ],
+    },
+  },
+];
+
+for (const t of types) {
+  const [row, created] = await db.TransactionType.findOrCreate({
+    where: { name: t.name, office: t.office },   // ← include office: name is only unique per office
+    defaults: t,
+  });
+  if (created) this.stats.transactionTypes++;
+}
     this.ok(`${this.stats.transactionTypes} new transaction types`);
   }
 

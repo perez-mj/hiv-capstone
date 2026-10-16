@@ -218,10 +218,10 @@
         <div class="dialog-header">
           <div class="d-flex align-center">
             <v-avatar size="40" color="primary" variant="tonal" class="mr-3">
-              <v-icon>{{ isEditing ? 'mdi-pencil' : 'mdi-plus' }}</v-icon>
+              <v-icon>{{ isEditing ? 'mdi-pencil-outline' : 'mdi-plus' }}</v-icon>
             </v-avatar>
             <div>
-              <h3 class="text-subtitle-1 font-weight-bold mb-0">{{ dialogTitle }}</h3>
+              <h3 class="text-h6 font-weight-bold mb-0">{{ dialogTitle }}</h3>
               <p class="text-caption text-medium-emphasis mb-0">
                 {{
                   isEditing
@@ -235,6 +235,7 @@
             icon="mdi-close"
             variant="text"
             size="small"
+            :disabled="saving"
             @click="closeDialog"
           />
         </div>
@@ -242,7 +243,11 @@
         <v-divider />
 
         <v-card-text class="pa-6">
-          <v-form ref="formRef" v-model="formValid" @submit.prevent="saveSettings">
+          <v-form
+            ref="formRef"
+            v-model="formValid"
+            @submit.prevent="onFormEnter"
+          >
             <!-- Office -->
             <v-row>
               <v-col cols="12" md="6">
@@ -265,6 +270,7 @@
                   color="success"
                   hide-details
                   inset
+                  density="comfortable"
                 >
                   <template #label>
                     <div>
@@ -505,6 +511,7 @@
                   color="success"
                   hide-details
                   inset
+                  density="comfortable"
                 >
                   <template #label>
                     <div class="font-weight-medium">Allow Online Booking</div>
@@ -517,6 +524,7 @@
                   color="success"
                   hide-details
                   inset
+                  density="comfortable"
                 >
                   <template #label>
                     <div class="font-weight-medium">Allow Online Cancellation</div>
@@ -529,15 +537,19 @@
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
-          <v-btn variant="text" class="text-none" @click="closeDialog">
+        <v-card-actions class="pa-4 pt-0">
+          <v-btn
+            variant="text"
+            class="text-none flex-grow-1"
+            :disabled="saving"
+            @click="closeDialog"
+          >
             Cancel
           </v-btn>
-          <v-spacer />
           <v-btn
             color="primary"
             variant="flat"
-            class="text-none"
+            class="text-none flex-grow-1"
             :loading="saving"
             :disabled="!formValid"
             @click="saveSettings"
@@ -559,6 +571,7 @@
       icon="mdi-alert-outline"
       :loading="deleting"
       @confirm="deleteSettings"
+      @cancel="deleteItem = null"
     >
       You're about to permanently delete the settings for
       <strong class="text-high-emphasis">
@@ -578,6 +591,7 @@
       :icon="toggleItem?.is_active ? 'mdi-pause-circle-outline' : 'mdi-play-circle-outline'"
       :loading="toggling"
       @confirm="toggleActive"
+      @cancel="toggleItem = null"
     >
       The settings for
       <strong class="text-high-emphasis">
@@ -598,7 +612,7 @@
               <v-icon>mdi-content-copy</v-icon>
             </v-avatar>
             <div>
-              <h3 class="text-subtitle-1 font-weight-bold mb-0">Apply Settings</h3>
+              <h3 class="text-h6 font-weight-bold mb-0">Apply Settings</h3>
               <p class="text-caption text-medium-emphasis mb-0">
                 Copy this configuration to another office
               </p>
@@ -608,6 +622,7 @@
             icon="mdi-close"
             variant="text"
             size="small"
+            :disabled="applying"
             @click="closeApplyDialog"
           />
         </div>
@@ -643,15 +658,19 @@
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
-          <v-btn variant="text" class="text-none" @click="closeApplyDialog">
+        <v-card-actions class="pa-4 pt-0">
+          <v-btn
+            variant="text"
+            class="text-none flex-grow-1"
+            :disabled="applying"
+            @click="closeApplyDialog"
+          >
             Cancel
           </v-btn>
-          <v-spacer />
           <v-btn
             color="info"
             variant="flat"
-            class="text-none"
+            class="text-none flex-grow-1"
             :loading="applying"
             :disabled="!applyFormValid"
             @click="applySettings"
@@ -858,12 +877,20 @@ function openEditDialog(item) {
 }
 
 function closeDialog() {
+  if (saving.value) return
   dialog.value = false
   resetForm()
 }
 
+function onFormEnter(e) {
+  if (e?.target?.tagName === 'TEXTAREA') return
+  if (formValid.value && !saving.value) {
+    saveSettings()
+  }
+}
+
 async function saveSettings() {
-  if (!formValid.value) return
+  if (!formValid.value || saving.value) return
   saving.value = true
   try {
     const data = { ...formData.value }
@@ -878,7 +905,10 @@ async function saveSettings() {
     closeDialog()
   } catch (error) {
     console.error('Error saving settings:', error)
-    showSnackbar(error.response?.data?.message || 'Failed to save settings', 'error')
+    showSnackbar(
+      error.response?.data?.message || 'Failed to save settings',
+      'error'
+    )
   } finally {
     saving.value = false
   }
@@ -891,17 +921,23 @@ function confirmDelete(item) {
 }
 
 async function deleteSettings() {
+  if (!deleteItem.value) return
+  const item = deleteItem.value
+
   deleting.value = true
   try {
-    const response = await appointmentSettingService.delete(deleteItem.value.id)
+    const response = await appointmentSettingService.delete(item.id)
     showSnackbar(response.message || 'Settings deleted successfully')
     await loadSettings()
-    deleteDialog.value = false
   } catch (error) {
     console.error('Error deleting settings:', error)
-    showSnackbar(error.response?.data?.message || 'Failed to delete settings', 'error')
+    showSnackbar(
+      error.response?.data?.message || 'Failed to delete settings',
+      'error'
+    )
   } finally {
     deleting.value = false
+    deleteDialog.value = false
     deleteItem.value = null
   }
 }
@@ -913,17 +949,23 @@ function confirmToggle(item) {
 }
 
 async function toggleActive() {
+  if (!toggleItem.value) return
+  const item = toggleItem.value
+
   toggling.value = true
   try {
-    const response = await appointmentSettingService.toggleActive(toggleItem.value.id)
+    const response = await appointmentSettingService.toggleActive(item.id)
     showSnackbar(response.message || 'Status toggled successfully')
     await loadSettings()
-    toggleDialog.value = false
   } catch (error) {
     console.error('Error toggling status:', error)
-    showSnackbar(error.response?.data?.message || 'Failed to toggle status', 'error')
+    showSnackbar(
+      error.response?.data?.message || 'Failed to toggle status',
+      'error'
+    )
   } finally {
     toggling.value = false
+    toggleDialog.value = false
     toggleItem.value = null
   }
 }
@@ -938,6 +980,7 @@ function openApplyDialog(item) {
 }
 
 function closeApplyDialog() {
+  if (applying.value) return
   applyDialog.value = false
   applySource.value = null
   applyTarget.value = ''
@@ -945,19 +988,27 @@ function closeApplyDialog() {
 }
 
 async function applySettings() {
-  if (!applyFormValid.value) return
+  if (!applyFormValid.value || applying.value) return
   applying.value = true
   try {
     const targetOffice = applyTarget.value === 'all' ? null : applyTarget.value
-    const response = await appointmentSettingService.applyToAll(applySource.value.id, targetOffice)
+    const response = await appointmentSettingService.applyToAll(
+      applySource.value.id,
+      targetOffice
+    )
     showSnackbar(response.message || 'Settings applied successfully')
     await loadSettings()
-    closeApplyDialog()
   } catch (error) {
     console.error('Error applying settings:', error)
-    showSnackbar(error.response?.data?.message || 'Failed to apply settings', 'error')
+    showSnackbar(
+      error.response?.data?.message || 'Failed to apply settings',
+      'error'
+    )
   } finally {
     applying.value = false
+    applyDialog.value = false
+    applySource.value = null
+    applyTarget.value = ''
   }
 }
 

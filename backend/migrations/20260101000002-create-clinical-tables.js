@@ -13,7 +13,7 @@ module.exports = {
     // ---------- transaction_types ----------
     await queryInterface.createTable('transaction_types', {
       id,
-      name: { type: S.STRING(50), allowNull: false, unique: true },
+      name: { type: S.STRING(50), allowNull: false },
       office: {
         type: S.ENUM('testing', 'treatment'),
         allowNull: false,
@@ -25,6 +25,18 @@ module.exports = {
       description: { type: S.TEXT, allowNull: true },
       is_active: { type: S.BOOLEAN, defaultValue: true },
       color_code: { type: S.STRING(7), allowNull: true },
+      checklist_schema: {
+        type: S.JSON,
+        allowNull: false,
+        defaultValue: { fields: [] },
+        comment: 'Declarative definition of the Encounter.data shape for this type',
+      },
+      schema_version: {
+        type: S.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+        comment: 'Bump when the schema changes so old encounters can be migrated',
+      },
       ...ts,
     });
     await queryInterface.addIndex('transaction_types', ['office']);
@@ -57,6 +69,12 @@ module.exports = {
       occurred_at: {
         type: S.DATE, allowNull: false,
         defaultValue: S.literal('CURRENT_TIMESTAMP'),
+      },
+      schema_version: {
+        type: S.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+        comment: 'Schema version of the transaction type at time of creation',
       },
       voided_at: { type: S.DATE, allowNull: true },
       voided_by: {
