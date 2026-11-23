@@ -6,5 +6,3 @@ docs
 .env
 logs/
 *.log
-
-backend/data
