@@ -10,8 +10,7 @@
           border="primary"
         >
           <v-card-title class="text-h4 font-weight-bold pa-4" style="background: linear-gradient(135deg, rgb(var(--v-theme-primary)), rgb(var(--v-theme-primary-darken-2))); color: white;">
-            <v-icon color="white" class="mr-2" :style="{ opacity: 0.9 }">mdi-test-tube</v-icon>
-            Testing Office
+            Office A
           </v-card-title>
           
           <v-card-text class="pa-4">
@@ -102,8 +101,7 @@
           border="success"
         >
           <v-card-title class="text-h4 font-weight-bold pa-4" style="background: linear-gradient(135deg, rgb(var(--v-theme-secondary)), rgb(var(--v-theme-secondary-darken-2))); color: white;">
-            <v-icon color="white" class="mr-2" :style="{ opacity: 0.9 }">mdi-pill</v-icon>
-            Treatment Office
+            Office B
           </v-card-title>
           
           <v-card-text class="pa-4">

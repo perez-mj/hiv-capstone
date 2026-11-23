@@ -8,27 +8,27 @@
             <!-- Kiosk Header -->
             <v-card 
               class="kiosk-header rounded-0"
-              color="success"
-              elevation="4"
+              color="primary"
+              elevation="2"
             >
-              <v-card-text class="d-flex align-center justify-space-between pa-4">
+              <v-card-text class="d-flex align-center justify-space-between py-1 px-4">
                 <div class="d-flex align-center">
                   <img 
                     src="@/assets/logo.svg" 
                     alt="Purple Rain Clinic Logo" 
-                    class="logo-icon mr-4"
+                    class="logo-icon mr-3"
                   />
                   <div>
-                    <div class="text-h5 font-weight-bold text-white">
+                    <div class="text-subtitle-1 font-weight-bold text-white">
                       Purple Rain Clinic Kiosk
                     </div>
-                    <div class="text-subtitle-1 text-white text-opacity-90">
+                    <div class="text-caption text-white text-opacity-90">
                       {{ currentDate }}
                     </div>
                   </div>
                 </div>
                 <div class="text-right">
-                  <div class="text-h6 text-white">
+                  <div class="text-body-1 font-weight-medium text-white">
                     {{ currentTime }}
                   </div>
                 </div>
@@ -92,28 +92,24 @@ onUnmounted(() => {
 }
 
 .kiosk-header {
-  min-height: 100px;
-}
-
-.kiosk-footer {
-  min-height: 40px;
+  min-height: 60px;
 }
 
 .logo-icon {
-  height: 48px;
-  width: 48px;
+  height: 32px;
+  width: 32px;
   object-fit: contain;
 }
 
 /* Touchscreen optimization */
 @media (max-width: 600px) {
   .kiosk-header {
-    min-height: 80px;
+    min-height: 56px;
   }
   
   .logo-icon {
-    height: 36px;
-    width: 36px;
+    height: 28px;
+    width: 28px;
   }
   
   :deep(.v-btn) {

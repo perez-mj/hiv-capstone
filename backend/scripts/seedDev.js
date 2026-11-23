@@ -320,7 +320,7 @@ for (const t of types) {
     const firstNames  = ['Alex', 'Sam', 'Jamie', 'Taylor', 'Jordan', 'Casey', 'Morgan', 'Riley', 'Avery', 'Quinn', 'Drew', 'Skyler'];
     const middleNames = ['Abad', 'Bautista', 'Castro', 'Domingo', 'Enriquez', 'Fernandez', 'Gonzales', 'Herrera', 'Ignacio', 'Jimenez'];
     const lastNames   = ['Cruz', 'Reyes', 'Santos', 'Garcia', 'Ramos', 'Torres', 'Flores', 'Rivera', 'Mendoza', 'Castillo'];
-    const suffixes    = [null, null, null, 'Jr.', 'Sr.', 'III']; // mostly null
+    const suffixes    = [null, null, null, 'Jr.', 'Sr.', 'III'];
     const genders     = ['Male', 'Female', 'Other'];
     const purposes    = ['testing', 'treatment'];
 
