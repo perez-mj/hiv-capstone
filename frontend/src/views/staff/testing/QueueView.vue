@@ -13,15 +13,21 @@
             </v-chip>
           </v-card-title>
           <v-divider></v-divider>
-          
+
           <v-card-text>
             <!-- Now Serving -->
             <v-row class="mb-4">
               <v-col cols="12">
-                <v-card color="info" variant="tonal" class="pa-4">
+                <v-card
+                  :color="currentServing ? 'info' : 'grey-lighten-3'"
+                  variant="tonal"
+                  class="pa-4"
+                >
                   <v-row align="center">
                     <v-col cols="auto">
-                      <v-icon size="48" color="info">mdi-account-check</v-icon>
+                      <v-icon size="48" :color="currentServing ? 'info' : 'grey'">
+                        {{ currentServing ? 'mdi-account-check' : 'mdi-account-clock-outline' }}
+                      </v-icon>
                     </v-col>
                     <v-col>
                       <div class="text-overline">NOW SERVING</div>
@@ -29,33 +35,76 @@
                         {{ currentServing ? currentServing.queue_number : '---' }}
                       </div>
                       <div class="text-subtitle-1">
-                        {{ currentServing ? currentServing.Patient.patient_facility_code + ' • ' + currentServing.Patient.contact_number : 'No one' }}
+                        <template v-if="currentServing">
+                          {{ currentServing.Patient?.patient_facility_code }}
+                          <span class="mx-1">•</span>
+                          {{ currentServing.Patient?.contact_number || 'No contact' }}
+                        </template>
+                        <template v-else>
+                          No patient is currently being served
+                        </template>
                       </div>
                     </v-col>
-                    <v-col cols="auto">
-                      <v-btn 
-                        color="error" 
-                        variant="flat"
-                        @click="skipCurrent"
-                        :disabled="!currentServing"
-                        :loading="loading"
-                        class="mr-2"
-                      >
-                        <v-icon start>mdi-skip-forward</v-icon>
-                        Skip
-                      </v-btn>
-                      <v-btn 
-                        color="info" 
-                        variant="flat"
-                        @click="callNext"
-                        :disabled="waitingCount === 0"
-                        :loading="loading"
-                      >
-                        <v-icon start>mdi-chevron-right</v-icon>
-                        Next
-                      </v-btn>
-                    </v-col>
                   </v-row>
+
+                  <!-- Action row -->
+                  <v-divider class="my-3" />
+                  <div class="d-flex align-center flex-wrap ga-2">
+                    <v-btn
+                      color="primary"
+                      variant="flat"
+                      size="large"
+                      prepend-icon="mdi-play-circle"
+                      :disabled="!currentServing"
+                      :loading="loading && !!currentServing"
+                      @click="startEncounter"
+                    >
+                      Start Encounter
+                    </v-btn>
+
+                    <v-spacer />
+
+                    <v-btn
+                      color="info"
+                      variant="outlined"
+                      prepend-icon="mdi-check-circle-outline"
+                      :disabled="!currentServing"
+                      :loading="loading && !!currentServing"
+                      @click="completeCurrent"
+                    >
+                      Complete
+                    </v-btn>
+
+                    <v-btn
+                      color="info"
+                      variant="flat"
+                      prepend-icon="mdi-chevron-right"
+                      :disabled="waitingCount === 0"
+                      :loading="loading && waitingCount > 0"
+                      @click="callNext"
+                    >
+                      Next
+                    </v-btn>
+
+                    <v-btn
+                      color="error"
+                      variant="text"
+                      prepend-icon="mdi-skip-forward"
+                      :disabled="!currentServing"
+                      @click="skipCurrent"
+                    >
+                      Skip
+                    </v-btn>
+                  </div>
+
+                  <!-- Empty-state hint -->
+                  <div
+                    v-if="!currentServing && waitingCount > 0"
+                    class="text-caption text-medium-emphasis mt-3"
+                  >
+                    <v-icon size="small" class="mr-1">mdi-information-outline</v-icon>
+                    Click <strong>Next</strong> to call the first patient in the queue.
+                  </div>
                 </v-card>
               </v-col>
             </v-row>
@@ -65,9 +114,9 @@
               <v-col cols="12">
                 <div class="d-flex justify-space-between align-center mb-2">
                   <div class="text-subtitle-1 font-weight-medium">Waiting List</div>
-                  <v-btn 
-                    size="small" 
-                    variant="text" 
+                  <v-btn
+                    size="small"
+                    variant="text"
                     @click="loadQueue"
                     :loading="loading"
                   >
@@ -75,42 +124,51 @@
                     Refresh
                   </v-btn>
                 </div>
-                
+
                 <v-list v-if="waitingList.length > 0" density="compact">
-                  <v-list-item 
-                    v-for="(item, index) in waitingList" 
-                    :key="item.queue_number"
+                  <v-list-item
+                    v-for="(item, index) in waitingList"
+                    :key="item.id"
                     :class="{ 'bg-blue-lighten-5': index === 0 }"
                   >
                     <template v-slot:prepend>
-                      <v-badge 
-                        :content="index + 1" 
-                        color="primary" 
+                      <v-badge
+                        :content="index + 1"
+                        :color="index === 0 ? 'primary' : 'grey'"
                         inline
                       ></v-badge>
                     </template>
-                    
+
                     <v-list-item-title>
-                      <strong>{{ item.queue_number }}</strong> - {{ item.Patient.patient_facility_code  }}
+                      <strong>{{ item.queue_number }}</strong>
+                      — {{ item.Patient?.patient_facility_code || 'Unknown patient' }}
                     </v-list-item-title>
-                    
+
                     <v-list-item-subtitle>
-                      {{ item.appointment_id ? "Scheduled" : "Walk-in" }} • {{ formatTime(item.createdAt) }}
+                      {{ item.appointment_id ? 'Scheduled' : 'Walk-in' }}
+                      <span class="mx-1">•</span>
+                      {{ formatTime(item.createdAt) }}
+                      <span v-if="item.TransactionType" class="mx-1">•</span>
+                      <span v-if="item.TransactionType">
+                        {{ item.TransactionType.name }}
+                        ({{ item.TransactionType.estimated_duration_minutes }} min)
+                      </span>
                     </v-list-item-subtitle>
-                    
+
                     <template v-slot:append>
-                      <v-btn 
-                        size="small" 
-                        color="primary" 
-                        variant="text"
-                        @click="startEncounter(item.patient_id)"
+                      <v-chip
+                        v-if="index === 0"
+                        color="primary"
+                        size="small"
+                        variant="tonal"
+                        prepend-icon="mdi-arrow-up-bold"
                       >
-                        Start
-                      </v-btn>
+                        Next up
+                      </v-chip>
                     </template>
                   </v-list-item>
                 </v-list>
-                
+
                 <v-empty-state
                   v-else
                   title="Queue is empty"
@@ -132,20 +190,9 @@
           </v-card-title>
           <v-divider></v-divider>
           <v-card-text>
-            <v-btn 
-              block 
-              color="primary" 
-              variant="flat"
-              @click="navigateToEncounter"
-              class="mb-2"
-            >
-              <v-icon start>mdi-clipboard-plus</v-icon>
-              New Testing Session
-            </v-btn>
-            
-            <v-btn 
-              block 
-              color="info" 
+            <v-btn
+              block
+              color="info"
               variant="outlined"
               @click="navigateToPatientSearch"
               class="mb-2"
@@ -153,10 +200,10 @@
               <v-icon start>mdi-account-search</v-icon>
               Find Patient
             </v-btn>
-            
-            <v-btn 
-              block 
-              color="warning" 
+
+            <v-btn
+              block
+              color="warning"
               variant="outlined"
               @click="showAddToQueueDialog = true"
             >
@@ -242,10 +289,10 @@
               ></v-progress-circular>
             </template>
           </v-text-field>
-          
+
           <v-list v-if="searchResults.length > 0" density="compact">
-            <v-list-item 
-              v-for="patient in searchResults" 
+            <v-list-item
+              v-for="patient in searchResults"
               :key="patient.id"
               @click="selectPatient(patient)"
             >
@@ -257,10 +304,10 @@
               </v-list-item-subtitle>
             </v-list-item>
           </v-list>
-          
-          <v-btn 
-            block 
-            color="primary" 
+
+          <v-btn
+            block
+            color="primary"
             variant="tonal"
             @click="navigateToPatientCreate"
             class="mt-2"
@@ -281,7 +328,7 @@
         </v-card-title>
         <v-divider></v-divider>
         <v-card-text class="pt-4">
-          <p>Why are you skipping {{ currentServing?.patient_name || 'this patient' }}?</p>
+          <p>Why are you skipping {{ currentServing?.Patient?.patient_facility_code || 'this patient' }}?</p>
           <v-text-field
             v-model="skipReason"
             label="Reason"
@@ -310,7 +357,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQueueStore } from '@/stores/queueStore'
-import { usePatientStore } from '@/stores/patientStore'
 import queueService from '@/services/queueService'
 import patientService from '@/services/patientService'
 import { io } from 'socket.io-client'
@@ -320,8 +366,7 @@ export default {
   setup() {
     const router = useRouter()
     const queueStore = useQueueStore()
-    const patientStore = usePatientStore()
-    
+
     const loading = ref(false)
     const searching = ref(false)
     const showAddToQueueDialog = ref(false)
@@ -337,17 +382,19 @@ export default {
       color: 'success'
     })
 
-    // Computed
     const currentServing = computed(() => queueStore.currentServing)
     const waitingList = computed(() => queueStore.waitingList)
     const waitingCount = computed(() => queueStore.waitingCount)
     const stats = computed(() => queueStore.stats)
 
-    // Methods
     const loadQueue = async () => {
       await queueStore.loadQueue('testing')
     }
 
+    /**
+     * "Next" — promotes the next waiting patient to in-progress.
+     * NOTE: If someone is currently being served, the backend completes them first.
+     */
     const callNext = async () => {
       loading.value = true
       try {
@@ -355,6 +402,22 @@ export default {
         showSnackbar('Next patient called', 'success')
       } catch (error) {
         showSnackbar('Failed to call next: ' + error.message, 'error')
+      } finally {
+        loading.value = false
+      }
+    }
+
+    /**
+     * "Complete" — completes the currently-serving entry without calling next.
+     */
+    const completeCurrent = async () => {
+      if (!currentServing.value) return
+      loading.value = true
+      try {
+        await queueStore.completeCurrent('testing')
+        showSnackbar('Patient marked as completed', 'success')
+      } catch (error) {
+        showSnackbar('Failed to complete: ' + error.message, 'error')
       } finally {
         loading.value = false
       }
@@ -379,12 +442,31 @@ export default {
       }
     }
 
+    /**
+     * "Start Encounter" — opens the encounter form for the CURRENTLY SERVING entry.
+     * Passes queue context via query params so the encounter page can complete it
+     * after save and navigate back.
+     */
+    const startEncounter = () => {
+      if (!currentServing.value) {
+        showSnackbar('No patient is currently being served', 'warning')
+        return
+      }
+      router.push({
+        name: 'TestingEncounter',
+        params: { patientId: currentServing.value.patient_id },
+        query: {
+          queue_entry_id: currentServing.value.id,
+          transaction_type_id: currentServing.value.transaction_type_id,
+        },
+      })
+    }
+
     const searchPatients = async () => {
       if (searchQuery.value.length < 2) {
         searchResults.value = []
         return
       }
-      
       searching.value = true
       try {
         const results = await patientService.searchPatients(searchQuery.value)
@@ -399,7 +481,7 @@ export default {
     const selectPatient = async (patient) => {
       loading.value = true
       try {
-        const result = await queueService.addToQueue('testing', patient.id)
+        await queueService.addToQueue('testing', patient.id)
         showAddToQueueDialog.value = false
         searchQuery.value = ''
         searchResults.value = []
@@ -410,16 +492,6 @@ export default {
       } finally {
         loading.value = false
       }
-    }
-
-    const startEncounter = (patientId) => {
-      if (patientId) {
-        router.push(`/testing/encounter/${patientId}`)
-      }
-    }
-
-    const navigateToEncounter = () => {
-      router.push('/testing/encounter')
     }
 
     const navigateToPatientSearch = () => {
@@ -445,7 +517,6 @@ export default {
       snackbar.value = { show: true, message, color }
     }
 
-    // Socket.IO setup
     const setupSocket = () => {
       const token = localStorage.getItem('token')
       if (!token) return
@@ -459,19 +530,14 @@ export default {
       })
 
       socket.on('queue-updated', (data) => {
-        if (data.office === 'testing') {
-          loadQueue()
-        }
+        if (data.office === 'testing') loadQueue()
       })
 
       socket.on('next-called', (data) => {
-        if (data.office === 'testing') {
-          loadQueue()
-        }
+        if (data.office === 'testing') loadQueue()
       })
     }
 
-    // Lifecycle
     onMounted(() => {
       loadQueue()
       setupSocket()
@@ -485,7 +551,6 @@ export default {
     })
 
     return {
-      // State
       loading,
       searching,
       showAddToQueueDialog,
@@ -494,25 +559,21 @@ export default {
       searchResults,
       skipReason,
       snackbar,
-      
-      // Computed
       currentServing,
       waitingList,
       waitingCount,
       stats,
-      
-      // Methods
       loadQueue,
       callNext,
+      completeCurrent,
       skipCurrent,
       confirmSkip,
+      startEncounter,
       searchPatients,
       selectPatient,
-      startEncounter,
-      navigateToEncounter,
       navigateToPatientSearch,
       navigateToPatientCreate,
-      formatTime
+      formatTime,
     }
   }
 }

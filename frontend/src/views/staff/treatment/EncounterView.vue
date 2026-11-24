@@ -17,8 +17,16 @@
         </div>
       </v-col>
       <v-col cols="12" md="4" class="text-md-right">
-        <v-chip color="teal-darken-2" variant="flat" prepend-icon="mdi-medical-bag">
+        <v-chip color="teal-darken-2" variant="flat" prepend-icon="mdi-medical-bag" class="mr-2">
           Treatment Office
+        </v-chip>
+        <v-chip
+          v-if="fromQueue"
+          color="info"
+          variant="tonal"
+          prepend-icon="mdi-account-check"
+        >
+          Serving from queue
         </v-chip>
       </v-col>
     </v-row>
@@ -110,7 +118,6 @@
               />
             </v-col>
 
-            <!-- ────── Dynamic fields from checklist_schema ────── -->
             <v-col cols="12">
               <v-divider class="my-2" />
               <div class="d-flex align-center justify-space-between mb-2">
@@ -147,6 +154,18 @@
               </v-row>
             </v-col>
 
+            <!-- ────── Follow-up scheduling checkbox ────── -->
+            <v-col v-if="fromQueue" cols="12">
+              <v-divider class="my-2" />
+              <v-checkbox
+                v-model="form.scheduleFollowUp"
+                label="Schedule a follow-up appointment for this patient"
+                hint="If checked, a scheduling dialog will open after saving."
+                persistent-hint
+                color="teal-darken-2"
+                density="comfortable"
+              />
+            </v-col>
           </v-row>
         </v-form>
       </v-card-text>
@@ -176,16 +195,17 @@
         Search and select a patient above to begin a treatment encounter.
       </div>
     </v-card>
-    <!-- ← NEW: follow-up scheduler -->
-<QuickScheduleDialog
-  v-model="scheduleDialog"
-  :patient="patient"
-  office="treatment"  
-  @scheduled="onScheduled"
-/>
+
+    <!-- Follow-up scheduler (opens only if checkbox was ticked) -->
+    <QuickScheduleDialog
+      v-model="scheduleDialog"
+      :patient="patient"
+      office="treatment"
+      @scheduled="onScheduled"
+    />
 
     <!-- Snackbar -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000" location="top right">
       {{ snackbar.message }}
       <template #actions>
         <v-btn variant="text" @click="snackbar.show = false">Close</v-btn>
@@ -200,13 +220,22 @@ import { useRoute, useRouter } from 'vue-router';
 import treatmentService from '@/services/treatmentService';
 import patientService from '@/services/patientService';
 import transactionTypeService from '@/services/transactionTypeService';
-import DynamicField from '@/components/encounters/DynamicField.vue'; 
+import { useQueueStore } from '@/stores/queueStore';
+import DynamicField from '@/components/encounters/DynamicField.vue';
 import QuickScheduleDialog from '@/components/appointments/QuickScheduleDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
+const queueStore = useQueueStore();
 
 const patientId = ref(route.params.patientId ? Number(route.params.patientId) : null);
+
+// Queue context — set when arriving from the queue's "Start Encounter" button
+const queueEntryId = ref(route.query.queue_entry_id ? Number(route.query.queue_entry_id) : null);
+const prefillTransactionTypeId = ref(
+  route.query.transaction_type_id ? Number(route.query.transaction_type_id) : null
+);
+const fromQueue = computed(() => !!queueEntryId.value);
 
 // ----- Patient -----
 const patient = ref(null);
@@ -228,12 +257,9 @@ const form = reactive({
   transaction_type_id: null,
   occurred_at: defaultDateTimeLocal(),
   data: {},
+  scheduleFollowUp: false,
 });
 
-/* ─────────────── Schema source ───────────────
-   The selected TransactionType carries checklist_schema.fields.
-   No more hardcoded map on the frontend.
-─────────────────────────────────────────────── */
 const currentTransactionType = computed(() =>
   transactionTypes.value.find(t => t.id === form.transaction_type_id) || null
 );
@@ -268,9 +294,11 @@ function defaultDateTimeLocal() {
 }
 
 function onScheduled(appointment) {
-  const d = appointment.appointment_date;
-  const t = appointment.time_slot;
-  notify(`Follow-up scheduled for ${d} at ${t}.`, 'success');
+  notify(
+    `Follow-up scheduled for ${appointment.appointment_date} at ${appointment.time_slot}.`,
+    'success'
+  );
+  router.push({ name: 'TreatmentQueue' });
 }
 
 function goBack() {
@@ -290,10 +318,12 @@ async function loadPatient() {
 async function loadTransactionTypes() {
   loadingTypes.value = true;
   try {
-    // Include the schema — ask for active only
     const list = await transactionTypeService.getTransactionTypes('treatment', { is_active: true });
     transactionTypes.value = list;
-    if (!form.transaction_type_id && list.length === 1) {
+
+    if (prefillTransactionTypeId.value && list.some(t => t.id === prefillTransactionTypeId.value)) {
+      form.transaction_type_id = prefillTransactionTypeId.value;
+    } else if (!form.transaction_type_id && list.length === 1) {
       form.transaction_type_id = list[0].id;
     }
   } catch (e) {
@@ -325,22 +355,26 @@ async function searchPatients(query) {
 }
 
 async function onPatientSelected(id) {
-  if (!id) return
-  await nextTick()
-  await router.replace({ name: 'TreatmentEncounter', params: { patientId: id } })
-  patientId.value = id
-  await loadPatient()
-  resetForm()
+  if (!id) return;
+  await nextTick();
+  await router.replace({ name: 'TreatmentEncounter', params: { patientId: id } });
+  patientId.value = id;
+  await loadPatient();
+  resetForm();
 }
 
 function resetForm() {
-  form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
+  if (prefillTransactionTypeId.value && transactionTypes.value.some(t => t.id === prefillTransactionTypeId.value)) {
+    form.transaction_type_id = prefillTransactionTypeId.value;
+  } else {
+    form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
+  }
   form.occurred_at = defaultDateTimeLocal();
   form.data = {};
+  form.scheduleFollowUp = false;
   formRef.value?.resetValidation();
 }
 
-/* ← NEW: clear stale keys when the transaction type changes */
 watch(
   () => form.transaction_type_id,
   () => {
@@ -362,12 +396,39 @@ async function submit() {
       data: form.data,
       occurred_at: form.occurred_at ? new Date(form.occurred_at).toISOString() : undefined,
     });
-    notify('Treatment encounter saved successfully.', 'success');
-    resetForm();
-    // ← NEW: offer to schedule a follow-up
-    scheduleDialog.value = true;
+
+    if (fromQueue.value) {
+      try {
+        await queueStore.completeCurrent('treatment');
+        notify('Encounter saved and patient marked as completed.', 'success');
+      } catch (queueErr) {
+        console.warn('Queue completion failed:', queueErr);
+        notify(
+          'Encounter saved, but queue could not be completed automatically.',
+          'warning'
+        );
+      }
+    } else {
+      notify('Treatment encounter saved successfully.', 'success');
+    }
+
+    if (form.scheduleFollowUp) {
+      resetForm();
+      scheduleDialog.value = true;
+    } else {
+      if (fromQueue.value) {
+        router.push({ name: 'TreatmentQueue' });
+      } else {
+        resetForm();
+      }
+    }
   } catch (e) {
-    // ... same error handling as before
+    const details = e.response?.data?.details;
+    const message =
+      e.response?.data?.error ||
+      (Array.isArray(details) ? details.map(d => `${d.instancePath || ''} ${d.message}`).join('; ') : null) ||
+      e.message;
+    notify('Failed to save encounter: ' + message, 'error');
   } finally {
     submitting.value = false;
   }

@@ -17,8 +17,16 @@
         </div>
       </v-col>
       <v-col cols="12" md="4" class="text-md-right">
-        <v-chip color="blue-darken-2" variant="flat" prepend-icon="mdi-flask">
+        <v-chip color="blue-darken-2" variant="flat" prepend-icon="mdi-flask" class="mr-2">
           Testing Office
+        </v-chip>
+        <v-chip
+          v-if="fromQueue"
+          color="info"
+          variant="tonal"
+          prepend-icon="mdi-account-check"
+        >
+          Serving from queue
         </v-chip>
       </v-col>
     </v-row>
@@ -110,7 +118,7 @@
               />
             </v-col>
 
-            <!-- ────── Dynamic fields from checklist_schema ────── -->
+            <!-- Dynamic fields from checklist_schema -->
             <v-col cols="12">
               <v-divider class="my-2" />
               <div class="d-flex align-center justify-space-between mb-2">
@@ -146,6 +154,19 @@
                 </v-col>
               </v-row>
             </v-col>
+
+            <!-- ────── Follow-up scheduling checkbox ────── -->
+            <v-col v-if="fromQueue" cols="12">
+              <v-divider class="my-2" />
+              <v-checkbox
+                v-model="form.scheduleFollowUp"
+                label="Schedule a follow-up appointment for this patient"
+                hint="If checked, a scheduling dialog will open after saving."
+                persistent-hint
+                color="primary"
+                density="comfortable"
+              />
+            </v-col>
           </v-row>
         </v-form>
       </v-card-text>
@@ -175,16 +196,17 @@
         Search and select a patient above to begin a testing encounter.
       </div>
     </v-card>
-    <!-- ← NEW: follow-up scheduler -->
-<QuickScheduleDialog
-  v-model="scheduleDialog"
-  :patient="patient"
-  office="testing"     
-  @scheduled="onScheduled"
-/>
+
+    <!-- Follow-up scheduler (opens only if checkbox was ticked) -->
+    <QuickScheduleDialog
+      v-model="scheduleDialog"
+      :patient="patient"
+      office="testing"
+      @scheduled="onScheduled"
+    />
 
     <!-- Snackbar -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top right">
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000" location="top right">
       {{ snackbar.message }}
       <template #actions>
         <v-btn variant="text" @click="snackbar.show = false">Close</v-btn>
@@ -199,13 +221,22 @@ import { useRoute, useRouter } from 'vue-router';
 import testingService from '@/services/testingService';
 import patientService from '@/services/patientService';
 import transactionTypeService from '@/services/transactionTypeService';
+import { useQueueStore } from '@/stores/queueStore';
 import DynamicField from '@/components/encounters/DynamicField.vue';
 import QuickScheduleDialog from '@/components/appointments/QuickScheduleDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
+const queueStore = useQueueStore();
 
 const patientId = ref(route.params.patientId ? Number(route.params.patientId) : null);
+
+// Queue context — set when arriving from the queue's "Start Encounter" button
+const queueEntryId = ref(route.query.queue_entry_id ? Number(route.query.queue_entry_id) : null);
+const prefillTransactionTypeId = ref(
+  route.query.transaction_type_id ? Number(route.query.transaction_type_id) : null
+);
+const fromQueue = computed(() => !!queueEntryId.value);
 
 // ----- Patient -----
 const patient = ref(null);
@@ -227,9 +258,9 @@ const form = reactive({
   transaction_type_id: null,
   occurred_at: defaultDateTimeLocal(),
   data: {},
+  scheduleFollowUp: false,
 });
 
-/* ─────────────── Schema source ─────────────── */
 const currentTransactionType = computed(() =>
   transactionTypes.value.find(t => t.id === form.transaction_type_id) || null
 );
@@ -250,7 +281,6 @@ const patientFullName = computed(() => {
   return [p.first_name, p.middle_name, p.last_name, p.suffix].filter(Boolean).join(' ');
 });
 
-// ----- Snackbar -----
 const snackbar = reactive({ show: false, message: '', color: 'success' });
 function notify(message, color = 'success') {
   snackbar.message = message;
@@ -258,7 +288,6 @@ function notify(message, color = 'success') {
   snackbar.show = true;
 }
 
-// ----- Helpers -----
 function defaultDateTimeLocal() {
   const d = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -266,16 +295,18 @@ function defaultDateTimeLocal() {
 }
 
 function onScheduled(appointment) {
-  const d = appointment.appointment_date;
-  const t = appointment.time_slot;
-  notify(`Follow-up scheduled for ${d} at ${t}.`, 'success');
+  notify(
+    `Follow-up scheduled for ${appointment.appointment_date} at ${appointment.time_slot}.`,
+    'success'
+  );
+  // After scheduling, return to queue
+  router.push({ name: 'TestingQueue' });
 }
 
 function goBack() {
   router.back();
 }
 
-// ----- Data loading -----
 async function loadPatient() {
   if (!patientId.value) return;
   try {
@@ -291,7 +322,11 @@ async function loadTransactionTypes() {
   try {
     const list = await transactionTypeService.getTransactionTypes('testing', { is_active: true });
     transactionTypes.value = list;
-    if (!form.transaction_type_id && list.length === 1) {
+
+    // Prefer transaction_type_id from queue context, then single-item default
+    if (prefillTransactionTypeId.value && list.some(t => t.id === prefillTransactionTypeId.value)) {
+      form.transaction_type_id = prefillTransactionTypeId.value;
+    } else if (!form.transaction_type_id && list.length === 1) {
       form.transaction_type_id = list[0].id;
     }
   } catch (e) {
@@ -323,23 +358,27 @@ async function searchPatients(query) {
 }
 
 async function onPatientSelected(id) {
-  if (!id) return
-  await nextTick()
-  await router.replace({ name: 'TestingEncounter', params: { patientId: id } })
-  patientId.value = id
-  await loadPatient()
-  resetForm()
+  if (!id) return;
+  await nextTick();
+  await router.replace({ name: 'TestingEncounter', params: { patientId: id } });
+  patientId.value = id;
+  await loadPatient();
+  resetForm();
 }
 
-// ----- Form behavior -----
 function resetForm() {
-  form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
+  if (prefillTransactionTypeId.value && transactionTypes.value.some(t => t.id === prefillTransactionTypeId.value)) {
+    form.transaction_type_id = prefillTransactionTypeId.value;
+  } else {
+    form.transaction_type_id = transactionTypes.value.length === 1 ? transactionTypes.value[0].id : null;
+  }
   form.occurred_at = defaultDateTimeLocal();
   form.data = {};
+  form.scheduleFollowUp = false;
   formRef.value?.resetValidation();
 }
 
-// ← NEW: clear stale keys when the transaction type changes
+// Clear stale keys when the transaction type changes
 watch(
   () => form.transaction_type_id,
   () => {
@@ -361,9 +400,36 @@ async function submit() {
       data: form.data,
       occurred_at: form.occurred_at ? new Date(form.occurred_at).toISOString() : undefined,
     });
-    notify('Testing encounter saved successfully.', 'success');
-    resetForm();
-    scheduleDialog.value = true;
+
+    // ── Queue completion (only if we came from the queue) ──
+    if (fromQueue.value) {
+      try {
+        await queueStore.completeCurrent('testing');
+        notify('Encounter saved and patient marked as completed.', 'success');
+      } catch (queueErr) {
+        // Don't block navigation — show warning and continue
+        console.warn('Queue completion failed:', queueErr);
+        notify(
+          'Encounter saved, but queue could not be completed automatically.',
+          'warning'
+        );
+      }
+    } else {
+      notify('Testing encounter saved successfully.', 'success');
+    }
+
+    // ── Follow-up flow ──
+    if (form.scheduleFollowUp) {
+      resetForm();
+      scheduleDialog.value = true; // navigate happens in onScheduled()
+    } else {
+      // No follow-up — go straight back to the queue
+      if (fromQueue.value) {
+        router.push({ name: 'TestingQueue' });
+      } else {
+        resetForm();
+      }
+    }
   } catch (e) {
     const details = e.response?.data?.details;
     const message =
@@ -376,7 +442,6 @@ async function submit() {
   }
 }
 
-// ----- Lifecycle -----
 onMounted(async () => {
   await loadTransactionTypes();
   if (patientId.value) {
